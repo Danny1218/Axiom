@@ -22,7 +22,7 @@ def wire_execution_graph(
     loop_max_unroll: int = 8,
     loop_num_basis: int = 8,
 ) -> ExecutionGraph:
-    """OP_CONDITIONAL → Sinkhorn block; OP_LOOP → LiquidKANNode."""
+    """OP_CONDITIONAL → Sinkhorn block; OP_LOOP → InterpretedLiquidLoop (IR + liquid sequence)."""
     return build_execution_graph_from_ir(
         ir,
         supernet,

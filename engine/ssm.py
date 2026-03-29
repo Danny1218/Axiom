@@ -46,7 +46,8 @@ class LiquidKANNode(nn.Module):
         u = self.gate(torch.cat([h2, h02], dim=-1)).unsqueeze(-1)
         u = torch.sigmoid(u)
         phi = _hat_basis(u, self.num_basis)
-        return phi @ self.coeffs
+        out = phi @ self.coeffs
+        return out.reshape(h2.shape[0], -1)
 
     def _liquid_mix(self, h: torch.Tensor, proposal: torch.Tensor, tau: torch.Tensor) -> torch.Tensor:
         h2 = h.reshape(h.shape[0], -1)
@@ -86,3 +87,35 @@ class LiquidKANNode(nn.Module):
             prop = self._kan_update(h_cur, h0, tn) + 0.1 * x_t
             h_cur = self._liquid_mix(h_cur, prop, taus[t].reshape(()))
         return h_cur.squeeze(0)
+
+    def forward_sequence_tensors(
+        self,
+        seq: torch.Tensor,
+        *,
+        taus: Optional[torch.Tensor] = None,
+        h_init: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        """Dense sequence (B, T, D) from IR snapshots; returns (B, D). Same recurrence as `forward_sequence`."""
+        if seq.dim() == 2:
+            seq = seq.unsqueeze(0)
+        B, T, D = seq.shape
+        if T < 1:
+            raise ValueError("forward_sequence_tensors needs T>=1")
+        if D != self.dim:
+            raise ValueError(f"state dim {D} != node dim {self.dim}")
+        if taus is None:
+            tau_vec = torch.ones(T, device=seq.device, dtype=seq.dtype)
+        else:
+            tau_vec = taus.reshape(-1)
+            if tau_vec.shape[0] != T:
+                raise ValueError(f"taus length {tau_vec.shape[0]} != T {T}")
+        h_cur = seq[:, 0, :]
+        if h_init is not None:
+            h_cur = h_init.reshape(B, D)
+        h0 = h_cur.clone()
+        for t in range(T):
+            tn = torch.full((B, 1), t / max(T - 1, 1), device=seq.device, dtype=seq.dtype)
+            x_t = seq[:, t, :]
+            prop = self._kan_update(h_cur, h0, tn) + 0.1 * x_t
+            h_cur = self._liquid_mix(h_cur, prop, tau_vec[t].reshape(()))
+        return h_cur

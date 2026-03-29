@@ -1,17 +1,41 @@
 from __future__ import annotations
 
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Sequence, Set, Tuple
 
 import networkx as nx
 import torch
 import torch.nn as nn
 
+from engine.interpreter import make_seed_map
+from engine.loop_executor import InterpretedLiquidLoop
 from engine.router import SinkhornRouter
-from engine.ssm import LiquidKANNode
 from engine.supernet import LatentSupernet
 
 IRList = List[tuple]
 ExpertPair = Tuple[str, str]
+
+_PRELUDE_OPS = frozenset({"OP_ASSIGN", "OP_EXPR_STMT"})
+
+
+def _absorbed_prelude_indices(ir: IRList) -> Set[int]:
+    absorbed: Set[int] = set()
+    for k, instr in enumerate(ir):
+        if instr[0] != "OP_LOOP":
+            continue
+        j = k - 1
+        while j >= 0 and ir[j][0] in _PRELUDE_OPS:
+            absorbed.add(j)
+            j -= 1
+    return absorbed
+
+
+def _prelude_stmts_before_loop(ir: IRList, k: int) -> List[tuple]:
+    stmts: List[tuple] = []
+    j = k - 1
+    while j >= 0 and ir[j][0] in _PRELUDE_OPS:
+        stmts.insert(0, ir[j])
+        j -= 1
+    return stmts
 
 
 class ConditionalSinkhornBlock(nn.Module):
@@ -133,8 +157,9 @@ def build_execution_graph_from_ir(
     loop_num_basis: int = 8,
 ) -> ExecutionGraph:
     """
-    Map IR to a DAG: OP_CONDITIONAL → ConditionalSinkhornBlock; OP_LOOP → LiquidKANNode;
-    other statements → Identity. Loop body IR is stored on the graph node for tooling.
+    Map IR to a DAG: OP_CONDITIONAL → ConditionalSinkhornBlock; OP_LOOP → InterpretedLiquidLoop
+    (IR cond/body + contiguous prelude assigns); other statements → Identity.
+    OP_ASSIGN/OP_EXPR_STMT immediately before a loop are absorbed into the loop node (no duplicate stmt nodes).
     """
     conds = [i for i in ir if i[0] == "OP_CONDITIONAL"]
     if len(conditional_experts) != len(conds):
@@ -150,8 +175,11 @@ def build_execution_graph_from_ir(
     cidx = 0
     lidx = 0
     order: List[str] = []
+    absorbed = _absorbed_prelude_indices(ir)
 
-    for instr in ir:
+    for idx, instr in enumerate(ir):
+        if idx in absorbed:
+            continue
         op = instr[0]
         if op == "OP_CONDITIONAL":
             name = f"cond_{cidx}"
@@ -172,12 +200,25 @@ def build_execution_graph_from_ir(
         elif op == "OP_LOOP":
             name = f"loop_{lidx}"
             _, cond_ir, body_ir = instr
-            modules[name] = LiquidKANNode(
+            prelude = _prelude_stmts_before_loop(ir, idx)
+            seed_map = make_seed_map(cond_ir, body_ir, supernet.dim)
+            modules[name] = InterpretedLiquidLoop(
                 supernet.dim,
+                cond_ir,
+                body_ir,
+                prelude,
+                seed_map,
                 num_basis=loop_num_basis,
                 max_unroll=loop_max_unroll,
             )
-            G.add_node(name, kind="loop", op="OP_LOOP", cond_ir=cond_ir, body_ir=body_ir)
+            G.add_node(
+                name,
+                kind="loop",
+                op="OP_LOOP",
+                cond_ir=cond_ir,
+                body_ir=body_ir,
+                prelude_stmts=prelude,
+            )
             G.add_edge(prev, name)
             order.append(name)
             prev = name

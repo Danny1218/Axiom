@@ -35,3 +35,15 @@ def test_liquid_kan_forward_sequence():
     assert out.shape == (d,)
     out.sum().backward()
     assert s0.data.grad is not None
+
+
+def test_liquid_kan_forward_sequence_tensors_batched():
+    torch.manual_seed(2)
+    d = 4
+    node = LiquidKANNode(d, num_basis=4, max_unroll=2)
+    seq = torch.randn(3, 2, d, requires_grad=True)
+    h0 = torch.randn(3, d, requires_grad=True)
+    out = node.forward_sequence_tensors(seq, h_init=h0)
+    assert out.shape == (3, d)
+    out.sum().backward()
+    assert seq.grad is not None and h0.grad is not None
