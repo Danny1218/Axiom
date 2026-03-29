@@ -134,7 +134,11 @@ def eval_expr(
             stack.append(a * b)
         elif op == "OP_DIV":
             b, a = stack.pop(), stack.pop()
-            stack.append(torch.where(b.abs() > 1e-12, a / b, _scalar_zero(device, dtype)))
+            # Avoid computing a/b at b==0 (forward Inf; backward 0*Inf -> NaN in torch.where).
+            mask = b.abs() > 1e-12
+            safe_b = torch.where(mask, b, _scalar_one(device, dtype))
+            safe_div = a / safe_b
+            stack.append(torch.where(mask, safe_div, _scalar_zero(device, dtype)))
         elif op == "OP_CMP_GT":
             b, a = stack.pop(), stack.pop()
             stack.append(torch.where(a > b, _scalar_one(device, dtype), _scalar_zero(device, dtype)))
