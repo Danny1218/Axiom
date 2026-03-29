@@ -9,21 +9,35 @@ from engine.interpreter import (
 )
 from engine.topology import _absorbed_prelude_indices, _prelude_stmts_before_loop
 
+_CPU = torch.device("cpu")
+_F32 = torch.float32
+
 
 def test_eval_expr_arithmetic():
-    env = {"a": 2.0, "b": 3.0}
+    env = {"a": torch.tensor(2.0), "b": torch.tensor(3.0)}
     ir = [("OP_LOAD", "a"), ("OP_LOAD", "b"), ("OP_MUL",)]
-    assert eval_expr(env, ir) == 6.0
+    assert eval_expr(env, ir, device=_CPU, dtype=_F32).item() == 6.0
+
+
+def test_eval_expr_grad_through_load():
+    a = torch.tensor(2.0, requires_grad=True)
+    env = {"a": a, "b": torch.tensor(3.0)}
+    ir = [("OP_LOAD", "a"), ("OP_LOAD", "b"), ("OP_ADD",)]
+    out = eval_expr(env, ir, device=_CPU, dtype=_F32)
+    out.backward()
+    assert a.grad is not None and a.grad.item() == 1.0
 
 
 def test_run_while_countdown_snapshots():
-    env = {"i": 3.0}
+    env = {"i": torch.tensor(3.0, device=_CPU, dtype=_F32)}
     cond = [("OP_LOAD", "i"), ("OP_CONST", 0.0), ("OP_CMP_GT",)]
     body = [("OP_ASSIGN", "i", [("OP_LOAD", "i"), ("OP_CONST", 1.0), ("OP_SUB",)])]
     var_order = ["i", "_pad0", "_pad1"]
-    snaps = run_while_loop(env, cond, body, dim=3, max_unroll=10, var_order=var_order)
+    snaps = run_while_loop(
+        env, cond, body, dim=3, max_unroll=10, var_order=var_order, device=_CPU, dtype=_F32
+    )
     assert len(snaps) == 3
-    assert snaps[0][0] == 2.0 and snaps[-1][0] == 0.0
+    assert snaps[0][0].item() == 2.0 and snaps[-1][0].item() == 0.0
 
 
 def test_run_loop_snapshots_with_prelude():
@@ -37,8 +51,18 @@ def test_run_loop_snapshots_with_prelude():
     assert mat[0, 0].item() == 2.0
 
 
+def test_run_loop_snapshots_grad_through_seed():
+    h = torch.tensor([3.0, 0.0, 0.0, 0.0, 0.0], requires_grad=True)
+    cond = [("OP_LOAD", "i"), ("OP_CONST", 0.0), ("OP_CMP_GT",)]
+    body = [("OP_ASSIGN", "i", [("OP_LOAD", "i"), ("OP_CONST", 1.0), ("OP_SUB",)])]
+    seed = make_seed_map(cond, body, 5)
+    mat = run_loop_snapshots(h, cond, body, dim=5, max_unroll=8, seed_map=seed, prelude_stmts=[])
+    mat.sum().backward()
+    assert h.grad is not None and h.grad[0].item() != 0.0
+
+
 def test_truthy():
-    assert truthy(1.0) and not truthy(0.0)
+    assert truthy(torch.tensor(1.0)) and not truthy(torch.tensor(0.0))
 
 
 def test_prelude_absorption_helpers():

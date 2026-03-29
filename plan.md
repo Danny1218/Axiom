@@ -8,6 +8,8 @@
 
 **Phase 7 (complete):** **`compiler/serializer.py`** — `execution_topology_to_dict` adds **`supernet_config`** (dim, adapter_names, rank), **`router_config`** (Sinkhorn iters/eps/mutation threshold from the first conditional block, else defaults), **`loop_config`** (num_basis/max_unroll from the first loop), plus per-node **`expert_then` / `expert_else`** and **`loop_num_basis` / `loop_max_unroll`**. **`compiler/deserializer.py`** — **`load_execution_bundle(path_prefix)`** rebuilds `nx.DiGraph`, `LatentSupernet`, `ConditionalSinkhornBlock` / `InterpretedLiquidLoop` / `Identity`, then **`load_state_dict`** from `*.pt`. IR lists from JSON are tuple-normalized via **`_ir_from_json`**; loop **`seed_map`** is recomputed with **`make_seed_map`**.
 
+**Phase 8 (complete):** **`engine/interpreter.py`** — IR env is **`Dict[str, torch.Tensor]`** (0D tensors). **`eval_expr`** / **`exec_stmt`** / **`run_while_loop`** take **`device`** and **`dtype`**; stack ops use PyTorch math; comparisons use **`torch.where`**. **`truthy`** uses **`detach().item()`** (branch choice is discrete, not differentiated). **`snapshot_env`** returns **`torch.stack(...)`**; **`run_loop_snapshots`** seeds with **`flat[idx].reshape(())`** (no **`.item()`**), builds **`torch.stack(snaps, dim=0)`** so the **(T, D)** sequence stays on the autograd graph. **`InterpretedLiquidLoop`** passes **`h.device`** / **`h.dtype`** into **`run_loop_snapshots`**. Tests: **`tests/test_interpreter_autograd.py`**, extended **`tests/test_interpreter.py`**.
+
 ## Layout
 
 - `main.py` — CLI entry
@@ -31,4 +33,4 @@ python -m pytest tests -q
 
 ## Next
 
-Optional gradients through IR seeds; distributed dataloader (see `readme.md`). Bundles saved before Phase 7 lack `supernet_config` / expert fields — reload requires a freshly saved topology JSON.
+Distributed dataloader (see `readme.md`). Bundles saved before Phase 7 lack `supernet_config` / expert fields — reload requires a freshly saved topology JSON.

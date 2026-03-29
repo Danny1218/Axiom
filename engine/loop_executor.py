@@ -49,6 +49,8 @@ class InterpretedLiquidLoop(nn.Module):
                 max_unroll=self.max_unroll,
                 seed_map=self.seed_map,
                 prelude_stmts=self.prelude_stmts,
+                device=h.device,
+                dtype=h.dtype,
             )
             row = flat[b : b + 1]
             if seq.size(0) == 0:

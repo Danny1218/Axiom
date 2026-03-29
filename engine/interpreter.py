@@ -8,6 +8,14 @@ Stmt = Tuple
 ExprIR = List[Tuple]
 
 
+def _scalar_zero(device: torch.device, dtype: torch.dtype) -> torch.Tensor:
+    return torch.zeros((), device=device, dtype=dtype)
+
+
+def _scalar_one(device: torch.device, dtype: torch.dtype) -> torch.Tensor:
+    return torch.ones((), device=device, dtype=dtype)
+
+
 def collect_load_names_from_stmts(stmts: List[Stmt]) -> List[str]:
     found: Set[str] = set()
 
@@ -99,14 +107,20 @@ def build_var_order(
     return order[:dim]
 
 
-def eval_expr(env: Dict[str, float], ir: ExprIR) -> float:
-    stack: List[float] = []
+def eval_expr(
+    env: Dict[str, torch.Tensor],
+    ir: ExprIR,
+    *,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> torch.Tensor:
+    stack: List[torch.Tensor] = []
     for tup in ir:
         op = tup[0]
         if op == "OP_CONST":
-            stack.append(float(tup[1]))
+            stack.append(torch.tensor(float(tup[1]), device=device, dtype=dtype, requires_grad=False))
         elif op == "OP_LOAD":
-            stack.append(float(env.get(str(tup[1]), 0.0)))
+            stack.append(env.get(str(tup[1]), _scalar_zero(device, dtype)))
         elif op == "OP_NEG":
             stack.append(-stack.pop())
         elif op == "OP_ADD":
@@ -120,19 +134,19 @@ def eval_expr(env: Dict[str, float], ir: ExprIR) -> float:
             stack.append(a * b)
         elif op == "OP_DIV":
             b, a = stack.pop(), stack.pop()
-            stack.append(a / b if b != 0 else 0.0)
+            stack.append(torch.where(b.abs() > 1e-12, a / b, _scalar_zero(device, dtype)))
         elif op == "OP_CMP_GT":
             b, a = stack.pop(), stack.pop()
-            stack.append(1.0 if a > b else 0.0)
+            stack.append(torch.where(a > b, _scalar_one(device, dtype), _scalar_zero(device, dtype)))
         elif op == "OP_CMP_LT":
             b, a = stack.pop(), stack.pop()
-            stack.append(1.0 if a < b else 0.0)
+            stack.append(torch.where(a < b, _scalar_one(device, dtype), _scalar_zero(device, dtype)))
         elif op == "OP_CMP_EQ":
             b, a = stack.pop(), stack.pop()
-            stack.append(1.0 if a == b else 0.0)
+            stack.append(torch.where(a == b, _scalar_one(device, dtype), _scalar_zero(device, dtype)))
         elif op == "OP_CMP_NE":
             b, a = stack.pop(), stack.pop()
-            stack.append(1.0 if a != b else 0.0)
+            stack.append(torch.where(a != b, _scalar_one(device, dtype), _scalar_zero(device, dtype)))
         else:
             raise ValueError(f"unknown expr op {op}")
     if len(stack) != 1:
@@ -140,46 +154,71 @@ def eval_expr(env: Dict[str, float], ir: ExprIR) -> float:
     return stack[0]
 
 
-def truthy(v: float) -> bool:
-    return v != 0.0
+def truthy(v: torch.Tensor) -> bool:
+    return v.detach().item() != 0.0
 
 
-def snapshot_env(env: Dict[str, float], var_order: List[str]) -> List[float]:
-    return [float(env.get(k, 0.0)) for k in var_order]
+def snapshot_env(
+    env: Dict[str, torch.Tensor],
+    var_order: List[str],
+    *,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> torch.Tensor:
+    return torch.stack([env.get(k, _scalar_zero(device, dtype)) for k in var_order])
 
 
 def run_while_loop(
-    env: Dict[str, float],
+    env: Dict[str, torch.Tensor],
     cond_ir: ExprIR,
     body_ir: List[Stmt],
     *,
     dim: int,
     max_unroll: int,
     var_order: List[str],
-) -> List[List[float]]:
-    snaps: List[List[float]] = []
+    device: torch.device,
+    dtype: torch.dtype,
+) -> List[torch.Tensor]:
+    snaps: List[torch.Tensor] = []
     for _ in range(max_unroll):
-        if not truthy(eval_expr(env, cond_ir)):
+        if not truthy(eval_expr(env, cond_ir, device=device, dtype=dtype)):
             break
         for st in body_ir:
-            exec_stmt(env, st, dim=dim, max_unroll=max_unroll)
-        snaps.append(snapshot_env(env, var_order))
+            exec_stmt(env, st, dim=dim, max_unroll=max_unroll, device=device, dtype=dtype)
+        snaps.append(snapshot_env(env, var_order, device=device, dtype=dtype))
     return snaps
 
 
-def exec_stmt(env: Dict[str, float], stmt: Stmt, *, dim: int, max_unroll: int) -> None:
+def exec_stmt(
+    env: Dict[str, torch.Tensor],
+    stmt: Stmt,
+    *,
+    dim: int,
+    max_unroll: int,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> None:
     op = stmt[0]
     if op == "OP_ASSIGN":
-        env[str(stmt[1])] = eval_expr(env, stmt[2])
+        env[str(stmt[1])] = eval_expr(env, stmt[2], device=device, dtype=dtype)
     elif op == "OP_EXPR_STMT":
-        eval_expr(env, stmt[1])
+        eval_expr(env, stmt[1], device=device, dtype=dtype)
     elif op == "OP_CONDITIONAL":
-        block = stmt[2] if truthy(eval_expr(env, stmt[1])) else stmt[3]
+        block = stmt[2] if truthy(eval_expr(env, stmt[1], device=device, dtype=dtype)) else stmt[3]
         for s in block:
-            exec_stmt(env, s, dim=dim, max_unroll=max_unroll)
+            exec_stmt(env, s, dim=dim, max_unroll=max_unroll, device=device, dtype=dtype)
     elif op == "OP_LOOP":
         inner_order = build_var_order(stmt[1], stmt[2], dim, env_keys=set(env.keys()))
-        run_while_loop(env, stmt[1], stmt[2], dim=dim, max_unroll=max_unroll, var_order=inner_order)
+        run_while_loop(
+            env,
+            stmt[1],
+            stmt[2],
+            dim=dim,
+            max_unroll=max_unroll,
+            var_order=inner_order,
+            device=device,
+            dtype=dtype,
+        )
     else:
         raise ValueError(f"unknown stmt {op}")
 
@@ -193,25 +232,31 @@ def run_loop_snapshots(
     max_unroll: int,
     seed_map: Dict[int, str],
     prelude_stmts: Optional[List[Stmt]] = None,
+    device: Optional[torch.device] = None,
+    dtype: Optional[torch.dtype] = None,
 ) -> torch.Tensor:
-    """(T, D) float tensor; T=0 if the loop body never runs."""
+    """(T, D) tensor; T=0 if the loop body never runs. Differentiable w.r.t. `h_row` (and env tensors)."""
     prelude_stmts = prelude_stmts or []
+    dev = device if device is not None else h_row.device
+    dt = dtype if dtype is not None else h_row.dtype
     seed_vals = set(seed_map.values())
     extra = set(collect_load_names_from_stmts(prelude_stmts))
     var_order = build_var_order(cond_ir, body_ir, dim, seed_names=seed_vals | extra)
-    env: Dict[str, float] = {k: 0.0 for k in var_order}
+    env: Dict[str, torch.Tensor] = {k: _scalar_zero(dev, dt) for k in var_order}
     flat = h_row.reshape(-1)
     for idx, name in seed_map.items():
         if idx < flat.numel():
-            env[name] = float(flat[idx].item())
+            env[name] = flat[idx].reshape(())
     for st in prelude_stmts:
-        exec_stmt(env, st, dim=dim, max_unroll=max_unroll)
-    snaps = run_while_loop(env, cond_ir, body_ir, dim=dim, max_unroll=max_unroll, var_order=var_order)
+        exec_stmt(env, st, dim=dim, max_unroll=max_unroll, device=dev, dtype=dt)
+    snaps = run_while_loop(
+        env, cond_ir, body_ir, dim=dim, max_unroll=max_unroll, var_order=var_order, device=dev, dtype=dt
+    )
     if not snaps:
-        return torch.zeros(0, dim, device=h_row.device, dtype=h_row.dtype)
-    mat = torch.tensor(snaps, device=h_row.device, dtype=h_row.dtype)
+        return torch.zeros(0, dim, device=dev, dtype=dt)
+    mat = torch.stack(snaps, dim=0)
     if mat.shape[1] < dim:
-        pad = torch.zeros(mat.size(0), dim - mat.size(1), device=mat.device, dtype=mat.dtype)
+        pad = torch.zeros(mat.size(0), dim - mat.shape[1], device=mat.device, dtype=mat.dtype)
         mat = torch.cat([mat, pad], dim=1)
     elif mat.shape[1] > dim:
         mat = mat[:, :dim]
