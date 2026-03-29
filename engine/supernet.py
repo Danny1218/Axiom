@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, Iterable, Mapping, Optional
+from typing import Dict, Iterable, Mapping, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -48,6 +48,11 @@ class LatentSupernet(nn.Module):
             p.requires_grad = False
         self.adapters = nn.ModuleDict({n: TTLoRAAdapter(dim, rank) for n in names})
         self.register_buffer("adapter_mask", torch.zeros(len(names)))
+        self.register_buffer("is_shadow", torch.zeros(len(names), dtype=torch.bool))
+
+    @property
+    def adapter_names(self) -> Tuple[str, ...]:
+        return tuple(self.adapters.keys())
 
     def set_adapter_mask(self, name: str, value: float) -> None:
         """1.0 = apply adapter; 0.0 = inactive (default)."""
@@ -57,9 +62,30 @@ class LatentSupernet(nn.Module):
         for k, v in masks.items():
             self.set_adapter_mask(k, v)
 
+    def unmask_next_inactive(self, *, shadow: bool = True) -> Optional[str]:
+        """Activate the first masked expert; optional sandbox shadow flag."""
+        for i, name in enumerate(self.adapter_names):
+            if self.adapter_mask[i] < 0.5:
+                self.adapter_mask[i] = 1.0
+                self.is_shadow[i] = shadow
+                return name
+        return None
+
+    def remask_expert(self, name: str) -> None:
+        i = self._name_to_idx[name]
+        self.adapter_mask[i] = 0.0
+        self.is_shadow[i] = False
+
+    def integrate_shadow(self, name: str) -> None:
+        i = self._name_to_idx[name]
+        self.is_shadow[i] = False
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         h = self.trunk(x)
         for i, (name, adapter) in enumerate(self.adapters.items()):
             if self.adapter_mask[i] >= 0.5:
-                h = h + adapter(x)
+                delta = adapter(x)
+                if self.is_shadow[i]:
+                    delta = delta.detach()
+                h = h + delta
         return h

@@ -18,6 +18,7 @@ def wire_execution_graph(
     *,
     router_iters: int = 8,
     router_eps: float = 0.1,
+    mutation_entropy_norm_threshold: float = 0.92,
 ) -> ExecutionGraph:
     """Each OP_CONDITIONAL in IR gets a Sinkhorn router node over the paired LoRA experts."""
     return build_execution_graph_from_ir(
@@ -26,4 +27,5 @@ def wire_execution_graph(
         conditional_experts,
         router_iters=router_iters,
         router_eps=router_eps,
+        mutation_entropy_norm_threshold=mutation_entropy_norm_threshold,
     )

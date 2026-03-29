@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Sequence, Tuple
+from typing import Dict, List, Sequence, Tuple
 
 import networkx as nx
 import torch
@@ -24,6 +24,7 @@ class ConditionalSinkhornBlock(nn.Module):
         *,
         num_iters: int = 8,
         epsilon: float = 0.1,
+        mutation_entropy_norm_threshold: float = 0.92,
     ) -> None:
         super().__init__()
         if expert_then not in supernet.adapters or expert_else not in supernet.adapters:
@@ -31,9 +32,17 @@ class ConditionalSinkhornBlock(nn.Module):
         self.supernet = supernet
         self.expert_then = expert_then
         self.expert_else = expert_else
-        self.router = SinkhornRouter(supernet.dim, 2, num_iters=num_iters, epsilon=epsilon)
+        self.router = SinkhornRouter(
+            supernet.dim,
+            2,
+            num_iters=num_iters,
+            epsilon=epsilon,
+            mutation_entropy_norm_threshold=mutation_entropy_norm_threshold,
+        )
+        self.last_shadow_outputs: Dict[str, torch.Tensor] = {}
 
     def forward(self, h: torch.Tensor) -> torch.Tensor:
+        self.last_shadow_outputs = {}
         it = self.supernet._name_to_idx[self.expert_then]
         ie = self.supernet._name_to_idx[self.expert_else]
         mask = torch.zeros(2, device=h.device, dtype=torch.bool)
@@ -49,7 +58,17 @@ class ConditionalSinkhornBlock(nn.Module):
         h_flat = h.reshape(-1, h.shape[-1])
         y0 = self.supernet.adapters[self.expert_then](h_flat)
         y1 = self.supernet.adapters[self.expert_else](h_flat)
-        out = h_flat + w2[:, 0:1] * y0 + w2[:, 1:2] * y1
+        sh0 = bool(self.supernet.is_shadow[it].item())
+        sh1 = bool(self.supernet.is_shadow[ie].item())
+        c0 = w2[:, 0:1] * y0
+        c1 = w2[:, 1:2] * y1
+        if sh0:
+            self.last_shadow_outputs[self.expert_then] = y0
+            c0 = c0.detach()
+        if sh1:
+            self.last_shadow_outputs[self.expert_else] = y1
+            c1 = c1.detach()
+        out = h_flat + c0 + c1
         return out.reshape(*lead, h.shape[-1])
 
 
@@ -83,6 +102,23 @@ class ExecutionGraph(nn.Module):
     def node_kind(self, name: str) -> str:
         return self.dag.nodes[name].get("kind", "unknown")
 
+    def conditional_blocks(self) -> List[ConditionalSinkhornBlock]:
+        return [
+            self.node_modules[n]
+            for n in self.topo_names
+            if isinstance(self.node_modules[n], ConditionalSinkhornBlock)
+        ]
+
+    def routers(self) -> List[SinkhornRouter]:
+        return [b.router for b in self.conditional_blocks()]
+
+    def shadow_locals(self) -> Dict[str, torch.Tensor]:
+        """Raw adapter outputs for shadow experts after the last `forward` (for localized loss)."""
+        acc: Dict[str, torch.Tensor] = {}
+        for b in self.conditional_blocks():
+            acc.update(b.last_shadow_outputs)
+        return acc
+
 
 def build_execution_graph_from_ir(
     ir: IRList,
@@ -91,6 +127,7 @@ def build_execution_graph_from_ir(
     *,
     router_iters: int = 8,
     router_eps: float = 0.1,
+    mutation_entropy_norm_threshold: float = 0.92,
 ) -> ExecutionGraph:
     """
     Map IR to a DAG: each statement is a node; OP_CONDITIONAL inserts ConditionalSinkhornBlock
@@ -121,6 +158,7 @@ def build_execution_graph_from_ir(
                 else_e,
                 num_iters=router_iters,
                 epsilon=router_eps,
+                mutation_entropy_norm_threshold=mutation_entropy_norm_threshold,
             )
             G.add_node(name, kind="conditional", op="OP_CONDITIONAL")
             G.add_edge(prev, name)

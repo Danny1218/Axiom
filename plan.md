@@ -2,21 +2,24 @@
 
 ## Current phase
 
-**Phase 1 (complete):** Grammar (`.ax`), Lark parser → AST, IR bridge (opcode tuples + `ir_to_digraph` chain), `LatentSupernet` + `TTLoRAAdapter`, `test.ax`, pytest.
+**Phase 1 (complete):** Grammar (`.ax`), Lark parser → AST, IR bridge, `LatentSupernet` + `TTLoRAAdapter`, `test.ax`, pytest.
 
-**Phase 2 (complete):** `SinkhornRouter` (balanced optimal-transport routing over masked experts), `ExecutionGraph` (NetworkX DAG of IR steps → `nn.Module` nodes), `ConditionalSinkhornBlock` at each `OP_CONDITIONAL`, compiler `wire_execution_graph()` bridge. Forward: trunk → topo order through graph; routing uses differentiable Sinkhorn; autograd verified in tests.
+**Phase 2 (complete):** `SinkhornRouter`, `ExecutionGraph` / `ConditionalSinkhornBlock`, `wire_execution_graph()` for `OP_CONDITIONAL`.
+
+**Phase 3 (complete):** Uncertainty-driven **MutationSignal** (normalized routing entropy), **MetaCompiler** (unmask inactive expert in shadow), **shadow mode** (`is_shadow` + detached contributions in supernet / conditional), **fitness** (`ShadowFitnessEvaluator`, `run_shadow_training_epochs`, `apply_shadow_verdict`), `ExecutionGraph.shadow_locals()` for localized loss inputs.
 
 ## Layout
 
-- `compiler/` — `grammar.lark`, `parser.py`, `ir.py`, `flow.py` (`wire_execution_graph`)
-- `engine/` — `supernet.py`, `router.py`, `topology.py`
-- `tests/` — parser, IR, supernet, router, topology, flow, phase2 integration
+- `compiler/` — `grammar.lark`, `parser.py`, `ir.py`, `flow.py`
+- `engine/` — `supernet.py`, `router.py`, `topology.py`, `signals.py`, `meta_compiler.py`, `fitness.py`
+- `tests/` — phases 1–3 coverage
 - `requirements.txt` — `torch`, `lark`, `networkx`, `pytest`
 
 ## IR → topology
 
-- Each IR instruction is a DAG node (`stmt` = `Identity`, `OP_CONDITIONAL` = `ConditionalSinkhornBlock` with `SinkhornRouter` + two named LoRA experts).
-- Call `wire_execution_graph(ir, supernet, [(then_name, else_name), ...])` with one pair per `OP_CONDITIONAL` in program order.
+- `wire_execution_graph(..., mutation_entropy_norm_threshold=...)` forwards to conditional routers.
+- **Meta NAS:** run forward → read `router.last_mutation_signal` / `g.routers()` → `MetaCompiler.react_to_router_signals` → optional `unmask_next_inactive(shadow=True)`.
+- **Shadow training:** `g(x)` → `g.shadow_locals()` → localized loss on raw adapter outputs → `ShadowFitnessEvaluator` over 5 epochs → `apply_shadow_verdict`.
 
 ## IR opcodes (Phase 1)
 
@@ -24,7 +27,7 @@
 
 ## Next (not started)
 
-Phase 3+: evaluate IR expr stack, richer merge nodes, Sinkhorn-Knopp in log domain for scale, MoE-scale graphs (see `readme.md`).
+Full IR stack execution, multi-merge DAG nodes, log-domain Sinkhorn, batched meta-steps (see `readme.md`).
 
 ## Verify locally (Windows PowerShell)
 

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import math
 from typing import Optional
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+
+from engine.signals import MutationSignal
 
 
 def sinkhorn_balance(
@@ -37,13 +39,16 @@ class SinkhornRouter(nn.Module):
         *,
         num_iters: int = 8,
         epsilon: float = 0.1,
+        mutation_entropy_norm_threshold: float = 0.92,
     ) -> None:
         super().__init__()
         self.dim = dim
         self.num_experts = num_experts
         self.num_iters = num_iters
         self.epsilon = epsilon
+        self.mutation_entropy_norm_threshold = mutation_entropy_norm_threshold
         self.proj = nn.Linear(dim, num_experts, bias=True)
+        self.last_mutation_signal: Optional[MutationSignal] = None
 
     def forward(self, x: torch.Tensor, expert_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
@@ -61,6 +66,7 @@ class SinkhornRouter(nn.Module):
             if mask.numel() != self.num_experts:
                 raise ValueError("expert_mask length must match num_experts")
         if not mask.any():
+            self.last_mutation_signal = MutationSignal(False, 0.0, 0, 0.0)
             return torch.zeros(B, self.num_experts, device=x.device, dtype=x.dtype)
 
         idx = mask.nonzero(as_tuple=False).squeeze(1)
@@ -72,4 +78,16 @@ class SinkhornRouter(nn.Module):
         P_a = sinkhorn_balance(K, row_target=row_target, col_target=col_target, num_iters=self.num_iters)
         P = torch.zeros(B, self.num_experts, device=x.device, dtype=x.dtype)
         P[:, idx] = P_a
+        self.last_mutation_signal = self._mutation_from_routing(P_a, A)
         return P.reshape(*lead, self.num_experts)
+
+    def _mutation_from_routing(self, P_active: torch.Tensor, num_active: int) -> MutationSignal:
+        """High entropy ⇒ nearly uniform routing ⇒ trigger NAS mutation."""
+        if num_active <= 1:
+            return MutationSignal(False, 0.0, num_active, 0.0)
+        p = P_active.clamp_min(1e-12)
+        ent = -(p * p.log()).sum(dim=-1).mean()
+        h_max = math.log(num_active)
+        norm = (ent / h_max).clamp(0.0, 1.0).item()
+        triggered = norm >= self.mutation_entropy_norm_threshold
+        return MutationSignal(triggered, float(ent.item()), num_active, norm)
