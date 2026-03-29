@@ -13,10 +13,9 @@ from engine.topology import ExecutionGraph
 
 class EvolutionaryTrainer:
     """
-    Train `ExecutionGraph` with Adam; optionally react to Sinkhorn mutation signals.
-    After each epoch, records shadow localized losses and applies `ShadowFitnessEvaluator`
-    when `shadow_fitness_epochs` samples are collected (integrate vs prune), then rebuilds
-    the optimizer so state stays consistent with mask/shadow changes.
+    Train `ExecutionGraph` with Adam. Main MSE plus summed localized MSE on `shadow_locals()`
+    so shadow adapters receive gradients while their contribution to `out` stays detached.
+    Shadow fitness uses epoch averages of those localized losses (not a single no_grad pass).
     """
 
     def __init__(
@@ -33,9 +32,6 @@ class EvolutionaryTrainer:
         self.shadow_evaluators: Dict[str, ShadowFitnessEvaluator] = {}
         self.optimizer = torch.optim.Adam(self.graph.parameters(), lr=self.lr)
 
-    def rebuild_optimizer(self) -> None:
-        self.optimizer = torch.optim.Adam(self.graph.parameters(), lr=self.lr)
-
     def train_epoch(
         self,
         loader,
@@ -44,36 +40,42 @@ class EvolutionaryTrainer:
         self.graph.train()
         total = 0.0
         count = 0
-        last_xy: Optional[Tuple[torch.Tensor, torch.Tensor]] = None
+        shadow_sum: Dict[str, float] = {}
+        shadow_cnt: Dict[str, int] = {}
         for x, y in loader:
-            last_xy = (x, y)
             self.optimizer.zero_grad(set_to_none=True)
             out = self.graph(x)
             loss = self.criterion(out, y)
-            loss.backward()
+            locs = self.graph.shadow_locals()
+            shadow_loss: Optional[torch.Tensor] = None
+            for name, loc in locs.items():
+                m = F.mse_loss(loc, y)
+                shadow_loss = m if shadow_loss is None else shadow_loss + m
+                key = name
+                shadow_sum[key] = shadow_sum.get(key, 0.0) + float(m.detach().item())
+                shadow_cnt[key] = shadow_cnt.get(key, 0) + 1
+            if shadow_loss is None:
+                shadow_loss = torch.zeros((), device=out.device, dtype=out.dtype)
+            total_loss = loss + shadow_loss
+            total_loss.backward()
             self.optimizer.step()
             total += float(loss.detach().item())
             count += 1
             if meta_compiler is not None:
-                unmasked = meta_compiler.react_to_router_signals(self.graph.routers(), max_unmasks=1)
-                if unmasked:
-                    self.rebuild_optimizer()
+                meta_compiler.react_to_router_signals(self.graph.routers(), max_unmasks=1)
         mean_loss = total / max(count, 1)
-        if last_xy is not None:
-            self._shadow_epoch_end(last_xy[0], last_xy[1])
+        epoch_means = {n: shadow_sum[n] / shadow_cnt[n] for n in shadow_sum if shadow_cnt.get(n, 0) > 0}
+        self._shadow_epoch_end(epoch_means)
         return mean_loss
 
-    def _shadow_epoch_end(self, x: torch.Tensor, y: torch.Tensor) -> None:
+    def _shadow_epoch_end(self, epoch_shadow_mse: Dict[str, float]) -> None:
         sn = self.graph.supernet
-        self.graph.eval()
-        with torch.no_grad():
-            _ = self.graph(x)
-        locs = self.graph.shadow_locals()
         for i, name in enumerate(sn.adapter_names):
             if not bool(sn.is_shadow[i].item()):
                 continue
-            loc = locs.get(name)
-            loss_v = float(F.mse_loss(loc, y).item()) if loc is not None else 1.0
+            if name not in epoch_shadow_mse:
+                continue
+            loss_v = epoch_shadow_mse[name]
             if name not in self.shadow_evaluators:
                 self.shadow_evaluators[name] = ShadowFitnessEvaluator(
                     name, epochs=self.shadow_fitness_epochs
@@ -86,6 +88,4 @@ class EvolutionaryTrainer:
                 ev.epoch_losses.clear()
         for name, verdict in pending:
             apply_shadow_verdict(sn, name, verdict)
-        if pending:
-            self.rebuild_optimizer()
         self.graph.train()

@@ -38,7 +38,7 @@ def test_topology_dict_serializable():
     json.dumps(d)
 
 
-def test_trainer_rebuild_optimizer_runs(tmp_path):
+def test_trainer_runs_consecutive_epochs(tmp_path):
     reset_parser()
     ir = ast_to_ir(parse_ax("if (1 > 0) { a = 1; } else { a = 2; }"))
     sn = LatentSupernet(5, ("then_0", "else_0"), rank=2)
@@ -48,7 +48,6 @@ def test_trainer_rebuild_optimizer_runs(tmp_path):
     loader = LiquidSequenceLoader(seq, feature_dim=5, batch_size=16, baseline_var=0.03, shuffle=True)
     tr = EvolutionaryTrainer(g, lr=5e-2, shadow_fitness_epochs=3)
     loss0 = tr.train_epoch(loader, meta_compiler=None)
-    assert loss0 == loss0 and loss0 >= 0.0
-    tr.rebuild_optimizer()
+    assert loss0 >= 0.0
     loss1 = tr.train_epoch(loader, meta_compiler=None)
-    assert loss1 == loss1
+    assert loss1 >= 0.0

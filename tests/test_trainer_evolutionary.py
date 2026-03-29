@@ -10,7 +10,8 @@ from engine.supernet import LatentSupernet
 from engine.trainer import EvolutionaryTrainer
 
 
-def test_meta_unmask_triggers_optimizer_rebuild():
+def test_meta_unmask_keeps_same_optimizer():
+    """Unmasking does not require a new Adam instance; parameter set is unchanged."""
     reset_parser()
     ir = ast_to_ir(parse_ax("if (1 > 0) { a = 1; } else { a = 2; }"))
     sn = LatentSupernet(5, ("then_0", "else_0", "latent_0"), rank=2)
@@ -25,4 +26,4 @@ def test_meta_unmask_triggers_optimizer_rebuild():
     oid_before = id(tr.optimizer)
     tr.train_epoch(loader, meta_compiler=MetaCompiler(sn))
     assert sn.adapter_mask[sn._name_to_idx["latent_0"]] >= 0.5
-    assert id(tr.optimizer) != oid_before
+    assert id(tr.optimizer) == oid_before

@@ -4,7 +4,7 @@
 
 **Phase 1–4:** Parser/IR, supernet + topology + Sinkhorn + shadow meta + Liquid KAN / `OP_LOOP` (see prior sections in git history).
 
-**Phase 5 (complete):** **`LiquidSequenceLoader`** (sequential float → `(B, D)` + **`baseline_var` noise**), **`EvolutionaryTrainer`** (forward → `loss.backward` → Adam → optional **`MetaCompiler`**; end-of-epoch **shadow localized MSE** + **`ShadowFitnessEvaluator`** → **`apply_shadow_verdict`**; **`rebuild_optimizer()`** after mask/shadow changes), **`save_execution_bundle`** (`*.pt` `state_dict` + **`*_topology.json`** with nodes/edges/topo_order + optional **IR JSON**), **`main.py`** (default **`train.ax`**, 10 epochs, save bundle).
+**Phase 5 (complete):** **`LiquidSequenceLoader`**, **`EvolutionaryTrainer`** (main MSE + **summed localized shadow MSE** on the same `backward` so shadow adapters learn; **epoch-mean** shadow losses feed **`ShadowFitnessEvaluator`**; **no optimizer rebuild** on mask changes), **`save_execution_bundle`**, **`main.py`**.
 
 ## Layout
 
