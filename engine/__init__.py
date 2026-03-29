@@ -1,3 +1,4 @@
+from engine.dataloader import LiquidSequenceLoader, sequential_to_features
 from engine.fitness import (
     ShadowFitnessEvaluator,
     apply_shadow_verdict,
@@ -10,6 +11,7 @@ from engine.ssm import LiquidKANNode
 from engine.signals import MutationSignal
 from engine.supernet import LatentSupernet, TTLoRAAdapter
 from engine.topology import ConditionalSinkhornBlock, ExecutionGraph, build_execution_graph_from_ir
+from engine.trainer import EvolutionaryTrainer
 
 __all__ = [
     "LatentSupernet",
@@ -26,4 +28,7 @@ __all__ = [
     "ExecutionGraph",
     "build_execution_graph_from_ir",
     "LiquidKANNode",
+    "LiquidSequenceLoader",
+    "sequential_to_features",
+    "EvolutionaryTrainer",
 ]

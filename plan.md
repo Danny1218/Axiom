@@ -2,39 +2,31 @@
 
 ## Current phase
 
-**Phase 1 (complete):** Grammar (`.ax`), Lark parser → AST, IR bridge, `LatentSupernet` + `TTLoRAAdapter`, `test.ax`, pytest.
+**Phase 1–4:** Parser/IR, supernet + topology + Sinkhorn + shadow meta + Liquid KAN / `OP_LOOP` (see prior sections in git history).
 
-**Phase 2 (complete):** `SinkhornRouter`, `ExecutionGraph` / `ConditionalSinkhornBlock`, `wire_execution_graph()` for `OP_CONDITIONAL`.
-
-**Phase 3 (complete):** `MutationSignal`, `MetaCompiler`, shadow mode + `fitness` utilities.
-
-**Phase 4 (complete):** `LiquidStateTensor` (`primitives/liquid_tensor.py`), `LiquidKANNode` (`engine/ssm.py`) with hat (linear B-spline-style) basis + liquid mixing, **`while`** in grammar → **`OP_LOOP`** in IR → **`LiquidKANNode`** in execution graph; `loop.ax` sample; `wire_execution_graph(..., loop_max_unroll=, loop_num_basis=)`.
+**Phase 5 (complete):** **`LiquidSequenceLoader`** (sequential float → `(B, D)` + **`baseline_var` noise**), **`EvolutionaryTrainer`** (forward → `loss.backward` → Adam → optional **`MetaCompiler`**; end-of-epoch **shadow localized MSE** + **`ShadowFitnessEvaluator`** → **`apply_shadow_verdict`**; **`rebuild_optimizer()`** after mask/shadow changes), **`save_execution_bundle`** (`*.pt` `state_dict` + **`*_topology.json`** with nodes/edges/topo_order + optional **IR JSON**), **`main.py`** (default **`train.ax`**, 10 epochs, save bundle).
 
 ## Layout
 
-- `compiler/` — `grammar.lark`, `parser.py`, `ir.py`, `flow.py`
-- `primitives/` — `liquid_tensor.py`
-- `engine/` — `supernet`, `router`, `topology`, `ssm`, `signals`, `meta_compiler`, `fitness`
-- `tests/` — phases 1–4
-- `requirements.txt` — `torch`, `lark`, `networkx`, `pytest`
+- `main.py` — CLI entry
+- `train.ax` — default training sketch
+- `compiler/serializer.py` — bundle I/O
+- `engine/dataloader.py`, `engine/trainer.py`
+- `primitives/`, `engine/*` (prior phases), `tests/`
 
 ## IR opcodes
 
-`OP_CONST`, `OP_LOAD`, `OP_ADD`, `OP_SUB`, `OP_MUL`, `OP_DIV`, `OP_NEG`, `OP_CMP_*`, `OP_ASSIGN`, `OP_EXPR_STMT`, `OP_CONDITIONAL`, **`OP_LOOP`** `(cond_expr, body_ir)`.
+`OP_CONST`, `OP_LOAD`, `OP_ADD`, `OP_SUB`, `OP_MUL`, `OP_DIV`, `OP_NEG`, `OP_CMP_*`, `OP_ASSIGN`, `OP_EXPR_STMT`, `OP_CONDITIONAL`, `OP_LOOP`.
 
-## IR → topology
-
-- `OP_LOOP` → `LiquidKANNode` (body IR stored on NX node `body_ir` for future interpretation).
-- `forward(h)` on the node = fixed unroll recurrence; `forward_sequence([LiquidStateTensor,...])` uses per-step τ and payloads.
-
-## Next (not started)
-
-Execute `body_ir` inside the loop module, full KAN grids, true cubic B-splines, sequence batching (see `readme.md`).
-
-## Verify locally (Windows PowerShell)
+## Run training (PowerShell)
 
 ```powershell
 cd "...\Axiom"
 pip install -r requirements.txt
+python main.py train.ax --epochs 10 --out axiom_bundle
 python -m pytest tests -q
 ```
+
+## Next (not started)
+
+Reload bundle into a reconstructed `ExecutionGraph`, real IR interpreter in-loop, distributed dataloader (see `readme.md`).
