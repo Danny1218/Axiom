@@ -13,7 +13,7 @@ ExprIR = List[Tuple]
 
 
 class InterpretedLiquidLoop(nn.Module):
-    """Runs IR cond/body in the interpreter; feeds snapshot sequence into `LiquidKANNode.forward_sequence_tensors`."""
+    """Vectorized IR interpreter over batch; feeds (B, T, D) into `LiquidKANNode.forward_sequence_tensors`."""
 
     def __init__(
         self,
@@ -39,23 +39,19 @@ class InterpretedLiquidLoop(nn.Module):
         lead = h.shape[:-1]
         d = h.shape[-1]
         flat = h.reshape(-1, d)
-        outs: List[torch.Tensor] = []
-        for b in range(flat.size(0)):
-            seq = run_loop_snapshots(
-                flat[b],
-                self.cond_ir,
-                self.body_ir,
-                dim=d,
-                max_unroll=self.max_unroll,
-                seed_map=self.seed_map,
-                prelude_stmts=self.prelude_stmts,
-                device=h.device,
-                dtype=h.dtype,
-            )
-            row = flat[b : b + 1]
-            if seq.size(0) == 0:
-                outs.append(self.kan.forward(row))
-            else:
-                outs.append(self.kan.forward_sequence_tensors(seq.unsqueeze(0), h_init=row))
-        y = torch.cat(outs, dim=0)
+        seq = run_loop_snapshots(
+            flat,
+            self.cond_ir,
+            self.body_ir,
+            dim=d,
+            max_unroll=self.max_unroll,
+            seed_map=self.seed_map,
+            prelude_stmts=self.prelude_stmts,
+            device=h.device,
+            dtype=h.dtype,
+        )
+        if seq.shape[1] == 0:
+            y = self.kan.forward(flat)
+        else:
+            y = self.kan.forward_sequence_tensors(seq, h_init=flat)
         return y.reshape(*lead, d)

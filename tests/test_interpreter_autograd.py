@@ -35,8 +35,8 @@ def test_run_loop_snapshots_matches_float_semantics_countdown():
     body = [("OP_ASSIGN", "i", [("OP_LOAD", "i"), ("OP_CONST", 1.0), ("OP_SUB",)])]
     seed = make_seed_map(cond, body, 5)
     mat = run_loop_snapshots(h, cond, body, dim=5, max_unroll=10, seed_map=seed)
-    assert mat.shape[0] == 3
-    assert mat[0, 0].item() == 2.0 and mat[-1, 0].item() == 0.0
+    assert mat.shape == (1, 3, 5)
+    assert mat[0, 0, 0].item() == 2.0 and mat[0, -1, 0].item() == 0.0
 
 
 def test_snapshot_stack_preserves_device_dtype():
@@ -47,4 +47,5 @@ def test_snapshot_stack_preserves_device_dtype():
     body = [("OP_ASSIGN", "i", [("OP_LOAD", "i"), ("OP_CONST", 1.0), ("OP_SUB",)])]
     seed = make_seed_map(cond, body, 3)
     mat = run_loop_snapshots(h, cond, body, dim=3, max_unroll=5, seed_map=seed)
+    assert mat.shape[0] == 1
     assert mat.device == h.device and mat.dtype == h.dtype
