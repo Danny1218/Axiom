@@ -1,0 +1,9 @@
+// Dummy Phase-1 script: assignment, arithmetic, comparison, if/else
+x = 1 + 2;
+y = x * 3;
+if (x > 0) {
+    z = y - 1;
+} else {
+    z = 0;
+}
+x > y;

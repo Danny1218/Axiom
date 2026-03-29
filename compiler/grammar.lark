@@ -1,0 +1,54 @@
+// Axiom Phase 1 — statements, arithmetic, comparisons, if/else { }
+// Unsigned NUMBER only: SIGNED_NUMBER would merge `1+2` into `1` and `+2`.
+%import common.CNAME -> NAME
+%import common.WS_INLINE
+%import common.NEWLINE
+%ignore WS_INLINE
+%ignore NEWLINE
+
+COMMENT: "//" /[^\n]/*
+%ignore COMMENT
+
+start: statement*
+
+?statement: assign_stmt
+         | if_stmt
+         | expr_stmt
+
+assign_stmt: NAME "=" expr ";"
+
+expr_stmt: expr ";"
+
+if_stmt: "if" "(" expr ")" "{" inner "}" else_block?
+
+else_block: "else" "{" inner "}"
+
+inner: statement*
+
+?expr: comparison
+
+?comparison: sum (cmp_op sum)?
+
+cmp_op: GT | LT | EQ | NE
+GT: ">"
+LT: "<"
+EQ: "=="
+NE: "!="
+
+ADD: "+"
+SUB: "-"
+MUL: "*"
+DIV: "/"
+
+?sum: product ((ADD | SUB) product)*
+
+?product: atom ((MUL | DIV) atom)*
+
+atom: NUMBER
+    | "-" atom
+    | NAME
+    | "(" expr ")"
+
+NUMBER: INT | FLOAT
+INT: /[0-9]+/
+FLOAT: /[0-9]+\.[0-9]+([eE][+-]?[0-9]+)?/
