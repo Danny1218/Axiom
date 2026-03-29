@@ -20,7 +20,7 @@ def ast_to_ir(tree: Tree) -> IRList:
 
 
 def ir_to_digraph(ir: IRList) -> nx.DiGraph:
-    """Linear opcode sequence as a chain of nodes (for topology / tooling)."""
+    """Linear opcode sequence as a chain of nodes (lightweight view; see `compiler.flow.wire_execution_graph` for module DAG)."""
     G = nx.DiGraph()
     for i, instr in enumerate(ir):
         op = instr[0] if isinstance(instr, tuple) else instr
