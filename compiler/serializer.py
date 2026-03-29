@@ -6,7 +6,15 @@ from typing import Any, Dict, List, Optional
 
 import torch
 
-from engine.topology import ExecutionGraph
+from engine.loop_executor import InterpretedLiquidLoop
+from engine.topology import ConditionalSinkhornBlock, ExecutionGraph
+
+
+def _supernet_rank(graph: ExecutionGraph) -> int:
+    names = graph.supernet.adapter_names
+    if not names:
+        return 4
+    return graph.supernet.adapters[names[0]].rank
 
 
 def _jsonable_ir(obj: Any) -> Any:
@@ -32,15 +40,55 @@ def _sanitize_node_attr(value: Any) -> Any:
 
 def execution_topology_to_dict(graph: ExecutionGraph) -> Dict[str, Any]:
     G = graph.dag
+    sn = graph.supernet
+    adapter_names = list(sn.adapter_names)
+    router_config = {
+        "num_iters": 8,
+        "epsilon": 0.1,
+        "mutation_entropy_norm_threshold": 0.92,
+    }
+    loop_config = {"num_basis": 8, "max_unroll": 8}
+    seen_router = False
+    seen_loop = False
     nodes = []
     for n, attr in G.nodes(data=True):
-        nodes.append({"id": n, **{k: _sanitize_node_attr(v) for k, v in attr.items()}})
+        row: Dict[str, Any] = {"id": n, **{k: _sanitize_node_attr(v) for k, v in attr.items()}}
+        if n in graph.node_modules:
+            mod = graph.node_modules[n]
+            if isinstance(mod, ConditionalSinkhornBlock):
+                row["expert_then"] = mod.expert_then
+                row["expert_else"] = mod.expert_else
+                if not seen_router:
+                    r = mod.router
+                    router_config = {
+                        "num_iters": r.num_iters,
+                        "epsilon": r.epsilon,
+                        "mutation_entropy_norm_threshold": r.mutation_entropy_norm_threshold,
+                    }
+                    seen_router = True
+            elif isinstance(mod, InterpretedLiquidLoop):
+                row["loop_num_basis"] = mod.kan.num_basis
+                row["loop_max_unroll"] = mod.max_unroll
+                if not seen_loop:
+                    loop_config = {
+                        "num_basis": mod.kan.num_basis,
+                        "max_unroll": mod.max_unroll,
+                    }
+                    seen_loop = True
+        nodes.append(row)
     edges = [{"source": u, "target": v} for u, v in G.edges()]
     return {
         "directed": True,
         "topo_order": list(graph.topo_names),
         "nodes": nodes,
         "edges": edges,
+        "supernet_config": {
+            "dim": sn.dim,
+            "adapter_names": adapter_names,
+            "rank": _supernet_rank(graph),
+        },
+        "router_config": router_config,
+        "loop_config": loop_config,
     }
 
 

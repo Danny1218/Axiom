@@ -6,11 +6,13 @@
 
 **Phase 6 (complete):** **`engine/interpreter.py`** — stack IR eval, `run_while_loop` / `run_loop_snapshots` (prelude stmts + seed map + padded state vectors). **`InterpretedLiquidLoop`** — runs interpreted snapshots per batch row, **`LiquidKANNode.forward_sequence_tensors`** for sequence memory, falls back to **`forward`** when the loop body never runs (T=0). **`build_execution_graph_from_ir`** — `OP_LOOP` → `InterpretedLiquidLoop`; contiguous **`OP_ASSIGN` / `OP_EXPR_STMT`** before a loop are absorbed as prelude (no duplicate Identity nodes). IR remains on graph nodes for tooling.
 
+**Phase 7 (complete):** **`compiler/serializer.py`** — `execution_topology_to_dict` adds **`supernet_config`** (dim, adapter_names, rank), **`router_config`** (Sinkhorn iters/eps/mutation threshold from the first conditional block, else defaults), **`loop_config`** (num_basis/max_unroll from the first loop), plus per-node **`expert_then` / `expert_else`** and **`loop_num_basis` / `loop_max_unroll`**. **`compiler/deserializer.py`** — **`load_execution_bundle(path_prefix)`** rebuilds `nx.DiGraph`, `LatentSupernet`, `ConditionalSinkhornBlock` / `InterpretedLiquidLoop` / `Identity`, then **`load_state_dict`** from `*.pt`. IR lists from JSON are tuple-normalized via **`_ir_from_json`**; loop **`seed_map`** is recomputed with **`make_seed_map`**.
+
 ## Layout
 
 - `main.py` — CLI entry
 - `train.ax` — default training sketch
-- `compiler/serializer.py` — bundle I/O
+- `compiler/serializer.py`, `compiler/deserializer.py` — bundle save / reload
 - `engine/dataloader.py`, `engine/trainer.py`, `engine/interpreter.py`, `engine/loop_executor.py`
 - `primitives/`, `engine/*`, `tests/`
 
@@ -29,4 +31,4 @@ python -m pytest tests -q
 
 ## Next
 
-Reload bundle into a reconstructed `ExecutionGraph`; optional gradients through IR seeds; distributed dataloader (see `readme.md`).
+Optional gradients through IR seeds; distributed dataloader (see `readme.md`). Bundles saved before Phase 7 lack `supernet_config` / expert fields — reload requires a freshly saved topology JSON.
