@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 
 from engine.router import SinkhornRouter
+from engine.ssm import LiquidKANNode
 from engine.supernet import LatentSupernet
 
 IRList = List[tuple]
@@ -128,10 +129,12 @@ def build_execution_graph_from_ir(
     router_iters: int = 8,
     router_eps: float = 0.1,
     mutation_entropy_norm_threshold: float = 0.92,
+    loop_max_unroll: int = 8,
+    loop_num_basis: int = 8,
 ) -> ExecutionGraph:
     """
-    Map IR to a DAG: each statement is a node; OP_CONDITIONAL inserts ConditionalSinkhornBlock
-    (Sinkhorn router + two LoRA experts). Other ops use Identity to preserve linear flow.
+    Map IR to a DAG: OP_CONDITIONAL → ConditionalSinkhornBlock; OP_LOOP → LiquidKANNode;
+    other statements → Identity. Loop body IR is stored on the graph node for tooling.
     """
     conds = [i for i in ir if i[0] == "OP_CONDITIONAL"]
     if len(conditional_experts) != len(conds):
@@ -145,6 +148,7 @@ def build_execution_graph_from_ir(
     prev = "src"
     modules: dict[str, nn.Module] = {}
     cidx = 0
+    lidx = 0
     order: List[str] = []
 
     for instr in ir:
@@ -165,6 +169,19 @@ def build_execution_graph_from_ir(
             order.append(name)
             prev = name
             cidx += 1
+        elif op == "OP_LOOP":
+            name = f"loop_{lidx}"
+            _, cond_ir, body_ir = instr
+            modules[name] = LiquidKANNode(
+                supernet.dim,
+                num_basis=loop_num_basis,
+                max_unroll=loop_max_unroll,
+            )
+            G.add_node(name, kind="loop", op="OP_LOOP", cond_ir=cond_ir, body_ir=body_ir)
+            G.add_edge(prev, name)
+            order.append(name)
+            prev = name
+            lidx += 1
         else:
             name = f"stmt_{len(order)}_{op}"
             modules[name] = nn.Identity()

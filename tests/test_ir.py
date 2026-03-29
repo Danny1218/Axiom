@@ -63,3 +63,10 @@ def test_ir_nested_conditional_blocks():
     _, _, then_ir, else_ir = ir[0]
     assert else_ir == []
     assert len(then_ir) == 2
+
+
+def test_ir_while_emits_op_loop():
+    reset_parser()
+    ir = ast_to_ir(parse_ax("while (n > 0) { n = n - 1; }"))
+    assert len(ir) == 1 and ir[0][0] == "OP_LOOP"
+    assert len(ir[0][2]) >= 1

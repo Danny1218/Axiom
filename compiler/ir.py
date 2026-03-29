@@ -5,6 +5,10 @@ from typing import Any, List
 import networkx as nx
 from lark import Token, Tree
 
+
+def _child_trees(t: Tree) -> list:
+    return [c for c in t.children if isinstance(c, Tree)]
+
 IRList = List[tuple]
 
 
@@ -46,6 +50,11 @@ def _stmt(t: Tree) -> IRList:
         else:
             else_ir = []
         return [("OP_CONDITIONAL", cond, then_ir, else_ir)]
+    if t.data == "while_stmt":
+        trees = _child_trees(t)
+        cond = _expr(trees[0])
+        body_ir = _inner(trees[1])
+        return [("OP_LOOP", cond, body_ir)]
     raise ValueError(f"unknown statement {t.data}")
 
 

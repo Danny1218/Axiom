@@ -1,4 +1,4 @@
-// Axiom Phase 1 — statements, arithmetic, comparisons, if/else { }
+// Axiom — statements, arithmetic, comparisons, if/else, while
 // Unsigned NUMBER only: SIGNED_NUMBER would merge `1+2` into `1` and `+2`.
 %import common.CNAME -> NAME
 %import common.WS_INLINE
@@ -11,8 +11,11 @@ COMMENT: "//" /[^\n]/*
 
 start: statement*
 
+WHILE: "while"
+
 ?statement: assign_stmt
          | if_stmt
+         | while_stmt
          | expr_stmt
 
 assign_stmt: NAME "=" expr ";"
@@ -20,6 +23,8 @@ assign_stmt: NAME "=" expr ";"
 expr_stmt: expr ";"
 
 if_stmt: "if" "(" expr ")" "{" inner "}" else_block?
+
+while_stmt: WHILE "(" expr ")" "{" inner "}"
 
 else_block: "else" "{" inner "}"
 

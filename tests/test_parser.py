@@ -67,3 +67,15 @@ def test_parse_ax_file(tmp_path):
 def test_parse_rejects_invalid_syntax():
     with pytest.raises((UnexpectedToken, UnexpectedCharacters)):
         parse_ax("if (1) {")  # unclosed / incomplete
+
+
+def test_parse_while_loop():
+    t = parse_ax("while (i > 0) { i = i - 1; }")
+    assert t.children[0].data == "while_stmt"
+
+
+def test_parse_while_body_multiple_stmts():
+    t = parse_ax("while (1) { a = 1; b = 2; }")
+    trees = [c for c in t.children[0].children if hasattr(c, "data")]
+    inner = next(x for x in trees if x.data == "inner")
+    assert len(inner.children) == 2

@@ -19,8 +19,10 @@ def wire_execution_graph(
     router_iters: int = 8,
     router_eps: float = 0.1,
     mutation_entropy_norm_threshold: float = 0.92,
+    loop_max_unroll: int = 8,
+    loop_num_basis: int = 8,
 ) -> ExecutionGraph:
-    """Each OP_CONDITIONAL in IR gets a Sinkhorn router node over the paired LoRA experts."""
+    """OP_CONDITIONAL → Sinkhorn block; OP_LOOP → LiquidKANNode."""
     return build_execution_graph_from_ir(
         ir,
         supernet,
@@ -28,4 +30,6 @@ def wire_execution_graph(
         router_iters=router_iters,
         router_eps=router_eps,
         mutation_entropy_norm_threshold=mutation_entropy_norm_threshold,
+        loop_max_unroll=loop_max_unroll,
+        loop_num_basis=loop_num_basis,
     )
