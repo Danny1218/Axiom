@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -282,6 +283,26 @@ def _cmd_predict(args: argparse.Namespace) -> None:
     print(json.dumps(decoded, indent=2))
 
 
+def _cmd_serve(args: argparse.Namespace) -> None:
+    try:
+        import uvicorn
+    except ImportError as e:
+        raise SystemExit(
+            "axiom serve requires optional deps: pip install -e \".[serve]\""
+        ) from e
+    from axiom.serve import create_app
+
+    bundle = args.bundle or os.environ.get("AXIOM_BUNDLE_PATH")
+    if not bundle:
+        raise SystemExit("Provide --bundle or set AXIOM_BUNDLE_PATH to a .axb file.")
+    bp = Path(bundle)
+    if not bp.is_file():
+        raise SystemExit(f"Bundle not found: {bp}")
+
+    app = create_app(bp)
+    uvicorn.run(app, host=args.host, port=int(args.port), log_level="info")
+
+
 def _cmd_inspect(_args: argparse.Namespace) -> int:
     import axiom.tools
 
@@ -300,7 +321,10 @@ def _cmd_inspect(_args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> None:
-    ap = argparse.ArgumentParser(prog="axiom", description="Axiom neural compiler CLI.")
+    ap = argparse.ArgumentParser(
+        prog="axiom",
+        description="Axiom neural compiler CLI (train, predict, inspect, serve bundle API).",
+    )
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p_train = sub.add_parser("train", help="Compile .ax, train execution graph, save bundle (or inference).")
@@ -384,11 +408,28 @@ def main(argv: list[str] | None = None) -> None:
     )
     p_predict.set_defaults(_handler=_cmd_predict)
 
+    p_serve = sub.add_parser(
+        "serve",
+        help="Serve one .axb bundle over HTTP (FastAPI: /health, /predict, /explain, /report).",
+    )
+    p_serve.add_argument(
+        "--bundle",
+        type=Path,
+        default=None,
+        help="Path to .axb (default: env AXIOM_BUNDLE_PATH).",
+    )
+    p_serve.add_argument("--host", type=str, default="127.0.0.1", help="Bind address.")
+    p_serve.add_argument("--port", type=int, default=8000, help="TCP port.")
+    p_serve.set_defaults(_handler=_cmd_serve)
+
     args = ap.parse_args(argv)
     handler = args._handler
     if handler is _cmd_inspect:
         raise SystemExit(handler(args))
     if handler is _cmd_predict:
+        handler(args)
+        return
+    if handler is _cmd_serve:
         handler(args)
         return
     handler(args)

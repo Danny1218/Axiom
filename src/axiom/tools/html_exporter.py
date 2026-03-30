@@ -21,13 +21,12 @@ def _format_cell_value(v: Jsonish) -> str:
     return str(v)
 
 
-def export_html_report(
+def render_html_report(
     model: Any,
     data: dict,
-    output_path: str,
     source_code: Optional[str] = None,
-) -> None:
-    """Run ``explain`` + ``predict`` on ``model`` and write a standalone HTML dashboard to ``output_path``."""
+) -> str:
+    """Build the Glass Box HTML string (same content as :func:`export_html_report` writes)."""
     trace: Dict[str, Any] = model.explain(data)
     result: Dict[str, Any] = model.predict(data)
 
@@ -224,6 +223,17 @@ def export_html_report(
 </html>
 """
 
+    return html
+
+
+def export_html_report(
+    model: Any,
+    data: dict,
+    output_path: str,
+    source_code: Optional[str] = None,
+) -> None:
+    """Run ``explain`` + ``predict`` on ``model`` and write a standalone HTML dashboard to ``output_path``."""
+    html = render_html_report(model, data, source_code)
     out_dir = os.path.dirname(os.path.abspath(output_path))
     if out_dir:
         os.makedirs(out_dir, exist_ok=True)

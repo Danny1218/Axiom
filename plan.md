@@ -2,6 +2,8 @@
 
 ## Current phase
 
+**Phase 51** — Bundle HTTP API (**`axiom serve`**, **`src/axiom/serve.py`**, **`src/axiom/api_models.py`**) — FastAPI + uvicorn (optional **`pip install -e ".[serve]"`**): load one **`.axb`** at startup (**`--bundle`** or **`AXIOM_BUNDLE_PATH`**), **`GET /health`**, **`POST /predict`**, **`POST /explain`**, **`POST /report`** (JSON **`inputs`**; report optional **`output_path`** else inline **`html`**). Optional **`AXIOM_API_KEY`** → **`Authorization: Bearer`** or **`X-API-Key`** on mutating routes (health unauthenticated). **`html_exporter.render_html_report`** for inline HTML. Tests: **`tests/test_serve.py`**.
+
 **Phase 50** — Enterprise Glass-Box UI (**`examples/enterprise_ui.py`**) — Streamlit chat front-end: **`@st.cache_resource`** **`build_trained_policy`**, sidebar metrics + **`st.progress`** from **`scan_text` + `explain`**, block path **`export_report`** → **`examples/live_audit.html`** + **`st.download_button`**, approve path **`chat_with_onyx`** (Onyx POST or mock). **`[gateway]`** extra includes **`requests`** + **`streamlit`**. Run: **`streamlit run examples/enterprise_ui.py --server.fileWatcherType none`**. **`chat_with_onyx(..., verbose=False)`** for silent UIs. Tests: **`tests/test_enterprise_ui.py`**.
 
 **Phase 49** — Onyx API gateway (**`examples/enterprise_policy.ax`**, **`examples/onyx_gateway.py`**) — regex **`scan_text`** → **`has_pii_data` / `mentions_competitor` / `text_toxicity`** → **`InterpretedBlock`** (liquid **`intent_risk`** + nested symbolic **`is_approved`** gates) → **`AxiomModel.explain`** / **`export_report`** on block, optional **`requests.post`** to **`http://localhost:8000/api/chat`** (lazy **`requests`** import; **`pip install -e ".[gateway]"`**). Training uses MSE on **`is_approved`** plus auxiliary MSE on **`intent_risk`** so high-toxicity rows learn **`intent_risk > 0.8`**. Audit HTML **`examples/blocked_audit.html`** (gitignored with **`examples/*.html`**). Tests: **`tests/test_onyx_gateway.py`**.
@@ -79,7 +81,8 @@
 ## Layout
 
 - `pyproject.toml` — **`axiom-engine`**, script **`axiom` → `axiom.cli:main`**
-- `src/axiom/cli.py` — train / inspect subcommands
+- `src/axiom/cli.py` — train / inspect / predict / **serve** subcommands
+- `src/axiom/serve.py`, `src/axiom/api_models.py` — Phase 51 FastAPI bundle server
 - `src/axiom/datasets.py` — Titanic, sine, finance mock
 - `src/axiom/tools/inspector.py`, `glass_box.py`, `html_exporter.py` — Glass Box (Streamlit + static HTML report)
 - `examples/titanic.ax`, `examples/sequence.ax`, `examples/portfolio.ax`, `examples/spy_alpha.ax`, `examples/statarb.ax`, `examples/cartpole.ax` — domain sketches
@@ -121,6 +124,8 @@ python examples/train_singularity.py
 pip install -e ".[gateway]"
 python examples/onyx_gateway.py
 streamlit run examples/enterprise_ui.py --server.fileWatcherType none
+pip install -e ".[serve]"
+axiom serve --bundle examples/portfolio_trained.axb --host 127.0.0.1 --port 8000
 axiom inspect
 ```
 
@@ -151,5 +156,7 @@ axiom inspect
 **Phase 49 (complete):** **Onyx gateway** — **`examples/enterprise_policy.ax`**: **`features`**, liquid **`intent_risk`**, nested **`if`** → **`is_approved`**. **`examples/onyx_gateway.py`**: **`scan_text`** (SSN regex, competitor keywords, demo toxicity), **`build_trained_policy`** (joint **`is_approved`** + **`intent_risk`** MSE), **`chat_with_onyx`** (**`explain`**, **`export_report`** on deny, **`requests.post`** or mock). Tests: **`tests/test_onyx_gateway.py`**.
 
 **Phase 50 (complete):** **Enterprise Streamlit UI** — **`examples/enterprise_ui.py`**: cached policy, sidebar telemetry, **`st.chat_input`**, block → **`live_audit.html`** + download, allow → **`chat_with_onyx(..., verbose=False)`**. **`pyproject.toml`** **`[gateway]`** lists **`streamlit`**. Tests: **`tests/test_enterprise_ui.py`**.
+
+**Phase 51 (complete):** **Serve bundle API** — **`axiom serve`**, **`create_app`**, Pydantic request/response models, **`render_html_report`** for **`/report`** inline HTML. **`[serve]`** extra: **`fastapi`**, **`uvicorn`**. Tests: **`tests/test_serve.py`**.
 
 **Later ideas:** **`return` inside `while`**; call targets like **`f()[i]`**. Glass Box upgrades (**`--inspect`** / graph of **`OP_NEURAL`**). See **`readme.md` § Road ahead**.
