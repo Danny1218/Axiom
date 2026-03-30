@@ -99,6 +99,10 @@ class ConditionalSinkhornBlock(nn.Module):
         w, entropy_tensor = self.router(h, expert_mask=mask)
         *lead, _ = w.shape
         w2 = w.reshape(-1, 2)
+        sig: Dict[str, torch.Tensor] = {
+            self.block_name: entropy_tensor,
+            f"{self.block_name}_weights": w.detach(),
+        }
         h_flat = h.reshape(-1, h.shape[-1])
         h_then_f = h_then.reshape(-1, h.shape[-1])
         h_else_f = h_else.reshape(-1, h.shape[-1])
@@ -112,7 +116,7 @@ class ConditionalSinkhornBlock(nn.Module):
         # Always expose raw adapter outputs; trainer applies localized MSE only when is_shadow.
         local_shadows[self.expert_then] = y0
         local_shadows[self.expert_else] = y1
-        return out_flat.reshape(*lead, h.shape[-1]), local_shadows, {self.block_name: entropy_tensor}
+        return out_flat.reshape(*lead, h.shape[-1]), local_shadows, sig
 
 
 class ExecutionGraph(nn.Module):

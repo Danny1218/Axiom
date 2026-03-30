@@ -33,6 +33,8 @@ class MetaCompiler:
         for name, entropy_tensor in signals_dict.items():
             if n >= max_unmasks:
                 break
+            if entropy_tensor.dim() != 0:
+                continue
             thr = thr_map.get(name, default_thr)
             if float(entropy_tensor.item()) < thr:
                 continue

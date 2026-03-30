@@ -32,9 +32,12 @@
 
 **Phase 19 (complete):** **Domain tooling — Titanic** — **`load_csv_to_dicts`** / **`_cell_to_float`** in **`engine/dataloader.py`** ( **`csv.DictReader`**, numeric parse, **`female`/`male`**, empty → **0** ). **`examples/titanic.ax`**: hybrid priors on **`Sex`** / **`Pclass`** → **`survived_prob`**. **`examples/run_titanic.py`**: compile graph (**`dim=32`**), download CSV if missing (public mirror), 80/20 split, **`AxiomDataset`**, **`EvolutionaryTrainer(..., target_col=abi["survived_prob"], device=...)`** via **`train_epoch(..., device=)`** so batches match CUDA. **`EvolutionaryTrainer.train_epoch`** optional **`device`** moves **`x,y`** to that device. Tests: **`tests/test_csv_titanic.py`**. **`examples/titanic.csv`** gitignored (downloaded on first run).
 
+**Phase 20 (complete):** **Glass Box visualizer** — **`tools/inspector.py`**: Streamlit UI loads a bundle via path prefix or uploaded **`upload_topology.json` + `upload.pt`**, builds ABI **`st.number_input`**s, **`Run inference`** → **`AxiomRunner.predict_with_signals`**, large output metric + routing expander. **`tools/glass_box.py`**: **`execution_graph_to_graphviz`** (conditional yellow, loop blue, stmt green), **`routing_trace_entries`**, **`tensor_preview_dict`**. **`ConditionalSinkhornBlock`** signals add **`{block}_weights`** (detached router **`w`**); **`MetaCompiler.react_to_signals`** skips non-scalar tensors so meta behavior unchanged. **`requirements.txt`**: **`streamlit`**, **`graphviz`**. Run: **`streamlit run tools/inspector.py`** (install [Graphviz](https://graphviz.org/download/) so **`dot`** is on **`PATH`** for **`st.graphviz_chart`**). Tests: **`tests/test_glass_box.py`**.
+
 ## Layout
 
 - `main.py` — CLI entry
+- `tools/inspector.py`, `tools/glass_box.py` — Glass Box Streamlit + DAG helpers
 - `examples/titanic.ax`, `examples/run_titanic.py` — applied Titanic pipeline
 - `train.ax` — default training sketch
 - `compiler/serializer.py`, `compiler/deserializer.py` — bundle save / reload
@@ -56,4 +59,4 @@ python -m pytest tests -q
 
 ## Next
 
-More domain examples, feature-rich Titanic encodings (Age/Fare in ABI), distributed dataloader (see `readme.md`). Further Dynamo hardening if new IR ops add Python breaks.
+More domain examples, feature-rich Titanic encodings (Age/Fare in ABI), distributed dataloader (see `readme.md`). Further Dynamo hardening if new IR ops add Python breaks. Optional: embed Graphviz WASM fallback if `dot` is missing on Windows.

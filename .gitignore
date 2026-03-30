@@ -7,3 +7,4 @@ venv/
 dist/
 build/
 examples/titanic.csv
+.axiom_inspector_upload/
