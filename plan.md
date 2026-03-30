@@ -2,9 +2,11 @@
 
 ## Current phase
 
-**Phase 58** — **Expert backend abstraction (semantic copilot)** — **`src/axiom/experts/`**: **`SemanticExpert`** protocol (**`draft_program`**, **`repair_program`**, **`summarize_trace`**), dataclasses **`ExpertDraftRequest`**, **`ExpertDraftResponse`**, **`ExpertRepairRequest`**, **`ExpertTraceSummaryRequest`**, registry (**`register`**, **`resolve`**, **`DuplicateExpertRegistrationError`**, **`UnknownExpertError`**). No network, no CLI, no compiler changes. Tests: **`tests/test_experts.py`**.
+**Phase 59** — **Onyx / Qwen expert HTTP adapter** — **`src/axiom/experts/onyx_qwen.py`**: **`OnyxQwenBackend`** (OpenAI-style **`POST …/v1/chat/completions`**), **`draft_program` / `repair_program` / `summarize_trace`**, deterministic prompts, fenced **`.ax`** extraction with plain-text fallback, **`OnyxQwenTimeoutError`**, **`OnyxQwenHTTPError`**, **`OnyxQwenParseError`**, **`OnyxQwenTransportError`**. Optional **`pip install -e ".[copilot]"`** (**`requests`**). Not imported from **`axiom`** root. Tests: **`tests/test_onyx_qwen_backend.py`**.
 
-**Phase 57** — **Semantic-copilot baseline (audit only)** — **`tests/test_architecture_baseline.py`** locks layout and public surfaces. **Phase 58** adds **`experts/`** to that layout check.
+**Phase 58** — **Expert backend abstraction** — **`SemanticExpert`**, registry, dataclasses. Tests: **`tests/test_experts.py`**.
+
+**Phase 57** — **Semantic-copilot baseline (audit only)** — **`tests/test_architecture_baseline.py`** locks layout and public surfaces.
 
 **Phase 56** — **Packaging & documentation** — Core **`pyproject.toml`** deps minimal; extras **`inspect`**, **`serve`**, **`lock`**, **`export`**, **`gateway`**, **`dev`**. **`readme.md`** pipeline narrative. Tests: **`tests/test_documentation_contract.py`**.
 
@@ -94,7 +96,7 @@
 
 ## Layout
 
-- `pyproject.toml` — **`axiom-engine`**, script **`axiom` → `axiom.cli:main`**, core deps minimal; extras **`inspect`**, **`serve`**, **`lock`**, **`export`**, **`gateway`**, **`dev`**
+- `pyproject.toml` — **`axiom-engine`**, script **`axiom` → `axiom.cli:main`**, core deps minimal; extras **`inspect`**, **`serve`**, **`lock`**, **`export`**, **`gateway`**, **`copilot`**, **`dev`**
 - `Dockerfile`, `docker-compose.yml`, `.dockerignore` — Phase 53 containerized **`axiom serve`**
 - `src/axiom/export/onnx_export.py` — Phase 54 optional **`.axb` → ONNX** (**InterpretedBlock**)
 - `src/axiom/gateway/core.py`, `src/axiom/gateway/server.py` — Phase 55 policy gateway + HTTP **`/gateway/chat`**
@@ -114,14 +116,14 @@
 - `examples/enterprise_ui.py` — Phase 50 Streamlit firewall UI (telemetry sidebar + chat + audit download)
 - `train.ax` — default **`axiom train`** sketch (cwd)
 - `src/axiom/compiler/`, `src/axiom/engine/`, `src/axiom/primitives/`
-- `src/axiom/experts/` — Phase 58 external **semantic expert** protocol + registry (not **`OP_NEURAL`**)
-- `tests/` — **`tests/test_architecture_baseline.py`**, **`tests/test_experts.py`**
+- `src/axiom/experts/` — Phase 58 protocol + registry; Phase 59 **`onyx_qwen.py`** (optional **`[copilot]`**)
+- `tests/` — **`tests/test_architecture_baseline.py`**, **`tests/test_experts.py`**, **`tests/test_onyx_qwen_backend.py`**
 
 ## Next target (semantic copilot — wiring)
 
-**Done (Phase 58):** typed **expert** API + **registry** for pluggable backends (still **no** default HTTP client in-tree).
+**Done:** typed **expert** API (**Phase 58**) + **Onyx/Qwen HTTP adapter** (**Phase 59**, **`[copilot]`**).
 
-**Not started:** wire a concrete HTTP expert implementation, copilot **CLI** or **FastAPI** routes, and orchestration that calls **`compile` / `train`** after expert draft/repair—keep using **`AxiomModel`** and existing **gateway** patterns at boundaries.
+**Not started:** copilot **CLI** or **FastAPI** routes, and orchestration that runs **`compile` / `train`** after expert draft/repair—keep using **`AxiomModel`** and existing **gateway** patterns at boundaries.
 
 ## IR opcodes
 
@@ -132,6 +134,7 @@
 ```powershell
 cd "...\Axiom"
 pip install -e ".[dev]"
+# Optional: `pip install -e ".[copilot]"` if `requests` is missing (runs `test_onyx_qwen_backend.py`)
 python -m pytest tests -q
 axiom train train.ax --epochs 10 --out axiom_bundle
 axiom train examples/titanic.ax --dataset titanic --epochs 30 --out axiom_bundle

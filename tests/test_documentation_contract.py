@@ -100,6 +100,7 @@ def test_pyproject_optional_extras_documented():
     text = (_root() / "pyproject.toml").read_text(encoding="utf-8")
     assert "inspect = [" in text
     assert "dev = [" in text
+    assert "copilot = [" in text
     assert "serve = [" in text and "lock = [" in text and "export = [" in text
 
 
