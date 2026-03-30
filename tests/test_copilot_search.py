@@ -49,14 +49,22 @@ class ScriptedExpert:
 
     def draft_program(self, request: ExpertDraftRequest) -> ExpertDraftResponse:
         self.draft_calls.append(request)
-        return ExpertDraftResponse(ax_source=self.draft_source, backend_name="scripted")
+        return ExpertDraftResponse(
+            ax_source=self.draft_source,
+            backend_name="scripted",
+            metadata={"call": "draft", "seq": 0},
+        )
 
     def repair_program(self, request: ExpertRepairRequest) -> ExpertDraftResponse:
         self.repair_calls.append(request)
         if not self._repairs:
             raise AssertionError("unexpected repair_program call")
         nxt = self._repairs.pop(0)
-        return ExpertDraftResponse(ax_source=nxt, backend_name="scripted")
+        return ExpertDraftResponse(
+            ax_source=nxt,
+            backend_name="scripted",
+            metadata={"call": "repair", "seq": len(self.repair_calls)},
+        )
 
     def summarize_trace(self, request: ExpertTraceSummaryRequest) -> str:
         return "ok"
@@ -95,6 +103,9 @@ def test_compile_failure_then_repair_then_success():
     assert out.iterations[0].outgoing_repair_error_report is not None
     assert out.iterations[0].producing_payload["type"] == "draft"
     assert out.iterations[1].producing_payload["type"] == "repair"
+    assert out.iterations[0].producing_expert["expert_call"] == "draft"
+    assert out.iterations[0].producing_expert["metadata"]["call"] == "draft"
+    assert out.iterations[1].producing_expert["expert_call"] == "repair"
 
 
 def test_best_candidate_prefers_valid_over_invalid():

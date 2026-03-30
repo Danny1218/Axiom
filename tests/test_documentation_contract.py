@@ -45,6 +45,7 @@ def test_readme_documents_copilot_cli():
     text = (_root() / "readme.md").read_text(encoding="utf-8")
     assert "copilot-draft" in text and "copilot-search" in text and "[copilot]" in text
     assert "Semantic copilot" in text and "inputs" in text and "expected" in text
+    assert "artifact-dir" in text and "iterations.json" in text and "search_report.json" in text
 
 
 def test_readme_from_compile_to_production_story():
@@ -183,6 +184,7 @@ def test_cli_source_wires_documented_train_features():
     assert "gateway-serve" in src and "create_gateway_app" in src
     assert "Glass Box requires" in src and ".[inspect]" in src
     assert "copilot-draft" in src and "copilot-search" in src and "_make_copilot_expert" in src
+    assert "artifact-dir" in src
 
 
 def test_cli_rejects_dataset_and_csv_together():

@@ -96,6 +96,8 @@ python -m pytest tests -q
 
 Install **`[copilot]`** so `requests` is available. Pass **`--expert-url`** (API base, e.g. `https://your-host/v1/`), **`--expert-model`**, and optionally **`--expert-api-key`** or set **`AXIOM_EXPERT_API_KEY`**. Iteration logs and “wrote file” lines go to **stderr**; the generated **`.ax`** source is printed to **stdout** so you can redirect it.
 
+**Reproducible runs:** **`axiom copilot-search --artifact-dir path/to/run/`** writes a fixed bundle — **`best.ax`**, **`iterations.json`** (per-iteration source, metrics, failure summaries, expert **`metadata`**), **`search_report.json`** (run header + **`failures_metrics_summary`**) — only when that flag is set (no silent writes).
+
 **Draft** (goal → single program):
 
 ```powershell
@@ -118,7 +120,7 @@ Set-Content -Path examples.json -Value $examples -Encoding utf8
 axiom copilot-search --backend onyx-qwen --goal "Output y from defaults" `
   --expert-url "https://api.example.com/v1/" --expert-model "qwen-7b" `
   --iterations 5 --examples-json examples.json `
-  --out best.ax --report-out search_report.json
+  --out best.ax --report-out search_report.json --artifact-dir ./copilot_run_01
 ```
 
 ---

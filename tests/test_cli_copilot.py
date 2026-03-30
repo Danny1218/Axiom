@@ -94,6 +94,33 @@ def test_copilot_draft_writes_out(tmp_path: Path, monkeypatch):
     assert out_ax.is_file() and "neural" in out_ax.read_text(encoding="utf-8")
 
 
+def test_copilot_search_artifact_dir_writes_bundle(tmp_path: Path, monkeypatch):
+    fake = _FakeExpert()
+    fake.draft_source = "y = neural([1.0, 2.0]);\n"
+    monkeypatch.setattr(cli_mod, "_make_copilot_expert", lambda _a: fake)
+    ad = tmp_path / "artifacts"
+    main(
+        [
+            "copilot-search",
+            "--backend",
+            "onyx-qwen",
+            "--goal",
+            "g",
+            "--expert-url",
+            "http://x/",
+            "--expert-model",
+            "m",
+            "--iterations",
+            "1",
+            "--artifact-dir",
+            str(ad),
+        ]
+    )
+    assert (ad / "best.ax").is_file()
+    assert (ad / "iterations.json").is_file()
+    assert (ad / "search_report.json").is_file()
+
+
 def test_copilot_search_runs_with_stub_expert(tmp_path: Path, capsys, monkeypatch):
     fake = _FakeExpert()
     fake.draft_source = "y = ++++ ;\n"

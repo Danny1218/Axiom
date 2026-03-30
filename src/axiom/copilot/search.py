@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 from axiom.copilot.evaluator import evaluate_program
@@ -121,6 +122,8 @@ class CopilotSearchConfig:
     metric_repair_if_below: Optional[float] = None
     predictions_sample_limit: int = 3
     include_trace_snippet: bool = True
+    # If set, run_copilot_search writes best.ax, iterations.json, search_report.json under this path.
+    artifact_dir: Optional[Path] = None
 
 
 @dataclass
@@ -130,6 +133,8 @@ class CopilotIterationRecord:
     evaluation: ProgramEvaluationReport
     producing_payload: ExpertRequestPayload
     outgoing_repair_error_report: Optional[str] = None
+    producing_expert: Dict[str, Any] = field(default_factory=dict)
+    """Expert response metadata for the call that produced ``source`` (draft or repair)."""
 
 
 @dataclass
@@ -217,6 +222,8 @@ def _needs_metric_repair(config: CopilotSearchConfig, report: ProgramEvaluationR
 
 
 def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
+    from axiom.copilot.artifacts import expert_response_to_dict, persist_copilot_artifacts
+
     ctx = build_draft_context(
         domain_context=config.domain_context,
         example_input_rows=config.example_input_rows,
@@ -225,6 +232,7 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
     draft_req = ExpertDraftRequest(goal=config.goal, context=ctx)
     draft_resp = config.expert.draft_program(draft_req)
     current = draft_resp.ax_source
+    provenance_meta = expert_response_to_dict(draft_resp, "draft")
     sort_key = config.score_sort_key
     max_it = max(1, int(config.max_iterations))
 
@@ -239,6 +247,7 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
     for i in range(max_it):
         source_evaluated = current
         producing = ingress_payload
+        iter_expert_meta = provenance_meta
 
         report = evaluate_program(
             ProgramCandidate(source_evaluated),
@@ -281,7 +290,9 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
                 context=repair_ctx,
             )
             ingress_payload = _repair_payload_dict(repair_req)
-            current = config.expert.repair_program(repair_req).ax_source
+            repair_resp = config.expert.repair_program(repair_req)
+            current = repair_resp.ax_source
+            provenance_meta = expert_response_to_dict(repair_resp, "repair")
         else:
             if report.success:
                 converged = True
@@ -293,6 +304,7 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
                 evaluation=report,
                 producing_payload=producing,
                 outgoing_repair_error_report=err_full,
+                producing_expert=iter_expert_meta,
             )
         )
 
@@ -301,10 +313,13 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
 
     assert final_report is not None and best_eval is not None
 
-    return CopilotSearchResult(
+    result = CopilotSearchResult(
         best_source=best_source,
         best_evaluation=best_eval,
         final_report=final_report,
         converged=converged,
         iterations=iterations,
     )
+    if config.artifact_dir is not None:
+        persist_copilot_artifacts(config, result, config.artifact_dir)
+    return result

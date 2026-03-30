@@ -479,19 +479,9 @@ def _default_predict_score_fn() -> Callable[[List[Dict[str, Any]], List[Dict[str
 
 
 def _serialize_evaluation_report(rep: Any) -> dict:
-    return {
-        "success": rep.success,
-        "source": rep.source,
-        "compile_stage_reached": rep.compile_stage_reached,
-        "mode": rep.mode,
-        "failures": [
-            {"stage": f.stage, "kind": f.kind, "message": f.message, "detail": f.detail}
-            for f in rep.failures
-        ],
-        "warnings": list(rep.warnings),
-        "metrics": dict(rep.metrics),
-        "program_metrics": [{"name": m.name, "value": m.value} for m in rep.program_metrics],
-    }
+    from axiom.copilot.artifacts import evaluation_report_to_dict
+
+    return evaluation_report_to_dict(rep)
 
 
 def _cmd_copilot_draft(args: argparse.Namespace) -> None:
@@ -546,6 +536,7 @@ def _cmd_copilot_search(args: argparse.Namespace) -> None:
         score_fn=score_fn,
         score_sort_key=sort_key,
         include_trace_snippet=False,
+        artifact_dir=args.artifact_dir,
     )
     result = run_copilot_search(cfg)
 
@@ -573,6 +564,7 @@ def _cmd_copilot_search(args: argparse.Namespace) -> None:
                     "source": rec.source,
                     "evaluation": _serialize_evaluation_report(rec.evaluation),
                     "producing_payload": rec.producing_payload,
+                    "producing_expert": rec.producing_expert,
                     "outgoing_repair_error_report": rec.outgoing_repair_error_report,
                 }
                 for rec in result.iterations
@@ -581,6 +573,8 @@ def _cmd_copilot_search(args: argparse.Namespace) -> None:
         args.report_out.parent.mkdir(parents=True, exist_ok=True)
         args.report_out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         print(f"Wrote report to {args.report_out}", file=sys.stderr)
+    if args.artifact_dir is not None:
+        print(f"Wrote artifact bundle to {args.artifact_dir.resolve()}", file=sys.stderr)
 
 
 def _add_copilot_backend_args(p: argparse.ArgumentParser) -> None:
@@ -841,6 +835,12 @@ def main(argv: list[str] | None = None) -> None:
         type=Path,
         default=None,
         help="Write structured JSON (iterations, metrics, sources) to this path.",
+    )
+    p_cs.add_argument(
+        "--artifact-dir",
+        type=Path,
+        default=None,
+        help="Write reproducible bundle: best.ax, iterations.json, search_report.json (creates dir).",
     )
     p_cs.set_defaults(_handler=_cmd_copilot_search)
 

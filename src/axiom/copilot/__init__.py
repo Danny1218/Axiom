@@ -9,6 +9,14 @@ from axiom.copilot.models import (
     ProgramMetric,
     ProgramValidationReport,
 )
+from axiom.copilot.artifacts import (
+    COPILOT_ARTIFACT_SCHEMA_VERSION,
+    build_iterations_document,
+    build_search_report_document,
+    evaluation_report_to_dict,
+    expert_response_to_dict,
+    persist_copilot_artifacts,
+)
 from axiom.copilot.search import (
     CopilotIterationRecord,
     CopilotSearchConfig,
@@ -22,6 +30,7 @@ from axiom.copilot.search import (
 )
 
 __all__ = [
+    "COPILOT_ARTIFACT_SCHEMA_VERSION",
     "CopilotIterationRecord",
     "CopilotSearchConfig",
     "CopilotSearchResult",
@@ -32,11 +41,16 @@ __all__ = [
     "ProgramMetric",
     "ProgramValidationReport",
     "build_draft_context",
+    "build_iterations_document",
     "build_repair_context",
     "build_repair_error_report",
+    "build_search_report_document",
     "evaluate_program",
+    "evaluation_report_to_dict",
+    "expert_response_to_dict",
     "format_failures_for_repair",
     "format_metrics_for_repair",
+    "persist_copilot_artifacts",
     "run_copilot_search",
     "validate_program",
 ]

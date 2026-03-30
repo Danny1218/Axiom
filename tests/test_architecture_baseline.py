@@ -29,6 +29,7 @@ def test_plan_documents_semantic_copilot_roadmap():
     assert "Phase 58" in plan and "experts" in plan.lower()
     assert "Phase 60" in plan and "copilot" in plan.lower()
     assert "Phase 61" in plan and "copilot-draft" in plan
+    assert "Phase 62" in plan and "artifacts" in plan.lower()
     assert "Phase 57" in plan
 
 
