@@ -1,3 +1,4 @@
+from engine.block_executor import InterpretedBlock
 from engine.dataloader import AxiomDataset, LiquidSequenceLoader, sequential_to_features
 from engine.inference import AxiomRunner
 from engine.fitness import (
@@ -29,6 +30,7 @@ __all__ = [
     "build_execution_graph_from_ir",
     "InterpretedLiquidLoop",
     "LiquidKANNode",
+    "InterpretedBlock",
     "AxiomDataset",
     "LiquidSequenceLoader",
     "sequential_to_features",

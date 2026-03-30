@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import networkx as nx
 import torch.nn as nn
 
 from compiler.ir import extract_global_abi
 from compiler.serializer import load_state_dict
+from engine.block_executor import InterpretedBlock
 from engine.loop_executor import InterpretedLiquidLoop
 from engine.supernet import LatentSupernet
 from engine.topology import ConditionalSinkhornBlock, ExecutionGraph
@@ -32,6 +33,14 @@ def _ir_program_from_json(obj: Any) -> list:
     if not isinstance(obj, list):
         return []
     return [_ir_from_json(x) for x in obj]
+
+
+def _ir_stmt_list(obj: Any) -> Optional[List[tuple]]:
+    if not obj:
+        return None
+    if not isinstance(obj, list):
+        return None
+    return [_ir_from_json(s) for s in obj]
 
 
 def _resolve_global_abi(data: Dict[str, Any], dim: int) -> Dict[str, int]:
@@ -85,6 +94,10 @@ def load_execution_bundle(path_prefix: str | Path) -> ExecutionGraph:
         if kind == "conditional":
             then_e = attr["expert_then"]
             else_e = attr["expert_else"]
+            then_ir = _ir_stmt_list(attr.get("then_ir"))
+            else_ir = _ir_stmt_list(attr.get("else_ir"))
+            then_ir_l = list(then_ir) if then_ir else []
+            else_ir_l = list(else_ir) if else_ir else []
             modules[name] = ConditionalSinkhornBlock(
                 sn,
                 then_e,
@@ -93,6 +106,10 @@ def load_execution_bundle(path_prefix: str | Path) -> ExecutionGraph:
                 num_iters=num_iters,
                 epsilon=epsilon,
                 mutation_entropy_norm_threshold=mut_thr,
+                then_ir=then_ir_l or None,
+                else_ir=else_ir_l or None,
+                abi=global_abi,
+                block_max_unroll=default_max_unroll,
             )
         elif kind == "loop":
             cond_ir = _ir_from_json(attr["cond_ir"])
@@ -110,7 +127,14 @@ def load_execution_bundle(path_prefix: str | Path) -> ExecutionGraph:
                 max_unroll=max_unroll,
             )
         elif kind == "stmt":
-            modules[name] = nn.Identity()
+            ir_one = attr.get("ir")
+            if ir_one is not None:
+                stmt_t = _ir_from_json(ir_one)
+                modules[name] = InterpretedBlock(
+                    [stmt_t], global_abi, max_unroll=default_max_unroll
+                )
+            else:
+                modules[name] = nn.Identity()
         else:
             raise ValueError(f"unknown node kind {kind!r} for {name!r}")
 

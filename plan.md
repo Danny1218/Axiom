@@ -28,12 +28,14 @@
 
 **Phase 17 (complete):** **Target blinding & dict outputs** — **`AxiomDataset`**: **`target_col = abi.get(target_key)`**; after filling **`x`**, **`x[target_col] = 0`** when that column is the supervised target so labels are not leaked into inputs. **`AxiomRunner`**: **`predict_dict`** / **`predict_dict_batch`** decode trunk tensors with **`graph.abi`**; **`predict`** / **`predict_batch`** / **`predict_with_signals`** set **`self.device`** and **`x = x.to(self.device)`** before the graph. **`main.py`** inference prints **`predict_dict(...)`**. Tests: **`tests/test_target_leakage.py`**, **`tests/test_inference_api.py`** (**`predict_dict`**, **`predict_dict_batch`**).
 
+**Phase 18 (complete):** **Hybrid symbolic–neural execution** — **`engine/block_executor.py`**: **`InterpretedBlock`** runs IR stmts with **`exec_stmt`**, seeds **`env`** from **`h`** via **`abi`**, repacks trunk columns. Root **`OP_ASSIGN` / `OP_EXPR_STMT`** use **`InterpretedBlock`** (DAG node carries **`ir`** for bundles). **`ConditionalSinkhornBlock`** runs symbolic **`then_ir` / `else_ir`** per branch, then **`out = w0*(h_then+y0) + w1*(h_else+y1)`** (same shadow semantics on raw adapter outputs). **`load_execution_bundle`** rebuilds stmt/conditional IR from JSON. Tests: **`tests/test_hybrid_execution.py`**. **`torch._dynamo.reset()`** in **`test_evolutionary_trainer_compile_fullgraph_with_loop_one_epoch`** avoids Dynamo cache exhaustion after other compile tests.
+
 ## Layout
 
 - `main.py` — CLI entry
 - `train.ax` — default training sketch
 - `compiler/serializer.py`, `compiler/deserializer.py` — bundle save / reload
-- `engine/dataloader.py`, `engine/trainer.py`, `engine/inference.py`, `engine/interpreter.py`, `engine/loop_executor.py`
+- `engine/block_executor.py`, `engine/dataloader.py`, `engine/trainer.py`, `engine/inference.py`, `engine/interpreter.py`, `engine/loop_executor.py`
 - `primitives/`, `engine/*`, `tests/`
 
 ## IR opcodes

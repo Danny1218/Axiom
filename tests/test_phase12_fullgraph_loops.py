@@ -61,6 +61,7 @@ while (i > 0) {
 
 
 def test_evolutionary_trainer_compile_fullgraph_with_loop_one_epoch():
+    torch._dynamo.reset()
     reset_parser()
     ax = """
 j = 2;

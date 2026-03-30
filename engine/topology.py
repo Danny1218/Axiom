@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 
 from compiler.ir import extract_global_abi
+from engine.block_executor import InterpretedBlock
 from engine.loop_executor import InterpretedLiquidLoop
 from engine.router import SinkhornRouter
 from engine.supernet import LatentSupernet
@@ -39,7 +40,7 @@ def _prelude_stmts_before_loop(ir: IRList, k: int) -> List[tuple]:
 
 
 class ConditionalSinkhornBlock(nn.Module):
-    """Sinkhorn-balanced mix of two supernet adapters (then / else experts)."""
+    """Sinkhorn-balanced mix: symbolic IR on each branch + TT-LoRA residual, then weight blend."""
 
     def __init__(
         self,
@@ -51,6 +52,10 @@ class ConditionalSinkhornBlock(nn.Module):
         num_iters: int = 8,
         epsilon: float = 0.1,
         mutation_entropy_norm_threshold: float = 0.92,
+        then_ir: Optional[List[tuple]] = None,
+        else_ir: Optional[List[tuple]] = None,
+        abi: Optional[Dict[str, int]] = None,
+        block_max_unroll: int = 8,
     ) -> None:
         super().__init__()
         if expert_then not in supernet.adapters or expert_else not in supernet.adapters:
@@ -66,6 +71,15 @@ class ConditionalSinkhornBlock(nn.Module):
             epsilon=epsilon,
             mutation_entropy_norm_threshold=mutation_entropy_norm_threshold,
         )
+        abi_d = dict(abi or {})
+        then_l = list(then_ir) if then_ir else []
+        else_l = list(else_ir) if else_ir else []
+        self.then_block = (
+            InterpretedBlock(then_l, abi_d, max_unroll=block_max_unroll) if then_l else None
+        )
+        self.else_block = (
+            InterpretedBlock(else_l, abi_d, max_unroll=block_max_unroll) if else_l else None
+        )
 
     def forward(
         self, h: torch.Tensor
@@ -80,21 +94,25 @@ class ConditionalSinkhornBlock(nn.Module):
             ],
             dim=0,
         )
+        h_then = self.then_block(h) if self.then_block is not None else h
+        h_else = self.else_block(h) if self.else_block is not None else h
         w, entropy_tensor = self.router(h, expert_mask=mask)
         *lead, _ = w.shape
         w2 = w.reshape(-1, 2)
         h_flat = h.reshape(-1, h.shape[-1])
+        h_then_f = h_then.reshape(-1, h.shape[-1])
+        h_else_f = h_else.reshape(-1, h.shape[-1])
         y0 = self.supernet.adapters[self.expert_then](h_flat)
         y1 = self.supernet.adapters[self.expert_else](h_flat)
         y0_mix = torch.where(self.supernet.is_shadow[it] >= 0.5, y0.detach(), y0)
         y1_mix = torch.where(self.supernet.is_shadow[ie] >= 0.5, y1.detach(), y1)
-        c0 = w2[:, 0:1] * y0_mix
-        c1 = w2[:, 1:2] * y1_mix
+        branch0 = h_then_f + y0_mix
+        branch1 = h_else_f + y1_mix
+        out_flat = w2[:, 0:1] * branch0 + w2[:, 1:2] * branch1
         # Always expose raw adapter outputs; trainer applies localized MSE only when is_shadow.
         local_shadows[self.expert_then] = y0
         local_shadows[self.expert_else] = y1
-        out = h_flat + c0 + c1
-        return out.reshape(*lead, h.shape[-1]), local_shadows, {self.block_name: entropy_tensor}
+        return out_flat.reshape(*lead, h.shape[-1]), local_shadows, {self.block_name: entropy_tensor}
 
 
 class ExecutionGraph(nn.Module):
@@ -202,6 +220,9 @@ def build_execution_graph_from_ir(
         if op == "OP_CONDITIONAL":
             name = f"cond_{cidx}"
             then_e, else_e = conditional_experts[cidx]
+            _, _cond_ir, then_ir_list, else_ir_list = instr
+            then_ir = list(then_ir_list)
+            else_ir = list(else_ir_list)
             modules[name] = ConditionalSinkhornBlock(
                 supernet,
                 then_e,
@@ -210,8 +231,18 @@ def build_execution_graph_from_ir(
                 num_iters=router_iters,
                 epsilon=router_eps,
                 mutation_entropy_norm_threshold=mutation_entropy_norm_threshold,
+                then_ir=then_ir,
+                else_ir=else_ir,
+                abi=global_abi,
+                block_max_unroll=loop_max_unroll,
             )
-            G.add_node(name, kind="conditional", op="OP_CONDITIONAL")
+            G.add_node(
+                name,
+                kind="conditional",
+                op="OP_CONDITIONAL",
+                then_ir=then_ir,
+                else_ir=else_ir,
+            )
             G.add_edge(prev, name)
             order.append(name)
             prev = name
@@ -243,8 +274,10 @@ def build_execution_graph_from_ir(
             lidx += 1
         else:
             name = f"stmt_{len(order)}_{op}"
-            modules[name] = nn.Identity()
-            G.add_node(name, kind="stmt", op=op)
+            modules[name] = InterpretedBlock(
+                [instr], global_abi, max_unroll=loop_max_unroll
+            )
+            G.add_node(name, kind="stmt", op=op, ir=instr)
             G.add_edge(prev, name)
             order.append(name)
             prev = name
