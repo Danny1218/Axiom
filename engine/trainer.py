@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 from typing import Dict, List, Optional, Tuple
 
 import torch
@@ -9,6 +10,32 @@ import torch.nn.functional as F
 from engine.fitness import ShadowFitnessEvaluator, Verdict, apply_shadow_verdict
 from engine.meta_compiler import MetaCompiler
 from engine.topology import ExecutionGraph
+
+
+def _compile_step_fn(graph: ExecutionGraph) -> nn.Module:
+    """Prefer inductor when available; fall back to aot_eager if codegen fails (e.g. no MSVC on Windows)."""
+    import torch._dynamo.config as dynamo_config
+
+    dynamo_config.capture_dynamic_output_shape_ops = True
+    p = next(graph.parameters())
+    dev, dt = p.device, p.dtype
+    d = graph.supernet.dim
+    trial = torch.randn(2, d, device=dev, dtype=dt, requires_grad=True)
+    graph.train()
+    order: List[str] = []
+    if importlib.util.find_spec("torch._inductor") is not None:
+        order.append("inductor")
+    order.append("aot_eager")
+    for backend in order:
+        try:
+            fn = torch.compile(graph, backend=backend, fullgraph=True)
+            out, _, _ = fn(trial)
+            out.sum().backward()
+            trial.grad = None
+            return fn
+        except Exception:
+            continue
+    return graph
 
 
 class EvolutionaryTrainer:
@@ -33,13 +60,7 @@ class EvolutionaryTrainer:
         self.shadow_evaluators: Dict[str, ShadowFitnessEvaluator] = {}
         self.optimizer = torch.optim.Adam(self.graph.parameters(), lr=self.lr)
         if compile_graph:
-            import torch._dynamo.config as dynamo_config
-
-            # SinkhornRouter uses mask.nonzero (dynamic A); interpreter loops are fixed unroll (Phase 12).
-            dynamo_config.capture_dynamic_output_shape_ops = True
-            self.step_fn: nn.Module = torch.compile(
-                graph, backend="aot_eager", fullgraph=True
-            )
+            self.step_fn = _compile_step_fn(graph)
         else:
             self.step_fn = graph
 

@@ -18,12 +18,14 @@
 
 **Phase 12 (complete):** **Static SIMT loop unroll** — No **`if not entering.any(): break`** in **`run_while_loop`**; **`run_loop_snapshots`** always stacks **`max_unroll`** steps (or empty if **`max_unroll==0`**). **`EvolutionaryTrainer`**: **`torch.compile(..., fullgraph=True)`** for all graphs (loops included). **`tests/test_jit_compile.py`** mixed cond+loop uses **`fullgraph=True`**. Proof: **`tests/test_phase12_fullgraph_loops.py`**.
 
+**Phase 13 (complete):** **`engine/inference.py`** — **`AxiomRunner`** loads a deserialized **`ExecutionGraph`**; **`predict`** / **`predict_batch`** map **`Dict[str, float]`** → **`(1, D)`** / **`(B, D)`** (single key broadcasts like the sequence dataloader; multiple keys use sorted order into trailing dimensions). **`torch.no_grad()`**, **`.eval()`**, returns main **`out`** tensor. **`predict_with_signals`** for CLI. **`EvolutionaryTrainer`** with **`compile_graph=True`**: prefers **`inductor`** when **`torch._inductor`** exists, runs a compile warmup forward+backward; on any failure falls back to **`aot_eager`** (covers Windows without MSVC **`cl`**). **`main.py`**: **`--mode train|inference`**; inference loads **`load_execution_bundle`**, runs dummy **`{"x": 5.0}`**, prints **`out`** and routing signals. Tests: **`tests/test_inference_api.py`**.
+
 ## Layout
 
 - `main.py` — CLI entry
 - `train.ax` — default training sketch
 - `compiler/serializer.py`, `compiler/deserializer.py` — bundle save / reload
-- `engine/dataloader.py`, `engine/trainer.py`, `engine/interpreter.py`, `engine/loop_executor.py`
+- `engine/dataloader.py`, `engine/trainer.py`, `engine/inference.py`, `engine/interpreter.py`, `engine/loop_executor.py`
 - `primitives/`, `engine/*`, `tests/`
 
 ## IR opcodes
@@ -41,4 +43,4 @@ python -m pytest tests -q
 
 ## Next
 
-Distributed dataloader (see `readme.md`). Bundles saved before Phase 7 lack `supernet_config` / expert fields — reload requires a freshly saved topology JSON. Optional: **`backend="inductor"`** on Linux+CUDA; further Dynamo hardening if new IR ops add Python breaks.
+Distributed dataloader (see `readme.md`). Bundles saved before Phase 7 lack `supernet_config` / expert fields — reload requires a freshly saved topology JSON. Optional: IR-derived input name → channel map for **`predict`** when multiple naming schemes matter; further Dynamo hardening if new IR ops add Python breaks.

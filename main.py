@@ -8,8 +8,10 @@ import torch
 from compiler.flow import wire_execution_graph
 from compiler.ir import ast_to_ir
 from compiler.parser import parse_ax_file
+from compiler.deserializer import load_execution_bundle
 from compiler.serializer import save_execution_bundle
 from engine.dataloader import LiquidSequenceLoader
+from engine.inference import AxiomRunner
 from engine.meta_compiler import MetaCompiler
 from engine.supernet import LatentSupernet
 from engine.topology import ExecutionGraph
@@ -35,6 +37,7 @@ def build_from_ax(ax_path: Path, dim: int, rank: int) -> tuple[list, LatentSuper
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description="Axiom: compile .ax, train execution graph, save bundle.")
     ap.add_argument("ax_path", type=Path, nargs="?", default=Path("train.ax"), help="Source .ax file")
+    ap.add_argument("--mode", choices=["train", "inference"], default="train")
     ap.add_argument("--epochs", type=int, default=10)
     ap.add_argument("--dim", type=int, default=16)
     ap.add_argument("--rank", type=int, default=4)
@@ -47,6 +50,19 @@ def main(argv: list[str] | None = None) -> None:
 
     torch.manual_seed(args.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    if args.mode == "inference":
+        prefix = args.out
+        pt = Path(str(prefix) + ".pt")
+        js = Path(str(prefix) + "_topology.json")
+        if not pt.is_file() or not js.is_file():
+            raise SystemExit(f"Inference requires saved bundle at {prefix} (.pt + _topology.json).")
+        graph = load_execution_bundle(prefix).to(device)
+        runner = AxiomRunner(graph)
+        out_t, signals = runner.predict_with_signals({"x": 5.0}, device=device)
+        print("out:", out_t)
+        print("signals:", {k: v.detach().cpu() for k, v in signals.items()})
+        return
 
     ir, sn, graph = build_from_ax(args.ax_path, args.dim, args.rank)
     graph = graph.to(device)

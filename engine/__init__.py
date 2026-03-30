@@ -1,4 +1,5 @@
 from engine.dataloader import LiquidSequenceLoader, sequential_to_features
+from engine.inference import AxiomRunner
 from engine.fitness import (
     ShadowFitnessEvaluator,
     apply_shadow_verdict,
@@ -31,4 +32,5 @@ __all__ = [
     "LiquidSequenceLoader",
     "sequential_to_features",
     "EvolutionaryTrainer",
+    "AxiomRunner",
 ]
