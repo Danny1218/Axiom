@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "tasks": [
+    {
+      "id": "risk_from_json_fixture",
+      "title": "Minimal JSON fixture (risk blend)",
+      "goal": "Output risk_score from risk_a and risk_b (0-1 clamped blend).",
+      "domain_context": "Axiom .ax: max, min, arithmetic.",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [{ "risk_a": 0.1, "risk_b": 0.9 }],
+      "expected_rows": [{ "risk_score": 0.42 }],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.25]
+    }
+  ]
+}

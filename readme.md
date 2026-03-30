@@ -130,6 +130,8 @@ axiom copilot-search --backend onyx-qwen --goal "Output y from defaults" `
 
 Omit **`--summarize-traces`** to skip the extra expert round-trips.
 
+**Benchmark harness (library, no CLI):** `axiom.copilot.benchmarks` defines a few tiny NL tasks (`DEFAULT_BENCHMARK_TASKS`), runs **`run_benchmark_draft_only`** vs **`run_benchmark_search`**, and emits JSON via **`benchmark_suite_to_dict`** — useful for regression checks with a stub expert (`BenchmarkDispatchExpert`) or a real backend. Extra tasks can be loaded from **`axiom/copilot/fixtures/benchmark_tasks.json`**.
+
 ---
 
 ## `axiom serve`

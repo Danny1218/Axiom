@@ -28,6 +28,19 @@ from axiom.copilot.search import (
     format_metrics_for_repair,
     run_copilot_search,
 )
+from axiom.copilot.benchmarks import (
+    BENCHMARK_SUITE_SCHEMA_VERSION,
+    DEFAULT_BENCHMARK_TASKS,
+    BenchmarkDispatchExpert,
+    BenchmarkRunRecord,
+    BenchmarkSuiteResult,
+    BenchmarkSummary,
+    BenchmarkTask,
+    benchmark_suite_to_dict,
+    run_benchmark_draft_only,
+    run_benchmark_search,
+    run_benchmark_suite,
+)
 from axiom.copilot.summarize import (
     safe_summarize_evaluation,
     summary_context_from_report,
@@ -35,7 +48,14 @@ from axiom.copilot.summarize import (
 )
 
 __all__ = [
+    "BENCHMARK_SUITE_SCHEMA_VERSION",
+    "BenchmarkDispatchExpert",
+    "BenchmarkRunRecord",
+    "BenchmarkSuiteResult",
+    "BenchmarkSummary",
+    "BenchmarkTask",
     "COPILOT_ARTIFACT_SCHEMA_VERSION",
+    "DEFAULT_BENCHMARK_TASKS",
     "CopilotIterationRecord",
     "CopilotSearchConfig",
     "CopilotSearchResult",
@@ -49,6 +69,7 @@ __all__ = [
     "build_iterations_document",
     "build_repair_context",
     "build_repair_error_report",
+    "benchmark_suite_to_dict",
     "build_search_report_document",
     "evaluate_program",
     "evaluation_report_to_dict",
@@ -56,6 +77,9 @@ __all__ = [
     "format_failures_for_repair",
     "format_metrics_for_repair",
     "persist_copilot_artifacts",
+    "run_benchmark_draft_only",
+    "run_benchmark_search",
+    "run_benchmark_suite",
     "run_copilot_search",
     "safe_summarize_evaluation",
     "summary_context_from_report",

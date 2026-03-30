@@ -188,6 +188,7 @@ def test_cli_source_wires_documented_train_features():
     assert "copilot-draft" in src and "copilot-search" in src and "_make_copilot_expert" in src
     assert "artifact-dir" in src
     assert "summarize-traces" in src
+    assert (_root() / "src" / "axiom" / "copilot" / "benchmarks.py").is_file()
     assert "copilot-studio" in src and "copilot_studio.py" in src
 
 

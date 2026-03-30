@@ -21,7 +21,7 @@ axiom = "axiom.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-axiom = ["compiler/*.lark"]
+axiom = ["compiler/*.lark", "copilot/fixtures/*.json"]
 
 [project.optional-dependencies]
 spy = ["pandas>=2.0", "yfinance>=0.2.36"]

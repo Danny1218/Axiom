@@ -127,6 +127,9 @@ class CopilotSearchConfig:
     summarize_traces: bool = False
     # If set, run_copilot_search writes best.ax, iterations.json, search_report.json under this path.
     artifact_dir: Optional[Path] = None
+    # Merged into expert draft/repair JSON context (e.g. benchmark task ids); no effect on evaluation harness.
+    draft_context_extras: Dict[str, Any] = field(default_factory=dict)
+    repair_context_extras: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -229,11 +232,13 @@ def _needs_metric_repair(config: CopilotSearchConfig, report: ProgramEvaluationR
 def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
     from axiom.copilot.artifacts import expert_response_to_dict, persist_copilot_artifacts
 
-    ctx = build_draft_context(
+    ctx: Dict[str, Any] = build_draft_context(
         domain_context=config.domain_context,
         example_input_rows=config.example_input_rows,
         expected_rows=config.expected_rows,
     )
+    if config.draft_context_extras:
+        ctx = {**ctx, **dict(config.draft_context_extras)}
     draft_req = ExpertDraftRequest(goal=config.goal, context=ctx)
     draft_resp = config.expert.draft_program(draft_req)
     current = draft_resp.ax_source
@@ -294,11 +299,13 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
                 current_ax=source_evaluated,
                 evaluation=report,
             )
-            repair_ctx = build_repair_context(
+            repair_ctx: Dict[str, Any] = build_repair_context(
                 example_input_rows=config.example_input_rows,
                 expected_rows=config.expected_rows,
                 evaluation_mode=config.mode,
             )
+            if config.repair_context_extras:
+                repair_ctx = {**repair_ctx, **dict(config.repair_context_extras)}
             repair_req = ExpertRepairRequest(
                 goal=config.goal,
                 current_program=source_evaluated,
