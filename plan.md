@@ -133,7 +133,7 @@ streamlit run examples/enterprise_ui.py --server.fileWatcherType none
 pip install -e ".[serve]"
 axiom serve --bundle examples/portfolio_trained.axb --host 127.0.0.1 --port 8000
 docker build -t axiom-engine:latest .
-# Place model.axb in bundles/ then: docker compose up
+# Build does not start the server — `docker run ...` (see readme Docker) or place model.axb in bundles/ then `docker compose up`
 # `examples/*.axb` is gitignored — run `python examples/train_portfolio.py` first if the file is missing.
 pip install -e ".[lock]"
 $env:AXIOM_BUNDLE_SECRET="dev-secret"

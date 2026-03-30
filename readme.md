@@ -71,7 +71,11 @@ Production-style image for **`axiom serve`**: one **`.axb`**, FastAPI on **`HOST
 docker build -t axiom-engine:latest .
 ```
 
-### Run
+**Building only creates the image.** Nothing listens on **`8000`** until you **run** a container (next section) or **`docker compose up`**.
+
+### Run (start the server)
+
+Mount a local **`.axb`** and set **`AXIOM_BUNDLE_PATH`** inside the container to match the mount path:
 
 ```bash
 docker run --rm -p 8000:8000 \
@@ -82,17 +86,32 @@ docker run --rm -p 8000:8000 \
   axiom-engine:latest
 ```
 
-Add optional **`AXIOM_API_KEY`** / **`AXIOM_BUNDLE_SECRET`** with **`-e`** as needed.
+**PowerShell** (repo root; uses a trained **`examples/portfolio_trained.axb`** if you ran **`python examples/train_portfolio.py`**):
+
+```powershell
+docker run --rm -p 8000:8000 `
+  -e AXIOM_BUNDLE_PATH=/bundle/model.axb `
+  -e HOST=0.0.0.0 `
+  -e PORT=8000 `
+  -v "${PWD}/examples/portfolio_trained.axb:/bundle/model.axb:ro" `
+  axiom-engine:latest
+```
+
+Leave that terminal open while testing. Add optional **`AXIOM_API_KEY`** / **`AXIOM_BUNDLE_SECRET`** with **`-e`** as needed.
 
 ### Compose
 
-Create **`bundles/`**, place **`model.axb`** there (or change **`AXIOM_BUNDLE_PATH`** in **`docker-compose.yml`**), then:
+Create **`bundles/`**, copy or symlink your **`model.axb`** there (compose expects **`/bundles/model.axb`**), then:
 
 ```bash
 docker compose up --build
 ```
 
+**Note:** the default **`docker-compose.yml`** sets **`AXIOM_API_KEY=change-me-in-production`**, so **`POST /predict`** requires **`Authorization: Bearer …`** (see below). **`GET /health`** stays unauthenticated.
+
 ### Example `curl`
+
+In another terminal, after the container is running:
 
 ```bash
 curl -s http://localhost:8000/health
