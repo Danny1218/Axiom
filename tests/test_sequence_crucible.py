@@ -1,9 +1,11 @@
-"""Phase 24: sequence.ax + sine loop pipeline (Liquid-KAN via OP_LOOP)."""
+"""Phase 24–25: sequence.ax + sine loop pipeline (Liquid-KAN via OP_LOOP); rows from ``axiom.datasets``."""
 
 import math
 from pathlib import Path
 
 import torch
+
+from axiom.datasets import generate_sine_wave
 from torch.utils.data import DataLoader
 
 from axiom.compiler.flow import wire_execution_graph
@@ -18,6 +20,11 @@ from axiom.engine.trainer import EvolutionaryTrainer
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
+
+
+def test_generate_sine_wave_matches_sequence_schema():
+    rows = generate_sine_wave(n=3, seed=7)
+    assert len(rows) == 3 and {"x", "y_pred", "target"} <= set(rows[0].keys())
 
 
 def test_sequence_ax_parses_and_contains_loop():

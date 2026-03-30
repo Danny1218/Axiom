@@ -30,7 +30,7 @@
 
 **Phase 18 (complete):** **Hybrid symbolic–neural execution** — **`engine/block_executor.py`**: **`InterpretedBlock`** runs IR stmts with **`exec_stmt`**, seeds **`env`** from **`h`** via **`abi`**, repacks trunk columns. Root **`OP_ASSIGN` / `OP_EXPR_STMT`** use **`InterpretedBlock`** (DAG node carries **`ir`** for bundles). **`ConditionalSinkhornBlock`** runs symbolic **`then_ir` / `else_ir`** per branch, then **`out = w0*(h_then+y0) + w1*(h_else+y1)`** (same shadow semantics on raw adapter outputs). **`load_execution_bundle`** rebuilds stmt/conditional IR from JSON. Tests: **`tests/test_hybrid_execution.py`**. **`torch._dynamo.reset()`** in **`test_evolutionary_trainer_compile_fullgraph_with_loop_one_epoch`** avoids Dynamo cache exhaustion after other compile tests.
 
-**Phase 19 (complete):** **Domain tooling — Titanic** — **`load_csv_to_dicts`** / **`_cell_to_float`** in **`engine/dataloader.py`** ( **`csv.DictReader`**, numeric parse, **`female`/`male`**, empty → **0** ). **`examples/titanic.ax`** (current): **sabotage** rule **`Fare > 100000`** → useless symbolic **`survived_prob`**; hybrid **`TT-LoRA`** + optional **`MetaCompiler`** still fit **`Survived`**. **`examples/run_titanic.py`**: **`MetaCompiler` on by default** (**`--no-meta`** to disable); saves **`axiom_bundle`** (**`.pt` + `_topology.json`**) unless **`--no-save`**; **`--out`** prefix. Tests: **`tests/test_csv_titanic.py`**. **`examples/titanic.csv`** / **`axiom_bundle*`** gitignored.
+**Phase 19 (complete):** **Domain tooling — Titanic** — **`load_csv_to_dicts`** / **`_cell_to_float`** in **`engine/dataloader.py`**. **`examples/titanic.ax`**: sabotage rule **`Fare > 100000`** → useless symbolic **`survived_prob`**; hybrid **`TT-LoRA`** + **`MetaCompiler`** still fit **`Survived`**. Train via **`axiom train examples/titanic.ax --dataset titanic`** (**`axiom.datasets.load_titanic`**). Tests: **`tests/test_csv_titanic.py`**. **`examples/titanic.csv`** / **`axiom_bundle*`** gitignored.
 
 **Phase 20 (complete):** **Glass Box visualizer** — **`src/axiom/tools/inspector.py`**: Streamlit UI loads a bundle via path prefix or uploaded **`upload_topology.json` + `upload.pt`**, builds ABI **`st.number_input`**s, **`Run inference`** → **`AxiomRunner.predict_with_signals`**, large output metric + routing expander. **`glass_box.py`**: **`execution_graph_to_graphviz`**, **`routing_trace_entries`**, **`tensor_preview_dict`**. **`ConditionalSinkhornBlock`** signals add **`{block}_weights`**; **`MetaCompiler.react_to_signals`** skips non-scalar tensors. Run: **`axiom inspect`** or **`streamlit run …/inspector.py`**. Tests: **`tests/test_glass_box.py`**.
 
@@ -40,15 +40,17 @@
 
 **Phase 23 (complete):** **Packaging** — Installable **`axiom-engine`** (**`pyproject.toml`**, **`src/axiom/`**): **`compiler/`**, **`engine/`**, **`primitives/`**, **`tools/`**, **`cli.py`**. Imports are **`axiom.*`**. Global CLI: **`axiom train …`**, **`axiom inspect`** (**`streamlit run`** with **`--server.fileWatcherType none`** to avoid PyTorch / file-watcher noise). **`pip install -e .`** for dev; **`grammar.lark`** in **`package-data`**. **`tests/`**, **`examples/`** stay at repo root; examples assume editable install.
 
-**Phase 24 (complete):** **Sequence crucible** — **`examples/sequence.ax`**: **`y_pred = x * 0.0`** (registers **`x`** in ABI and zeros **`y_pred`** without **`x = 0`** clobbering the data column), **`step = 0.0`**, **`while (step < 10.0)`** **`step = step + 1.0`** only — **no** post-loop **`y_pred = …`** (avoids overwriting the KAN readout). Drives **`InterpretedLiquidLoop`** (**`loop_max_unroll=10`**) → **`LiquidKANNode`**. **`examples/run_sequence.py`**: sine **`AxiomDataset`**, **`EvolutionaryTrainer`** (**`target_col=abi["y_pred"]`**). **`axiom train examples/sequence.ax`** still uses **`LiquidSequenceLoader`** (generic CLI path), not the sine CSV pipeline — use **`python examples/run_sequence.py`** for the crucible MSE check. Tests: **`tests/test_sequence_crucible.py`** (parse/ABI/shapes, **`x`→`y_pred` sensitivity**, training MSE must fall vs stuck ~0.49 baseline).
+**Phase 24 (complete):** **Sequence crucible** — **`examples/sequence.ax`**: **`y_pred = x * 0.0`**, loop, no post-loop assign; **`InterpretedLiquidLoop`** + **`LiquidKANNode`**. Tests: **`tests/test_sequence_crucible.py`**.
+
+**Phase 25 (complete):** **Standard library & unified CLI** — **`src/axiom/datasets.py`**: **`load_titanic`**, **`generate_sine_wave`**, **`train_val_split`**. **`axiom train`**: **`--dataset titanic|sine`** → **`AxiomDataset`**, **`train_val_split`** (**`--split-frac`**, default 0.8), **`EvolutionaryTrainer`**; metrics: **test_accuracy** (Titanic) / **test_mse** (sine). **`--csv`** + **`--target_key`** + **`--target_var`**. **`--no-meta`**, **`--titanic-csv`**, **`--sine-samples`**, **`--loop-max-unroll`**, **`--mutation-threshold`**. Legacy (no dataset/csv): **`LiquidSequenceLoader`**. Tests: **`tests/test_datasets.py`**, **`tests/test_cli_tabular.py`**.
 
 ## Layout
 
 - `pyproject.toml` — **`axiom-engine`**, script **`axiom` → `axiom.cli:main`**
 - `src/axiom/cli.py` — train / inspect subcommands
+- `src/axiom/datasets.py` — built-in Titanic / sine rows
 - `src/axiom/tools/inspector.py`, `glass_box.py` — Glass Box
-- `examples/titanic.ax`, `examples/run_titanic.py` — Titanic pipeline (**`pip install -e .`** first)
-- `examples/sequence.ax`, `examples/run_sequence.py` — sine + **`OP_LOOP`** / Liquid-KAN smoke
+- `examples/titanic.ax`, `examples/sequence.ax` — domain sketches
 - `train.ax` — default **`axiom train`** sketch (cwd)
 - `src/axiom/compiler/`, `src/axiom/engine/`, `src/axiom/primitives/`
 - `tests/`
@@ -64,9 +66,11 @@ cd "...\Axiom"
 pip install -e .
 python -m pytest tests -q
 axiom train train.ax --epochs 10 --out axiom_bundle
+axiom train examples/titanic.ax --dataset titanic --epochs 30 --out axiom_bundle
+axiom train examples/sequence.ax --dataset sine --epochs 30 --dim 32 --out axiom_bundle
 axiom inspect
 ```
 
 ## Next
 
-Tune sequence example (lr, epochs, trunk trainable slice) for lower sine MSE; richer time-series encodings. Feature-rich Titanic (Age/Fare in ABI), distributed dataloader (see `readme.md`). Dynamo hardening for new IR ops. Optional: Graphviz WASM if **`dot`** missing on Windows.
+More built-in **`--dataset`** presets; CSV classification metric flag; richer Titanic ABI. Dynamo hardening for new IR ops. Optional: Graphviz WASM if **`dot`** missing on Windows.

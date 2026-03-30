@@ -6,6 +6,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from axiom.compiler.flow import wire_execution_graph
+from axiom.datasets import load_titanic
 from axiom.compiler.ir import ast_to_ir, extract_global_abi
 from axiom.compiler.parser import parse_ax_file, reset_parser
 from axiom.engine.dataloader import AxiomDataset, load_csv_to_dicts
@@ -28,6 +29,13 @@ def test_numeric_strings_parse(tmp_path):
     p.write_text("a,b\n12.5,-3\n", encoding="utf-8")
     rows = load_csv_to_dicts(p)
     assert rows[0]["a"] == 12.5 and rows[0]["b"] == -3.0
+
+
+def test_load_titanic_delegates_to_csv_parser(tmp_path):
+    p = tmp_path / "one.csv"
+    p.write_text("Fare,Sex,Pclass,Survived\n0,1,1,1\n", encoding="utf-8")
+    rows = load_titanic(csv_path=p)
+    assert len(rows) == 1 and rows[0]["Survived"] == 1.0
 
 
 def test_titanic_ax_abi_has_survived_prob():
