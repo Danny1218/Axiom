@@ -21,6 +21,12 @@ def test_readme_has_narrative_sections():
     assert "symbolic" in text.lower() and "neural" in text.lower()
 
 
+def test_readme_documents_python_api():
+    text = (_root() / "readme.md").read_text(encoding="utf-8")
+    assert "## Quickstart — Native Python API" in text
+    assert "axiom.load" in text and "model.predict" in text
+
+
 def test_readme_version_matches_pyproject():
     readme = (_root() / "readme.md").read_text(encoding="utf-8")
     pyproject = (_root() / "pyproject.toml").read_text(encoding="utf-8")

@@ -61,6 +61,34 @@ This installs the **`axiom-engine`** package and the global **`axiom`** CLI. Req
 
 ---
 
+## Quickstart — Native Python API (Jupyter / scripts)
+
+Load a trained **`.axb`** bundle and run inference with ordinary Python dicts—no manual trunk layout. Batches are a **list of dicts**; **pandas** `DataFrame` rows work too (optional: install `pandas` separately).
+
+```python
+import axiom
+
+model = axiom.load("examples/portfolio_trained.axb")  # after training
+out = model.predict(
+    {"volatility": 0.6, "drawdown": 0.1, "momentum": -0.8, "volume": 1.5}
+)
+# out is a dict of ABI names → floats (or lists for vector columns)
+
+batch = model.predict(
+    [
+        {"volatility": 0.5, "drawdown": 0.0, "momentum": 0.1, "volume": 1.0},
+        {"volatility": 0.6, "drawdown": 0.1, "momentum": -0.8, "volume": 1.5},
+    ]
+)
+
+# Optional: entire DataFrame (same column names as ABI inputs)
+# import pandas as pd
+# market = pd.read_csv("spy_daily.csv")
+# preds = model.predict(market)
+```
+
+---
+
 ## Quickstart 1 — Tabular crucible (Titanic)
 
 The bundled `examples/titanic.ax` uses a **deliberate sabotage** rule (impossible Fare threshold) so symbolic logic alone is useless—the hybrid stack must learn from data. Your own programs use the same **`if` / `else`** shape (e.g. branching on `Sex`, `Pclass`, etc.).

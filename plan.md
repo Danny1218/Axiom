@@ -100,4 +100,6 @@ axiom inspect
 
 ## Next
 
-**Phase 38 (ideas):** **`return` inside `while`**; call targets like **`f()[i]`**. Glass Box upgrades (**`--inspect`** / graph of **`OP_NEURAL`**). See **`readme.md` § Road ahead**.
+**Phase 38 (complete):** **`src/axiom/api.py`** — **`AxiomModel`**, **`axiom.load(bundle_path)`**; **`predict(dict)`** → dict, **`predict([{...}, ...])`** → list of dicts, **`predict(DataFrame)`** via **`type(...).__name__ == "DataFrame"`** (pandas optional). Uses **`_inputs_to_tensor`** / **`_abi_outputs_from_trunk_row`** and **`_trunk_dim_from_block_abi`** (same span rule as CLI). Root **`from axiom import load, AxiomModel`**. Tests: **`tests/test_api.py`**. Readme Quickstart documents the API.
+
+**Later ideas:** **`return` inside `while`**; call targets like **`f()[i]`**. Glass Box upgrades (**`--inspect`** / graph of **`OP_NEURAL`**). See **`readme.md` § Road ahead**.
