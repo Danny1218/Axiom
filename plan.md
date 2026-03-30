@@ -2,6 +2,8 @@
 
 ## Current phase
 
+**Phase 66** — **In-program `expert()` / `OP_EXPERT`** — Syntax **`expert("backend_name", feature_expr)`** (second argument is any expression that evaluates to **`(B,)`** or **`(B,K)`** on the trunk stack, typically **`[a, b, …]`**). Lowers to **`("OP_EXPERT", name, input_ir)`** — **not** **`OP_NEURAL`**; **not differentiable**; **no ONNX export** (**`interpreted_block_ir_contains_expert`** + **`OnnxExportError`** in **`src/axiom/export/onnx_export.py`**). Runtime: **`InterpretedBlock(..., expert_handler=Callable[[str, Sequence[float]], float], expert_fallback: Optional[float])`**; missing both → **`ExpertRuntimeError`**. Threaded through **`eval_expr`**, **`exec_stmt`**, **`run_while_loop`**, **`run_loop_snapshots`**, optional **`InterpretedLiquidLoop`** kwargs. Audit: **`_last_expert_trace`**; **`AxiomModel.explain`** adds **`expert_calls`**. **`src/axiom/engine/expert_call.py`**: **`ExpertHandler`**, **`ExpertRuntimeError`**. Reserved name (**`ir.RESERVED_EXPERT_BUILTIN`**). Tests: **`tests/test_expert_opcode.py`**.
+
 **Phase 65** — **Copilot benchmark harness** — **`src/axiom/copilot/benchmarks.py`**: small **NL→`.ax`** tasks (**finance-style threshold policy**, **blended risk score**, **while-loop counter** in **`DEFAULT_BENCHMARK_TASKS`**), optional JSON at **`src/axiom/copilot/fixtures/benchmark_tasks.json`** (**`load_benchmark_tasks_json_path`** / **`benchmark_tasks_from_json_dict`**). **`run_benchmark_draft_only`**, **`run_benchmark_search`**, **`run_benchmark_suite`** compare draft vs repair loop; **`compile_success`** / **`metric_success`** + **`summarize_rates`**; **`benchmark_suite_to_dict`** for JSON. **`BenchmarkDispatchExpert`** maps **`benchmark_task_id`** in draft/repair context to reference **`.ax`** (tests / offline baselines). **`CopilotSearchConfig.draft_context_extras`** / **`repair_context_extras`** merge into expert payloads. No HTTP in-module. Tests: **`tests/test_copilot_benchmarks.py`**.
 
 **Phase 64** — **Semantic trace summarization** — **`src/axiom/copilot/summarize.py`**: **`safe_summarize_evaluation`**, **`trace_and_metrics_for_summary`**, **`summary_context_from_report`** — builds **`ExpertTraceSummaryRequest`** (goal, program, explain **`trace_snippet`**, scalar **`metrics`**, failures / program_metrics / samples in **`context`**) and calls **`SemanticExpert.summarize_trace`**; failures return **`None`** (never affects eval). **`CopilotSearchConfig.summarize_traces`** (default off) + **`CopilotIterationRecord.semantic_trace_summary`**. Search turns on explain capture when summarization is enabled. **`search_report.json`** / **`iterations.json`**: sibling **`semantic_summaries`** / per-row **`semantic_trace_summary`** (separate from **`metrics`**). CLI **`axiom copilot-search --summarize-traces`**; **`--report-out`** adds **`semantic_summaries`** when flag set. Copilot Studio checkbox + table column **`trace_summary`** + expander. Tests: **`tests/test_copilot_summarize.py`**, updates to search / artifacts / CLI / studio tests.
@@ -128,9 +130,10 @@
 - `examples/enterprise_ui.py` — Phase 50 Streamlit firewall UI (telemetry sidebar + chat + audit download)
 - `train.ax` — default **`axiom train`** sketch (cwd)
 - `src/axiom/compiler/`, `src/axiom/engine/`, `src/axiom/primitives/`
+- `src/axiom/engine/expert_call.py` — Phase 66 **`OP_EXPERT`** types / **`ExpertRuntimeError`**
 - `src/axiom/experts/` — Phase 58 protocol + registry; Phase 59 **`onyx_qwen.py`** (optional **`[copilot]`**)
 - `src/axiom/copilot/` — Phase 60 **`search.py`** + Phase 62 **`artifacts.py`** + Phase 64 **`summarize.py`** + Phase 65 **`benchmarks.py`** + **`fixtures/benchmark_tasks.json`**
-- `tests/` — **`tests/test_architecture_baseline.py`**, **`tests/test_experts.py`**, **`tests/test_onyx_qwen_backend.py`**, **`tests/test_copilot_evaluator.py`**, **`tests/test_copilot_search.py`**, **`tests/test_cli_copilot.py`**, **`tests/test_copilot_artifacts.py`**, **`tests/test_copilot_studio.py`**, **`tests/test_copilot_summarize.py`**, **`tests/test_copilot_benchmarks.py`**
+- `tests/` — **`tests/test_architecture_baseline.py`**, **`tests/test_expert_opcode.py`**, **`tests/test_experts.py`**, **`tests/test_onyx_qwen_backend.py`**, **`tests/test_copilot_evaluator.py`**, **`tests/test_copilot_search.py`**, **`tests/test_cli_copilot.py`**, **`tests/test_copilot_artifacts.py`**, **`tests/test_copilot_studio.py`**, **`tests/test_copilot_summarize.py`**, **`tests/test_copilot_benchmarks.py`**
 
 ## Next target (semantic copilot — wiring)
 
@@ -140,7 +143,7 @@
 
 ## IR opcodes
 
-`OP_CONST`, `OP_LOAD`, `OP_ADD`, `OP_SUB`, `OP_MUL`, `OP_DIV`, `OP_NEG`, `OP_CMP_*`, `OP_VEC_PACK`, `OP_INDEX`, `OP_REDUCE_SUM`, `OP_REDUCE_MEAN`, `OP_REDUCE_BATCH_MEAN`, `OP_DOT`, `OP_MATH_UNARY`, `OP_MATH_BINARY`, `OP_NEURAL` (payload: `input_ir` + `arch_type` string, Phase 43), `OP_CALL` (pre-expand), `OP_RETURN` (function body), `OP_ASSIGN`, `OP_BLEND_ASSIGN` (inlined fn), `OP_EXPR_STMT`, `OP_CONDITIONAL`, `OP_LOOP`.
+`OP_CONST`, `OP_LOAD`, `OP_ADD`, `OP_SUB`, `OP_MUL`, `OP_DIV`, `OP_NEG`, `OP_CMP_*`, `OP_VEC_PACK`, `OP_INDEX`, `OP_REDUCE_SUM`, `OP_REDUCE_MEAN`, `OP_REDUCE_BATCH_MEAN`, `OP_DOT`, `OP_MATH_UNARY`, `OP_MATH_BINARY`, `OP_NEURAL` (payload: `input_ir` + `arch_type` string, Phase 43), `OP_EXPERT` (payload: backend name string + `input_ir`; Phase 66, non-differentiable, no ONNX), `OP_CALL` (pre-expand), `OP_RETURN` (function body), `OP_ASSIGN`, `OP_BLEND_ASSIGN` (inlined fn), `OP_EXPR_STMT`, `OP_CONDITIONAL`, `OP_LOOP`.
 
 ## Run training (PowerShell)
 

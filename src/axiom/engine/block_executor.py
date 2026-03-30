@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import torch
 import torch.nn as nn
 
 from axiom.compiler.ir import extract_neural_node_specs
+from axiom.engine.expert_call import ExpertHandler
 from axiom.engine.interpreter import collect_load_names_from_stmts, exec_stmt
 from axiom.engine.ssm import LiquidKANNode
 from axiom.primitives.liquid_tensor import LiquidFeatureReadout
@@ -60,12 +61,17 @@ class InterpretedBlock(nn.Module):
         max_unroll: int = 8,
         abi_widths: Optional[Dict[str, int]] = None,
         custom_neural_registry: Optional[Dict[str, nn.Module]] = None,
+        expert_handler: Optional[ExpertHandler] = None,
+        expert_fallback: Optional[float] = None,
     ) -> None:
         super().__init__()
         self.ir_stmts = list(ir_stmts)
         self.abi = dict(abi)
         self.abi_widths: Dict[str, int] = dict(abi_widths or {})
         self.max_unroll = int(max_unroll)
+        self.expert_handler = expert_handler
+        self.expert_fallback = expert_fallback
+        self._last_expert_trace: List[Dict[str, Any]] = []
         spec = extract_neural_node_specs(self.ir_stmts, self.abi_widths)
         custom = dict(custom_neural_registry or {})
         built: Dict[str, nn.Module] = {}
@@ -80,6 +86,7 @@ class InterpretedBlock(nn.Module):
         self, h: torch.Tensor, return_env: bool = False
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, Dict[str, torch.Tensor]]]:
         if not self.ir_stmts:
+            self._last_expert_trace = []
             return (h, {}) if return_env else h
         if h.dim() != 2:
             raise ValueError("InterpretedBlock expects h (B, D)")
@@ -101,6 +108,7 @@ class InterpretedBlock(nn.Module):
                     env[name] = z.clone() if w == 1 else torch.zeros(B, w, device=device, dtype=dtype)
             else:
                 env[name] = z.clone()
+        audit: List[Dict[str, Any]] = []
         for stmt in self.ir_stmts:
             exec_stmt(
                 env,
@@ -112,7 +120,11 @@ class InterpretedBlock(nn.Module):
                 dtype=dtype,
                 abi_widths=self.abi_widths,
                 neural_registry=self.neural_registry,
+                expert_handler=self.expert_handler,
+                expert_fallback=self.expert_fallback,
+                expert_audit=audit,
             )
+        self._last_expert_trace = audit
         out = h.clone()
         for name, col in self.abi.items():
             if name not in env:

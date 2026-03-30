@@ -47,6 +47,8 @@ Much of the industry optimizes **scaling laws**—bigger GPUs, bigger black boxe
 
 An **`.ax`** file is source code for Axiom: assignments, comparisons, **`if` / `else`**, and **`while`** with C/JavaScript-like syntax. The parser builds an AST → IR bytecode (`OP_ASSIGN`, `OP_CONDITIONAL`, `OP_LOOP`, …) → an **execution graph** (`ExecutionGraph`) of PyTorch modules. You train that graph like any other model; gradients flow through both symbolic and neural pieces where the IR is differentiable.
 
+**External expert hook (in-program):** `expert("backend_name", feature_expr)` lowers to **`OP_EXPERT`** (not `neural()`). It is **not differentiable**. At runtime, pass **`InterpretedBlock(..., expert_handler=callable)`** or **`expert_fallback=float`**; otherwise execution raises a clear error. The handler receives `(backend_name, list[float])` for one batch row and must return a **scalar float**. **`model.explain(...)`** adds an **`expert_calls`** list (backend names used). **ONNX export** rejects bundles that contain `expert()`.
+
 ---
 
 ## Installation

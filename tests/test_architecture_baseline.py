@@ -33,6 +33,7 @@ def test_plan_documents_semantic_copilot_roadmap():
     assert "Phase 63" in plan and "copilot-studio" in plan
     assert "Phase 64" in plan and "summarize" in plan.lower()
     assert "Phase 65" in plan and "benchmark" in plan.lower()
+    assert "Phase 66" in plan and "OP_EXPERT" in plan
     assert "Phase 57" in plan
 
 

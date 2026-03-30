@@ -8,6 +8,7 @@ import torch.nn as nn
 from axiom.compiler.ir import extract_neural_node_specs
 
 from axiom.engine.block_executor import build_neural_module
+from axiom.engine.expert_call import ExpertHandler
 from axiom.engine.interpreter import run_loop_snapshots
 from axiom.engine.ssm import LiquidKANNode
 
@@ -29,6 +30,8 @@ class InterpretedLiquidLoop(nn.Module):
         num_basis: int = 8,
         max_unroll: int = 8,
         abi_widths: Optional[Dict[str, int]] = None,
+        expert_handler: Optional[ExpertHandler] = None,
+        expert_fallback: Optional[float] = None,
     ) -> None:
         super().__init__()
         self.dim = dim
@@ -38,6 +41,8 @@ class InterpretedLiquidLoop(nn.Module):
         self.seed_map = dict(seed_map)
         self.abi_widths: Dict[str, int] = dict(abi_widths or {})
         self.max_unroll = max_unroll
+        self.expert_handler = expert_handler
+        self.expert_fallback = expert_fallback
         self.kan = LiquidKANNode(dim, num_basis=num_basis, max_unroll=max_unroll)
         combined: List[Stmt] = list(prelude_stmts) + [("OP_LOOP", list(cond_ir), list(body_ir))]
         spec = extract_neural_node_specs(combined, self.abi_widths)
@@ -67,6 +72,9 @@ class InterpretedLiquidLoop(nn.Module):
             trunk_dim=flat.shape[-1],
             abi_widths=self.abi_widths,
             neural_registry=self.neural_registry,
+            expert_handler=self.expert_handler,
+            expert_fallback=self.expert_fallback,
+            expert_audit=None,
         )
         if seq.shape[1] == 0:
             y = self.kan.forward(flat)

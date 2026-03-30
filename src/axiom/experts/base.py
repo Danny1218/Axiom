@@ -2,6 +2,8 @@
 
 This layer is for **external** tools (LLMs, hosted APIs) that author or comment on ``.ax``
 source. It is intentionally separate from ``OP_NEURAL``, the compiler, and FastAPI.
+In-program ``expert("name", features)`` (``OP_EXPERT``) is a distinct runtime hook on
+``InterpretedBlock``; see ``plan.md`` Phase 66.
 """
 
 from __future__ import annotations

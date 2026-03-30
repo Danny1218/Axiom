@@ -108,6 +108,9 @@ class AxiomModel:
                 continue
             if isinstance(v, torch.Tensor):
                 trace[k] = _env_tensor_to_python(v)
+        ex = getattr(block, "_last_expert_trace", None)
+        if ex:
+            trace["expert_calls"] = list(ex)
         return trace
 
     def export_report(self, data: dict, output_path: str, source_code: str | None = None) -> None:

@@ -2,11 +2,13 @@ from __future__ import annotations
 
 # ``exec_stmt`` mutates ``env`` in place; ``InterpretedBlock.forward(..., return_env=True)`` exposes it (Phase 41).
 
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+from axiom.engine.expert_call import ExpertHandler, ExpertRuntimeError
 
 Stmt = Tuple
 ExprIR = List[Tuple]
@@ -34,6 +36,8 @@ def collect_load_names_from_stmts(stmts: List[Stmt]) -> List[str]:
             if tup[0] == "OP_LOAD" and len(tup) > 1:
                 found.add(str(tup[1]))
             elif tup[0] == "OP_NEURAL" and len(tup) >= 3:
+                walk_expr(list(tup[2]))
+            elif tup[0] == "OP_EXPERT" and len(tup) >= 3:
                 walk_expr(list(tup[2]))
             elif tup[0] == "OP_CALL":
                 for a in tup[2]:
@@ -76,6 +80,8 @@ def collect_load_names(cond_ir: ExprIR, body_ir: List[Stmt]) -> List[str]:
             if tup[0] == "OP_LOAD" and len(tup) > 1:
                 found.add(str(tup[1]))
             elif tup[0] == "OP_NEURAL" and len(tup) >= 3:
+                walk_expr(list(tup[2]))
+            elif tup[0] == "OP_EXPERT" and len(tup) >= 3:
                 walk_expr(list(tup[2]))
             elif tup[0] == "OP_CALL":
                 for a in tup[2]:
@@ -129,12 +135,11 @@ def build_var_order(
         loads |= seed_names
     if env_keys:
         loads |= env_keys
-    order = sorted(loads)
-    i = 0
-    while len(order) < dim:
-        order.append(f"_pad{i}")
-        i += 1
-    return order[:dim]
+    base = sorted(loads)
+    if len(base) >= dim:
+        return base[:dim]
+    need = dim - len(base)
+    return base + [f"_pad{i}" for i in range(need)]
 
 
 def _broadcast_mask(mask_1d: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
@@ -175,6 +180,9 @@ def eval_expr(
     device: torch.device,
     dtype: torch.dtype,
     neural_registry: Optional[Union[Dict[str, nn.Module], nn.ModuleDict]] = None,
+    expert_handler: Optional[ExpertHandler] = None,
+    expert_fallback: Optional[float] = None,
+    expert_audit: Optional[List[Dict[str, Any]]] = None,
 ) -> torch.Tensor:
     stack: List[torch.Tensor] = []
     z = _batch_zeros(B, device, dtype)
@@ -273,6 +281,9 @@ def eval_expr(
                 device=device,
                 dtype=dtype,
                 neural_registry=neural_registry,
+                expert_handler=expert_handler,
+                expert_fallback=expert_fallback,
+                expert_audit=expert_audit,
             )
             feats2 = feats.unsqueeze(-1) if feats.dim() == 1 else feats
             reg = neural_registry
@@ -289,6 +300,50 @@ def eval_expr(
             if out.shape[-1] != 1:
                 raise ValueError(f"neural {nid!r} must output width 1, got shape {tuple(out.shape)}")
             stack.append(out.squeeze(-1))
+        elif op == "OP_EXPERT" and len(tup) >= 3:
+            name = str(tup[1])
+            feats = eval_expr(
+                env,
+                list(tup[2]),
+                B=B,
+                device=device,
+                dtype=dtype,
+                neural_registry=neural_registry,
+                expert_handler=expert_handler,
+                expert_fallback=expert_fallback,
+                expert_audit=expert_audit,
+            )
+            fd = feats.detach()
+            if fd.dim() == 1:
+                fd = fd.unsqueeze(-1)
+            if fd.dim() != 2 or int(fd.shape[0]) != B:
+                raise ValueError(
+                    f"expert({name!r}) features must be (B,) or (B,K), got {tuple(feats.shape)}"
+                )
+            rows = fd.cpu().tolist()
+            out_vals: List[float] = []
+            for bi in range(B):
+                row = [float(x) for x in rows[bi]]
+                if expert_handler is not None:
+                    try:
+                        v = float(expert_handler(name, row))
+                    except Exception as e:
+                        raise ExpertRuntimeError(
+                            f"expert backend {name!r} handler raised: {e}"
+                        ) from e
+                elif expert_fallback is not None:
+                    v = float(expert_fallback)
+                else:
+                    raise ExpertRuntimeError(
+                        f"expert({name!r}) is not differentiable and has no runtime backend: set "
+                        f"InterpretedBlock(..., expert_handler=callable) or expert_fallback=float"
+                    )
+                out_vals.append(v)
+            if expert_audit is not None:
+                expert_audit.append({"op": "expert", "backend": name})
+            stack.append(
+                torch.tensor(out_vals, device=device, dtype=dtype, requires_grad=False)
+            )
         elif op == "OP_CMP_GT":
             b, a = stack.pop(), stack.pop()
             a, b = _promote_batch_binop(a, b)
@@ -363,6 +418,9 @@ def run_while_loop(
     parent_active: Optional[torch.Tensor] = None,
     var_widths: Optional[Dict[str, int]] = None,
     neural_registry: Optional[Union[Dict[str, nn.Module], nn.ModuleDict]] = None,
+    expert_handler: Optional[ExpertHandler] = None,
+    expert_fallback: Optional[float] = None,
+    expert_audit: Optional[List[Dict[str, Any]]] = None,
 ) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
     """
     Runs exactly ``max_unroll`` iterations (no early ``break``). When the condition is false,
@@ -377,7 +435,15 @@ def run_while_loop(
     masks: List[torch.Tensor] = []
     for _ in range(max_unroll):
         cond_val = eval_expr(
-            env, cond_ir, B=B, device=device, dtype=dtype, neural_registry=neural_registry
+            env,
+            cond_ir,
+            B=B,
+            device=device,
+            dtype=dtype,
+            neural_registry=neural_registry,
+            expert_handler=expert_handler,
+            expert_fallback=expert_fallback,
+            expert_audit=expert_audit,
         )
         entering = scope & (cond_val != 0)
         for st in body_ir:
@@ -392,6 +458,9 @@ def run_while_loop(
                 active_mask=entering,
                 abi_widths=var_widths,
                 neural_registry=neural_registry,
+                expert_handler=expert_handler,
+                expert_fallback=expert_fallback,
+                expert_audit=expert_audit,
             )
         snaps.append(
             snapshot_env(
@@ -414,6 +483,9 @@ def exec_stmt(
     active_mask: Optional[torch.Tensor] = None,
     abi_widths: Optional[Dict[str, int]] = None,
     neural_registry: Optional[Union[Dict[str, nn.Module], nn.ModuleDict]] = None,
+    expert_handler: Optional[ExpertHandler] = None,
+    expert_fallback: Optional[float] = None,
+    expert_audit: Optional[List[Dict[str, Any]]] = None,
 ) -> None:
     if active_mask is None:
         active_mask = _all_active(B, device)
@@ -421,7 +493,15 @@ def exec_stmt(
     op = stmt[0]
     if op == "OP_ASSIGN":
         nv = eval_expr(
-            env, stmt[2], B=B, device=device, dtype=dtype, neural_registry=neural_registry
+            env,
+            stmt[2],
+            B=B,
+            device=device,
+            dtype=dtype,
+            neural_registry=neural_registry,
+            expert_handler=expert_handler,
+            expert_fallback=expert_fallback,
+            expert_audit=expert_audit,
         )
         k = str(stmt[1])
         old = env[k]
@@ -437,10 +517,26 @@ def exec_stmt(
     elif op == "OP_BLEND_ASSIGN":
         k = str(stmt[1])
         path_a = eval_expr(
-            env, list(stmt[2]), B=B, device=device, dtype=dtype, neural_registry=neural_registry
+            env,
+            list(stmt[2]),
+            B=B,
+            device=device,
+            dtype=dtype,
+            neural_registry=neural_registry,
+            expert_handler=expert_handler,
+            expert_fallback=expert_fallback,
+            expert_audit=expert_audit,
         ).to(dtype=dtype)
         nv = eval_expr(
-            env, list(stmt[3]), B=B, device=device, dtype=dtype, neural_registry=neural_registry
+            env,
+            list(stmt[3]),
+            B=B,
+            device=device,
+            dtype=dtype,
+            neural_registry=neural_registry,
+            expert_handler=expert_handler,
+            expert_fallback=expert_fallback,
+            expert_audit=expert_audit,
         )
         old = env[k]
         path_a, nv2 = _promote_batch_binop(path_a, nv)
@@ -452,11 +548,27 @@ def exec_stmt(
         env[k] = aa * nv + (1.0 - aa) * old
     elif op == "OP_EXPR_STMT":
         eval_expr(
-            env, stmt[1], B=B, device=device, dtype=dtype, neural_registry=neural_registry
+            env,
+            stmt[1],
+            B=B,
+            device=device,
+            dtype=dtype,
+            neural_registry=neural_registry,
+            expert_handler=expert_handler,
+            expert_fallback=expert_fallback,
+            expert_audit=expert_audit,
         )
     elif op == "OP_CONDITIONAL":
         cond_vec = eval_expr(
-            env, stmt[1], B=B, device=device, dtype=dtype, neural_registry=neural_registry
+            env,
+            stmt[1],
+            B=B,
+            device=device,
+            dtype=dtype,
+            neural_registry=neural_registry,
+            expert_handler=expert_handler,
+            expert_fallback=expert_fallback,
+            expert_audit=expert_audit,
         )
         base = {k: v.clone() for k, v in env.items()}
         then_env = {k: v.clone() for k, v in env.items()}
@@ -472,6 +584,9 @@ def exec_stmt(
                 active_mask=active_mask,
                 abi_widths=aw,
                 neural_registry=neural_registry,
+                expert_handler=expert_handler,
+                expert_fallback=expert_fallback,
+                expert_audit=expert_audit,
             )
         else_env = {k: v.clone() for k, v in env.items()}
         for s in stmt[3]:
@@ -486,6 +601,9 @@ def exec_stmt(
                 active_mask=active_mask,
                 abi_widths=aw,
                 neural_registry=neural_registry,
+                expert_handler=expert_handler,
+                expert_fallback=expert_fallback,
+                expert_audit=expert_audit,
             )
         sel = cond_vec != 0
         for k in env.keys():
@@ -512,6 +630,9 @@ def exec_stmt(
             parent_active=active_mask,
             var_widths=aw,
             neural_registry=neural_registry,
+            expert_handler=expert_handler,
+            expert_fallback=expert_fallback,
+            expert_audit=expert_audit,
         )
     else:
         raise ValueError(f"unknown stmt {op}")
@@ -531,6 +652,9 @@ def run_loop_snapshots(
     trunk_dim: Optional[int] = None,
     abi_widths: Optional[Dict[str, int]] = None,
     neural_registry: Optional[Union[Dict[str, nn.Module], nn.ModuleDict]] = None,
+    expert_handler: Optional[ExpertHandler] = None,
+    expert_fallback: Optional[float] = None,
+    expert_audit: Optional[List[Dict[str, Any]]] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Returns ``(seq, seq_mask)`` with **fixed** ``T = max_unroll`` (or ``T=0`` if ``max_unroll==0``).
 
@@ -574,6 +698,9 @@ def run_loop_snapshots(
             active_mask=None,
             abi_widths=aw,
             neural_registry=neural_registry,
+            expert_handler=expert_handler,
+            expert_fallback=expert_fallback,
+            expert_audit=expert_audit,
         )
     if max_unroll == 0:
         z = torch.zeros(B, 0, dim, device=dev, dtype=dt)
@@ -592,6 +719,9 @@ def run_loop_snapshots(
         parent_active=None,
         var_widths=aw,
         neural_registry=neural_registry,
+        expert_handler=expert_handler,
+        expert_fallback=expert_fallback,
+        expert_audit=expert_audit,
     )
     mat = torch.stack(snaps, dim=1)
     seq_mask = torch.stack(masks, dim=1)

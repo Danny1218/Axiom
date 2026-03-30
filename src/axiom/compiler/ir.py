@@ -22,8 +22,12 @@ RESERVED_REDUCTION_BUILTINS = frozenset({"sum", "mean", "dot", "batch_mean"})
 RESERVED_MATH_BUILTINS = frozenset({"abs", "exp", "log", "sqrt", "sin", "cos"})
 RESERVED_MATH_BINARY = frozenset({"max", "min"})
 RESERVED_NEURAL_BUILTIN = "neural"
+RESERVED_EXPERT_BUILTIN = "expert"
 RESERVED_BUILTIN_NAMES = (
-    RESERVED_REDUCTION_BUILTINS | RESERVED_MATH_BUILTINS | RESERVED_MATH_BINARY | {RESERVED_NEURAL_BUILTIN}
+    RESERVED_REDUCTION_BUILTINS
+    | RESERVED_MATH_BUILTINS
+    | RESERVED_MATH_BINARY
+    | {RESERVED_NEURAL_BUILTIN, RESERVED_EXPERT_BUILTIN}
 )
 
 
@@ -145,6 +149,8 @@ def _expr_contains_op_call(expr: ExprIR) -> bool:
             return True
         if tup[0] == "OP_NEURAL" and len(tup) > 2 and _expr_contains_op_call(list(tup[2])):
             return True
+        if tup[0] == "OP_EXPERT" and len(tup) > 2 and _expr_contains_op_call(list(tup[2])):
+            return True
     return False
 
 
@@ -191,6 +197,11 @@ def expand_expr(expr: ExprIR, funcs: Dict[str, FunctionDef], ctr: List[int]) -> 
             hoists.extend(h)
             out.append(("OP_NEURAL", str(tup[1]), inner, arch))
             continue
+        if isinstance(tup, tuple) and tup and tup[0] == "OP_EXPERT":
+            h, inner = expand_expr(list(tup[2]), funcs, ctr)
+            hoists.extend(h)
+            out.append(("OP_EXPERT", str(tup[1]), inner))
+            continue
         if isinstance(tup, tuple) and tup and tup[0] == "OP_CALL":
             name = str(tup[1])
             if name in RESERVED_REDUCTION_BUILTINS:
@@ -205,6 +216,11 @@ def expand_expr(expr: ExprIR, funcs: Dict[str, FunctionDef], ctr: List[int]) -> 
                 continue
             if name == RESERVED_NEURAL_BUILTIN:
                 h, tail = _expand_neural_call(tup, funcs, ctr)
+                hoists.extend(h)
+                out.extend(tail)
+                continue
+            if name == RESERVED_EXPERT_BUILTIN:
+                h, tail = _expand_expert_call(tup, funcs, ctr)
                 hoists.extend(h)
                 out.extend(tail)
                 continue
@@ -302,6 +318,30 @@ def _expand_neural_call(
     nid = f"neural_node_{uuid.uuid4().hex[:8]}"
     h, e = expand_expr(list(feat_ir), funcs, ctr)
     return h, [("OP_NEURAL", nid, e, arch)]
+
+
+def _expand_expert_call(
+    tup: Tuple[Any, ...], funcs: Dict[str, FunctionDef], ctr: List[int]
+) -> Tuple[IRList, ExprIR]:
+    """Lower ``expert("backend", feat_expr)`` → ``("OP_EXPERT", name, feat_ir)`` (scalar float out)."""
+    arg_irs: Tuple[ExprIR, ...] = tuple(tuple(x) for x in tup[2])
+    if len(arg_irs) != 2:
+        raise ValueError("expert() expects exactly 2 arguments")
+    s_ir = list(arg_irs[0])
+    if len(s_ir) == 1 and isinstance(s_ir[0], StringLiteral):
+        backend = str(s_ir[0].value)
+    elif (
+        len(s_ir) == 1
+        and isinstance(s_ir[0], tuple)
+        and s_ir[0]
+        and s_ir[0][0] == "OP_CONST_STR"
+    ):
+        backend = str(s_ir[0][1])
+    else:
+        raise ValueError("expert() first argument must be a string literal")
+    feat_ir = arg_irs[1]
+    h, e = expand_expr(list(feat_ir), funcs, ctr)
+    return h, [("OP_EXPERT", backend, e)]
 
 
 def _load_e(name: str) -> ExprIR:
@@ -674,6 +714,8 @@ def _mangle_expr(expr: ExprIR, mp: Dict[str, str]) -> ExprIR:
         elif op == "OP_NEURAL" and len(tup) >= 3:
             arch = str(tup[3]) if len(tup) >= 4 else "mlp"
             out.append(("OP_NEURAL", str(tup[1]), _mangle_expr(list(tup[2]), mp), arch))
+        elif op == "OP_EXPERT" and len(tup) >= 3:
+            out.append(("OP_EXPERT", str(tup[1]), _mangle_expr(list(tup[2]), mp)))
         elif op in (
             "OP_ADD",
             "OP_SUB",
@@ -924,6 +966,11 @@ def _postfix_expr(t: Tree) -> List[tuple]:
                     raise ValueError("neural() expects 1 or 2 arguments")
                 nid = f"neural_node_{uuid.uuid4().hex[:8]}"
                 return [("OP_NEURAL", nid, _expr(feat_t), arch)]
+            if fname == RESERVED_EXPERT_BUILTIN:
+                if len(args) != 2:
+                    raise ValueError("expert() expects exactly 2 arguments")
+                backend = _string_literal_from_expr_tree(args[0])
+                return [("OP_EXPERT", backend, _expr(args[1]))]
             if fname in RESERVED_MATH_BUILTINS:
                 if len(args) != 1:
                     raise ValueError(f"{fname}() expects exactly 1 argument")
@@ -1029,6 +1076,9 @@ def _infer_expr_output_width(expr: ExprIR, known: Dict[str, int]) -> int:
         elif op == "OP_NEURAL" and len(tup) >= 3:
             _infer_expr_output_width(list(tup[2]), known)
             stack.append(1)
+        elif op == "OP_EXPERT" and len(tup) >= 3:
+            _infer_expr_output_width(list(tup[2]), known)
+            stack.append(1)
         elif op == "OP_CALL":
             raise ValueError("OP_CALL in width inference — expand calls before ABI layout")
         else:
@@ -1096,6 +1146,8 @@ def extract_abi_layout(
             if tup[0] == "OP_LOAD" and len(tup) > 1:
                 add_name(str(tup[1]))
             elif tup[0] == "OP_NEURAL" and len(tup) >= 3:
+                walk_expr(list(tup[2]))
+            elif tup[0] == "OP_EXPERT" and len(tup) >= 3:
                 walk_expr(list(tup[2]))
             elif tup[0] == "OP_CALL":
                 for a in tup[2]:
@@ -1167,6 +1219,8 @@ def extract_neural_node_specs(ir: IRList, known_widths: Dict[str, int]) -> Dict[
                     max(1, int(_infer_expr_output_width(list(tup[2]), known_widths))),
                     arch,
                 )
+            elif tup[0] == "OP_EXPERT" and len(tup) >= 3:
+                walk_expr(list(tup[2]))
             elif tup[0] == "OP_CALL":
                 for a in tup[2]:
                     walk_expr(list(a))
