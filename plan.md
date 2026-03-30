@@ -129,6 +129,7 @@ python examples/onyx_gateway.py
 streamlit run examples/enterprise_ui.py --server.fileWatcherType none
 pip install -e ".[serve]"
 axiom serve --bundle examples/portfolio_trained.axb --host 127.0.0.1 --port 8000
+# `examples/*.axb` is gitignored — run `python examples/train_portfolio.py` first if the file is missing.
 pip install -e ".[lock]"
 $env:AXIOM_BUNDLE_SECRET="dev-secret"
 axiom lock-bundle --input examples/portfolio_trained.axb --output examples/portfolio_locked.axb --mode env-secret

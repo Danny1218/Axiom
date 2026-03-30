@@ -34,6 +34,14 @@ def test_unlock_payload_pass_through_without_lock():
     assert unlock_payload(payload) is payload
 
 
+def test_lock_bundle_file_missing_input(tmp_path: Path):
+    with pytest.raises(FileNotFoundError) as ei:
+        lock_bundle_file(tmp_path / "missing.axb", tmp_path / "out.axb", "env-secret")
+    msg = str(ei.value)
+    assert "train_portfolio" in msg
+    assert "gitignored" in msg.lower()
+
+
 def test_roundtrip_unlocked_bundle(tmp_path: Path):
     b0 = _make_block()
     p = tmp_path / "u.axb"

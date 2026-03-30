@@ -270,6 +270,8 @@ def _cmd_lock_bundle(args: argparse.Namespace) -> None:
         lock_bundle_file(Path(args.input), Path(args.output), args.mode)
     except ImportError as e:
         raise SystemExit('Bundle lock requires: pip install -e ".[lock]"') from e
+    except FileNotFoundError as e:
+        raise SystemExit(str(e)) from None
     print(f"Locked bundle written to {args.output}")
 
 
@@ -422,7 +424,12 @@ def main(argv: list[str] | None = None) -> None:
         "lock-bundle",
         help="Re-save an .axb with AES-256-CTR encrypted neural weights (topology stays readable).",
     )
-    p_lock.add_argument("--input", type=Path, required=True, help="Source .axb (unlocked).")
+    p_lock.add_argument(
+        "--input",
+        type=Path,
+        required=True,
+        help="Source .axb (unlocked). Example bundles are often gitignored — train first, e.g. python examples/train_portfolio.py.",
+    )
     p_lock.add_argument("--output", type=Path, required=True, help="Destination .axb.")
     p_lock.add_argument(
         "--mode",

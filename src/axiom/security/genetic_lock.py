@@ -192,11 +192,21 @@ def unlock_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     return payload
 
 
+def _missing_bundle_msg(src: Path) -> str:
+    abs_p = Path(src).expanduser().resolve()
+    return (
+        f"Input bundle not found: {src}\n"
+        f"Resolved path: {abs_p}\n"
+        "Repository `examples/*.axb` files are gitignored — generate a bundle first, "
+        "e.g. `python examples/train_portfolio.py` (writes `examples/portfolio_trained.axb`)."
+    )
+
+
 def lock_bundle_file(src: Path, dst: Path, mode: str | LockMode) -> None:
     """Load an unlocked ``.axb``, apply lock, write ``dst``."""
     _require_crypto()
     if not src.is_file():
-        raise FileNotFoundError(src)
+        raise FileNotFoundError(_missing_bundle_msg(src))
     try:
         payload = torch.load(src, map_location="cpu", weights_only=False)
     except TypeError:
