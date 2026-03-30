@@ -8,6 +8,7 @@ dist/
 build/
 examples/titanic.csv
 examples/*.axb
+examples/*.html
 axiom_bundle.pt
 axiom_bundle_topology.json
 axiom_bundle_*.pt

@@ -224,6 +224,13 @@ def main() -> None:
     print("AI internal trace:")
     print(json.dumps(trace, indent=2))
 
+    source = AX_PATH.read_text(encoding="utf-8")
+    report_path = _EXAMPLES / "worst_trade_report.html"
+    model.export_report(worst_dict, str(report_path.resolve()), source_code=source)
+    print(
+        f"\nGlass Box Report generated at {report_path}. Open it in your browser!"
+    )
+
 
 if __name__ == "__main__":
     main()

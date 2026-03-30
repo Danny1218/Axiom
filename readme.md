@@ -74,6 +74,8 @@ out = model.predict(
 )
 # out is a dict of ABI names → floats (or lists for vector columns)
 
+model.export_report({"volatility": 0.6, "drawdown": 0.1, "momentum": -0.8, "volume": 1.5}, "report.html")
+
 batch = model.predict(
     [
         {"volatility": 0.5, "drawdown": 0.0, "momentum": 0.1, "volume": 1.0},

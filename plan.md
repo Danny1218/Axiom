@@ -2,7 +2,7 @@
 
 ## Current phase
 
-**Phase 43** — KAN / liquid / MLP selection via **`neural(expr, "arch")`** (see plan § Phase 43).
+**Phase 44** — HTML Glass Box report via **`AxiomModel.export_report`** / **`tools/html_exporter.py`** (see plan § Phase 44).
 
 **Phase 1–5:** Parser/IR, supernet + topology + Sinkhorn + shadow meta + Liquid KAN / `OP_LOOP`, dataloader, evolutionary trainer, serializer, CLI (now **`axiom train`**).
 
@@ -75,7 +75,7 @@
 - `pyproject.toml` — **`axiom-engine`**, script **`axiom` → `axiom.cli:main`**
 - `src/axiom/cli.py` — train / inspect subcommands
 - `src/axiom/datasets.py` — Titanic, sine, finance mock
-- `src/axiom/tools/inspector.py`, `glass_box.py` — Glass Box
+- `src/axiom/tools/inspector.py`, `glass_box.py`, `html_exporter.py` — Glass Box (Streamlit + static HTML report)
 - `examples/titanic.ax`, `examples/sequence.ax`, `examples/portfolio.ax`, `examples/spy_alpha.ax`, `examples/statarb.ax` — domain sketches
 - `examples/train_portfolio.py` — Phase 36 train + symbolic ablation
 - `examples/train_spy.py` — live SPY + Phase 38 backtest (optional: `pip install -e ".[spy]"`)
@@ -106,7 +106,7 @@ axiom inspect
 
 ## Next
 
-**Phase 38 (complete):** **`src/axiom/api.py`** — **`AxiomModel`**, **`axiom.load(bundle_path)`**; **`predict(dict)`** → dict, **`predict([{...}, ...])`** → list of dicts, **`predict(DataFrame)`** via **`type(...).__name__ == "DataFrame"`** (pandas optional). Uses **`_inputs_to_tensor`** / **`_abi_outputs_from_trunk_row`** and **`_trunk_dim_from_block_abi`** (same span rule as CLI). Root **`from axiom import load, AxiomModel`**. Tests: **`tests/test_api.py`**. Readme Quickstart documents the API.
+**Phase 38 (complete):** **`src/axiom/api.py`** — **`AxiomModel`**, **`axiom.load(bundle_path)`**; **`predict(dict)`** → dict, **`predict([{...}, ...])`** → list of dicts, **`predict(DataFrame)`** via **`type(...).__name__ == "DataFrame"`** (pandas optional). Uses **`_inputs_to_tensor`** / **`_abi_outputs_from_trunk_row`** and **`_trunk_dim_from_block_abi`** (same span rule as CLI). Root **`from axiom import load, AxiomModel`**. Tests: **`tests/test_api.py`**. Readme Quickstart documents the API. **Phase 44** adds **`export_report`** → HTML Glass Box file.
 
 **Phase 39 (complete):** **Live SPY neuro-symbolic flagship** — **`examples/spy_alpha.ax`** + **`examples/train_spy.py`** (yfinance, OOS backtest). Superseded in detail by Phase 40 below.
 
@@ -117,5 +117,7 @@ axiom inspect
 **Phase 42 (complete):** **Cross-sectional `batch_mean`** — Grammar **`batch_mean(expr)`** → **`OP_REDUCE_BATCH_MEAN`**; **`eval_expr`**: **`torch.mean(v, dim=0, keepdim=True)`** (differentiable w.r.t. batch). **`_infer_expr_output_width`**: preserves feature width (unlike **`mean`** over features). **`examples/statarb.ax`**: **`market_neutral_alpha = raw_alpha - batch_mean(raw_alpha)`**, **`target_weight = …`**. **`examples/train_statarb.py`**: mock **10×50** panel, per-day batch forward, maximize **`-sum(weight * future_return)`**. Tests: **`tests/test_batch_mean.py`**.
 
 **Phase 43 (complete):** **Neural architecture strings** — Grammar string literals (**`STRING_DQ` / `STRING_SQ`**) under **`atom`**; IR **`StringLiteral`**, **`OP_NEURAL`** is **`("OP_NEURAL", node_id, input_ir, arch_type)`** (one-arg form defaults **`arch_type`** to **`mlp`**; legacy 3-tuples load as **`mlp`**). **`extract_neural_node_specs`** → **`node_id → (width, arch_type)`**. **`InterpretedBlock` / `InterpretedLiquidLoop`**: **`build_neural_module`** — **`kan`** → **`LiquidKANNode` + readout**, **`liquid`** → **`LiquidFeatureReadout`** (**`primitives/liquid_tensor.py`**, τ-mix + MLP), else small MLP. **`eval_expr`** ignores **`arch_type`** (registry only). **`examples/spy_alpha.ax`**: **`neural(features, "liquid")`**. Tests: **`tests/test_phase43_neural_arch.py`**, updated **`tests/test_ir.py`**.
+
+**Phase 44 (complete):** **HTML Glass Box** — **`src/axiom/tools/html_exporter.py`**: **`export_html_report(model, data, output_path, source_code=None)`** calls **`explain`** + **`predict`**, writes standalone dark-themed HTML (outputs cards, inputs vs trace “Neural adapters” with highlight on **`alpha` / `neural` / `prediction`**, full trace table, optional **`<pre>`** strategy source). **`AxiomModel.export_report`**. **`examples/train_spy.py`** Autopsy writes **`examples/worst_trade_report.html`** (gitignored **`examples/*.html`**). Readme API one-liner. Tests: **`tests/test_html_exporter.py`**, **`tests/test_api.py`**.
 
 **Later ideas:** **`return` inside `while`**; call targets like **`f()[i]`**. Glass Box upgrades (**`--inspect`** / graph of **`OP_NEURAL`**). See **`readme.md` § Road ahead**.

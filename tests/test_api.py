@@ -96,3 +96,18 @@ def test_predict_rejects_invalid_type(tmp_path: Path):
     model = axiom.load(axb)
     with pytest.raises(TypeError):
         model.predict("not-a-dict")
+
+
+def test_export_report_writes_html(tmp_path: Path):
+    block = _simple_double_block()
+    axb = tmp_path / "m.axb"
+    save_bundle(block, axb)
+    model = axiom.load(axb)
+    out = tmp_path / "report.html"
+    model.export_report({"x": 2.0}, str(out))
+    text = out.read_text(encoding="utf-8")
+    assert out.is_file()
+    assert "Axiom Glass Box Execution Report" in text
+    assert "Final outputs" in text and "Input features" in text
+    assert "Full execution trace" in text
+    assert "y" in text and "4.0" in text  # predict y = 2*x

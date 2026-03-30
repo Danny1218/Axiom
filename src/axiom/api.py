@@ -11,6 +11,7 @@ import torch.nn as nn
 from axiom.compiler.deserializer import load_bundle
 from axiom.engine.block_executor import InterpretedBlock
 from axiom.engine.inference import _abi_outputs_from_trunk_row, _inputs_to_tensor
+from axiom.tools.html_exporter import export_html_report
 
 
 def _env_tensor_to_python(t: torch.Tensor) -> Union[float, List[float]]:
@@ -103,3 +104,7 @@ class AxiomModel:
             if isinstance(v, torch.Tensor):
                 trace[k] = _env_tensor_to_python(v)
         return trace
+
+    def export_report(self, data: dict, output_path: str, source_code: str | None = None) -> None:
+        """Write a standalone HTML Glass Box report (``explain`` + ``predict``) to ``output_path``."""
+        export_html_report(self, data, output_path, source_code)
