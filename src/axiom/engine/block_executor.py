@@ -7,6 +7,8 @@ import torch.nn as nn
 
 from axiom.compiler.ir import extract_neural_node_specs
 from axiom.engine.interpreter import collect_load_names_from_stmts, exec_stmt
+from axiom.engine.ssm import LiquidKANNode
+from axiom.primitives.liquid_tensor import LiquidFeatureReadout
 
 Stmt = Tuple
 
@@ -17,6 +19,30 @@ def _neural_mlp(in_dim: int) -> nn.Sequential:
         nn.ReLU(),
         nn.Linear(8, 1),
     )
+
+
+class _KanNeuralReadout(nn.Module):
+    """Spline / RBF path from ``LiquidKANNode`` + linear scalar readout (Phase 43)."""
+
+    def __init__(self, in_dim: int, *, num_basis: int = 8, max_unroll: int = 8) -> None:
+        super().__init__()
+        self.kan = LiquidKANNode(in_dim, num_basis=num_basis, max_unroll=max(1, int(max_unroll)))
+        self.readout = nn.Linear(in_dim, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if x.dim() == 1:
+            x = x.unsqueeze(-1)
+        return self.readout(self.kan(x))
+
+
+def build_neural_module(in_dim: int, arch: str, *, max_unroll: int = 8) -> nn.Module:
+    a = str(arch).strip().lower()
+    if a == "kan":
+        u = max(1, min(int(max_unroll), 16))
+        return _KanNeuralReadout(in_dim, num_basis=8, max_unroll=u)
+    if a == "liquid":
+        return LiquidFeatureReadout(in_dim)
+    return _neural_mlp(in_dim)
 
 
 class InterpretedBlock(nn.Module):
@@ -43,11 +69,11 @@ class InterpretedBlock(nn.Module):
         spec = extract_neural_node_specs(self.ir_stmts, self.abi_widths)
         custom = dict(custom_neural_registry or {})
         built: Dict[str, nn.Module] = {}
-        for nid, w in spec.items():
+        for nid, (w, arch) in spec.items():
             if nid in custom:
                 built[nid] = custom[nid]
             else:
-                built[nid] = _neural_mlp(w)
+                built[nid] = build_neural_module(w, arch, max_unroll=self.max_unroll)
         self.neural_registry: nn.ModuleDict = nn.ModuleDict(built)
 
     def forward(

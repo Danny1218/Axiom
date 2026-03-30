@@ -156,8 +156,9 @@ def main() -> None:
     del probe
     nid = neural_keys[0]
     spec = extract_neural_node_specs(ir, aw)
-    if spec.get(nid, 0) != 6:
-        raise RuntimeError(f"expected neural input width 6, got {spec.get(nid)}")
+    w0, _arch0 = spec.get(nid, (0, "mlp"))
+    if w0 != 6:
+        raise RuntimeError(f"expected neural input width 6, got {w0}")
     custom_brain = make_spy_alpha_custom_brain()
     block = InterpretedBlock(
         ir, abi, abi_widths=aw, custom_neural_registry={nid: custom_brain}

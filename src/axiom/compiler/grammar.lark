@@ -64,11 +64,16 @@ postfix_expr: atom | postfix_expr "[" expr "]" | postfix_expr "(" [call_args] ")
 array_literal: "[" _array_elems "]"
 _array_elems: expr ("," expr)*
 
+STRING_DQ: /"[^"]*"/
+STRING_SQ: /'[^']*'/
+string: STRING_DQ | STRING_SQ
+
 atom: NUMBER
     | "-" atom
     | NAME
     | "(" expr ")"
     | array_literal
+    | string
 
 NUMBER: INT | FLOAT
 INT: /[0-9]+/

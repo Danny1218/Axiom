@@ -7,7 +7,7 @@ import torch.nn as nn
 
 from axiom.compiler.ir import extract_neural_node_specs
 
-from axiom.engine.block_executor import _neural_mlp
+from axiom.engine.block_executor import build_neural_module
 from axiom.engine.interpreter import run_loop_snapshots
 from axiom.engine.ssm import LiquidKANNode
 
@@ -42,7 +42,10 @@ class InterpretedLiquidLoop(nn.Module):
         combined: List[Stmt] = list(prelude_stmts) + [("OP_LOOP", list(cond_ir), list(body_ir))]
         spec = extract_neural_node_specs(combined, self.abi_widths)
         self.neural_registry: nn.ModuleDict = nn.ModuleDict(
-            {nid: _neural_mlp(w) for nid, w in spec.items()}
+            {
+                nid: build_neural_module(w, arch, max_unroll=max_unroll)
+                for nid, (w, arch) in spec.items()
+            }
         )
 
     def forward(

@@ -36,8 +36,19 @@ class FunctionDef:
     body: IRList
 
 
-ExprIR = List[Tuple[Any, ...]]
+ExprIR = List[Any]  # opcode tuples and compile-time fragments like ``StringLiteral``
 Stmt = Tuple[Any, ...]
+
+
+class Expression:
+    """Marker base for structured expression fragments (e.g. string literals for built-ins)."""
+
+
+@dataclass(frozen=True)
+class StringLiteral(Expression):
+    """Compile-time string (e.g. second argument to ``neural(expr, "kan")``)."""
+
+    value: str
 
 
 @dataclass(frozen=True)
@@ -171,10 +182,14 @@ def expand_expr(expr: ExprIR, funcs: Dict[str, FunctionDef], ctr: List[int]) -> 
     hoists: IRList = []
     out: ExprIR = []
     for tup in expr:
+        if isinstance(tup, StringLiteral):
+            out.append(tup)
+            continue
         if isinstance(tup, tuple) and tup and tup[0] == "OP_NEURAL":
+            arch = str(tup[3]) if len(tup) >= 4 else "mlp"
             h, inner = expand_expr(list(tup[2]), funcs, ctr)
             hoists.extend(h)
-            out.append(("OP_NEURAL", str(tup[1]), inner))
+            out.append(("OP_NEURAL", str(tup[1]), inner, arch))
             continue
         if isinstance(tup, tuple) and tup and tup[0] == "OP_CALL":
             name = str(tup[1])
@@ -265,11 +280,28 @@ def _expand_neural_call(
     tup: Tuple[Any, ...], funcs: Dict[str, FunctionDef], ctr: List[int]
 ) -> Tuple[IRList, ExprIR]:
     arg_irs: Tuple[ExprIR, ...] = tuple(tuple(x) for x in tup[2])
-    if len(arg_irs) != 1:
-        raise ValueError("neural() expects exactly 1 argument")
+    if len(arg_irs) == 1:
+        arch = "mlp"
+        feat_ir = arg_irs[0]
+    elif len(arg_irs) == 2:
+        feat_ir = arg_irs[0]
+        s_ir = list(arg_irs[1])
+        if len(s_ir) == 1 and isinstance(s_ir[0], StringLiteral):
+            arch = str(s_ir[0].value)
+        elif (
+            len(s_ir) == 1
+            and isinstance(s_ir[0], tuple)
+            and s_ir[0]
+            and s_ir[0][0] == "OP_CONST_STR"
+        ):
+            arch = str(s_ir[0][1])
+        else:
+            raise ValueError("neural() second argument must be a string literal")
+    else:
+        raise ValueError("neural() expects 1 or 2 arguments")
     nid = f"neural_node_{uuid.uuid4().hex[:8]}"
-    h, e = expand_expr(list(arg_irs[0]), funcs, ctr)
-    return h, [("OP_NEURAL", nid, e)]
+    h, e = expand_expr(list(feat_ir), funcs, ctr)
+    return h, [("OP_NEURAL", nid, e, arch)]
 
 
 def _load_e(name: str) -> ExprIR:
@@ -640,7 +672,8 @@ def _mangle_expr(expr: ExprIR, mp: Dict[str, str]) -> ExprIR:
         elif op == "OP_VEC_PACK":
             out.append(tup)
         elif op == "OP_NEURAL" and len(tup) >= 3:
-            out.append(("OP_NEURAL", str(tup[1]), _mangle_expr(list(tup[2]), mp)))
+            arch = str(tup[3]) if len(tup) >= 4 else "mlp"
+            out.append(("OP_NEURAL", str(tup[1]), _mangle_expr(list(tup[2]), mp), arch))
         elif op in (
             "OP_ADD",
             "OP_SUB",
@@ -836,6 +869,14 @@ def _product(t: Tree) -> List[tuple]:
     return acc
 
 
+def _string_literal_from_expr_tree(t: Tree) -> str:
+    """Used for ``neural(expr, "arch")``: second argument must be a string literal."""
+    ir = _expr(t)
+    if len(ir) == 1 and isinstance(ir[0], StringLiteral):
+        return ir[0].value
+    raise ValueError("expected a string literal")
+
+
 def _postfix_expr(t: Tree) -> List[tuple]:
     if t.data == "atom":
         return _atom(t)
@@ -873,10 +914,16 @@ def _postfix_expr(t: Tree) -> List[tuple]:
                     raise ValueError(f"{fname}() expects exactly 2 arguments")
                 return _expr(args[0]) + _expr(args[1]) + [("OP_MATH_BINARY", fname)]
             if fname == RESERVED_NEURAL_BUILTIN:
-                if len(args) != 1:
-                    raise ValueError("neural() expects exactly 1 argument")
+                if len(args) == 1:
+                    arch = "mlp"
+                    feat_t = args[0]
+                elif len(args) == 2:
+                    feat_t = args[0]
+                    arch = _string_literal_from_expr_tree(args[1])
+                else:
+                    raise ValueError("neural() expects 1 or 2 arguments")
                 nid = f"neural_node_{uuid.uuid4().hex[:8]}"
-                return [("OP_NEURAL", nid, _expr(args[0]))]
+                return [("OP_NEURAL", nid, _expr(feat_t), arch)]
             if fname in RESERVED_MATH_BUILTINS:
                 if len(args) != 1:
                     raise ValueError(f"{fname}() expects exactly 1 argument")
@@ -897,6 +944,15 @@ def _array_literal(t: Tree) -> List[tuple]:
     return ir
 
 
+def _string_tree_to_literal(t: Tree) -> List[Any]:
+    assert t.data == "string"
+    tok = t.children[0]
+    raw = str(tok)
+    if len(raw) >= 2 and raw[0] in "\"'" and raw[0] == raw[-1]:
+        return [StringLiteral(raw[1:-1])]
+    return [StringLiteral(raw)]
+
+
 def _atom(t: Tree) -> List[tuple]:
     ch = t.children
     if len(ch) == 1:
@@ -911,6 +967,8 @@ def _atom(t: Tree) -> List[tuple]:
                 return _atom(x) + [("OP_NEG",)]
             if x.data == "array_literal":
                 return _array_literal(x)
+            if x.data == "string":
+                return _string_tree_to_literal(x)
             if x.data == "comparison":
                 return _comparison(x)
             if x.data == "expr":
@@ -1093,9 +1151,9 @@ def extract_abi_widths(ir: IRList, *, max_vars: Optional[int] = None) -> Dict[st
     return {n: max(1, int(widths.get(n, 1))) for n in starts}
 
 
-def extract_neural_node_specs(ir: IRList, known_widths: Dict[str, int]) -> Dict[str, int]:
-    """``node_id`` → feature width for each ``OP_NEURAL`` in statements (for ``nn.Linear`` in width)."""
-    out: Dict[str, int] = {}
+def extract_neural_node_specs(ir: IRList, known_widths: Dict[str, int]) -> Dict[str, Tuple[int, str]]:
+    """``node_id`` → ``(feature_width, arch_type)`` for each ``OP_NEURAL`` (``arch_type`` defaults to ``mlp``)."""
+    out: Dict[str, Tuple[int, str]] = {}
 
     def walk_expr(expr: ExprIR) -> None:
         for tup in expr:
@@ -1104,7 +1162,11 @@ def extract_neural_node_specs(ir: IRList, known_widths: Dict[str, int]) -> Dict[
             if tup[0] == "OP_NEURAL" and len(tup) >= 3:
                 walk_expr(list(tup[2]))
                 nid = str(tup[1])
-                out[nid] = max(1, int(_infer_expr_output_width(list(tup[2]), known_widths)))
+                arch = str(tup[3]) if len(tup) >= 4 else "mlp"
+                out[nid] = (
+                    max(1, int(_infer_expr_output_width(list(tup[2]), known_widths))),
+                    arch,
+                )
             elif tup[0] == "OP_CALL":
                 for a in tup[2]:
                     walk_expr(list(a))

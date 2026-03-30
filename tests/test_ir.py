@@ -94,3 +94,4 @@ def test_ir_math_binary_and_neural_opcodes():
     assert ir[0][2][-1] == ("OP_MATH_BINARY", "max")
     assert ir[1][2][0][0] == "OP_NEURAL"
     assert str(ir[1][2][0][1]).startswith("neural_node_")
+    assert ir[1][2][0][3] == "mlp"

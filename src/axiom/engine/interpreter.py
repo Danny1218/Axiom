@@ -265,6 +265,7 @@ def eval_expr(
             else:
                 raise ValueError(f"unknown OP_MATH_BINARY {fn!r}")
         elif op == "OP_NEURAL" and len(tup) >= 3:
+            # tup[3] is architecture tag for the executor; stack eval is unchanged.
             feats = eval_expr(
                 env,
                 list(tup[2]),

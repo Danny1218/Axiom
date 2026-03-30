@@ -1,6 +1,6 @@
 // We want to predict tomorrow's return based on today's features
 features = [momentum_1d, momentum_5d, volatility, sma_10, sma_50, volatility_20d];
-alpha_signal = neural(features);
+alpha_signal = neural(features, "liquid");
 
 // The Symbolic Circuit Breaker (Risk Management)
 // If daily volatility exceeds 2.5%, the market is crashing or behaving erratically.

@@ -2,6 +2,8 @@
 
 ## Current phase
 
+**Phase 43** — KAN / liquid / MLP selection via **`neural(expr, "arch")`** (see plan § Phase 43).
+
 **Phase 1–5:** Parser/IR, supernet + topology + Sinkhorn + shadow meta + Liquid KAN / `OP_LOOP`, dataloader, evolutionary trainer, serializer, CLI (now **`axiom train`**).
 
 **Phase 6 (complete):** **`engine/interpreter.py`** — stack IR eval, `run_while_loop` / `run_loop_snapshots` (prelude stmts + seed map + padded state vectors). **`InterpretedLiquidLoop`** — runs interpreted snapshots per batch row, **`LiquidKANNode.forward_sequence_tensors`** for sequence memory, falls back to **`forward`** when **`max_unroll==0`** (empty sequence). **`build_execution_graph_from_ir`** — `OP_LOOP` → `InterpretedLiquidLoop`; contiguous **`OP_ASSIGN` / `OP_EXPR_STMT`** before a loop are absorbed as prelude (no duplicate Identity nodes). IR remains on graph nodes for tooling.
@@ -83,7 +85,7 @@
 
 ## IR opcodes
 
-`OP_CONST`, `OP_LOAD`, `OP_ADD`, `OP_SUB`, `OP_MUL`, `OP_DIV`, `OP_NEG`, `OP_CMP_*`, `OP_VEC_PACK`, `OP_INDEX`, `OP_REDUCE_SUM`, `OP_REDUCE_MEAN`, `OP_REDUCE_BATCH_MEAN`, `OP_DOT`, `OP_MATH_UNARY`, `OP_MATH_BINARY`, `OP_NEURAL`, `OP_CALL` (pre-expand), `OP_RETURN` (function body), `OP_ASSIGN`, `OP_BLEND_ASSIGN` (inlined fn), `OP_EXPR_STMT`, `OP_CONDITIONAL`, `OP_LOOP`.
+`OP_CONST`, `OP_LOAD`, `OP_ADD`, `OP_SUB`, `OP_MUL`, `OP_DIV`, `OP_NEG`, `OP_CMP_*`, `OP_VEC_PACK`, `OP_INDEX`, `OP_REDUCE_SUM`, `OP_REDUCE_MEAN`, `OP_REDUCE_BATCH_MEAN`, `OP_DOT`, `OP_MATH_UNARY`, `OP_MATH_BINARY`, `OP_NEURAL` (payload: `input_ir` + `arch_type` string, Phase 43), `OP_CALL` (pre-expand), `OP_RETURN` (function body), `OP_ASSIGN`, `OP_BLEND_ASSIGN` (inlined fn), `OP_EXPR_STMT`, `OP_CONDITIONAL`, `OP_LOOP`.
 
 ## Run training (PowerShell)
 
@@ -113,5 +115,7 @@ axiom inspect
 **Phase 41 (complete):** **Explainability** — **`InterpretedBlock.forward(h, return_env=True)`** → **`(out_trunk, env)`**; default **`return_env=False`** unchanged for training. **`AxiomModel.explain(row_dict)`** runs batch-1 forward, strips **`_…`** keys, converts env tensors to **float / list[float]**. **`examples/train_spy.py`**: **`backtest_metrics`** returns **`(metrics, df_oos)`**; **Autopsy** section: worst **`strategy_return`** day, **`model.explain`**, JSON trace. Tests: **`tests/test_explain.py`**.
 
 **Phase 42 (complete):** **Cross-sectional `batch_mean`** — Grammar **`batch_mean(expr)`** → **`OP_REDUCE_BATCH_MEAN`**; **`eval_expr`**: **`torch.mean(v, dim=0, keepdim=True)`** (differentiable w.r.t. batch). **`_infer_expr_output_width`**: preserves feature width (unlike **`mean`** over features). **`examples/statarb.ax`**: **`market_neutral_alpha = raw_alpha - batch_mean(raw_alpha)`**, **`target_weight = …`**. **`examples/train_statarb.py`**: mock **10×50** panel, per-day batch forward, maximize **`-sum(weight * future_return)`**. Tests: **`tests/test_batch_mean.py`**.
+
+**Phase 43 (complete):** **Neural architecture strings** — Grammar string literals (**`STRING_DQ` / `STRING_SQ`**) under **`atom`**; IR **`StringLiteral`**, **`OP_NEURAL`** is **`("OP_NEURAL", node_id, input_ir, arch_type)`** (one-arg form defaults **`arch_type`** to **`mlp`**; legacy 3-tuples load as **`mlp`**). **`extract_neural_node_specs`** → **`node_id → (width, arch_type)`**. **`InterpretedBlock` / `InterpretedLiquidLoop`**: **`build_neural_module`** — **`kan`** → **`LiquidKANNode` + readout**, **`liquid`** → **`LiquidFeatureReadout`** (**`primitives/liquid_tensor.py`**, τ-mix + MLP), else small MLP. **`eval_expr`** ignores **`arch_type`** (registry only). **`examples/spy_alpha.ax`**: **`neural(features, "liquid")`**. Tests: **`tests/test_phase43_neural_arch.py`**, updated **`tests/test_ir.py`**.
 
 **Later ideas:** **`return` inside `while`**; call targets like **`f()[i]`**. Glass Box upgrades (**`--inspect`** / graph of **`OP_NEURAL`**). See **`readme.md` § Road ahead**.

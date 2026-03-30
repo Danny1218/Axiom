@@ -32,6 +32,31 @@ class LiquidStateTensor(nn.Module):
         return self.data
 
 
+class LiquidFeatureReadout(nn.Module):
+    """Batched liquid-style τ mix (same spirit as ``LiquidStateTensor``) + MLP + scalar readout."""
+
+    def __init__(self, in_dim: int, hidden: int = 16) -> None:
+        super().__init__()
+        self.in_dim = in_dim
+        self.mlp = nn.Sequential(
+            nn.Linear(in_dim, hidden),
+            nn.ReLU(),
+            nn.Linear(hidden, in_dim),
+        )
+        self.readout = nn.Linear(in_dim, 1)
+        inv = torch.log(torch.expm1(torch.tensor(1.0, dtype=torch.float32)))
+        self._log_tau = nn.Parameter(inv.reshape(()))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if x.dim() == 1:
+            x = x.unsqueeze(-1)
+        x2 = x.reshape(x.shape[0], -1)
+        tau = F.softplus(self._log_tau).squeeze() + 1e-5
+        alpha = torch.exp(-1.0 / tau)
+        mixed = alpha * x2 + (1.0 - alpha) * self.mlp(x2)
+        return self.readout(mixed)
+
+
 def stack_liquid_states(states: list[LiquidStateTensor]) -> tuple[torch.Tensor, torch.Tensor]:
     """Stack `data` as (T, D) and per-step τ as (T,)."""
     if not states:

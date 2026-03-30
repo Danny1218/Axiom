@@ -33,3 +33,6 @@ def parse_ax_program(source: str):
     from axiom.compiler.ir import parse_program as program_from_tree
 
     return program_from_tree(parse_ax(source))
+
+
+# String literals (e.g. ``neural(x, "kan")``) are lowered in ``axiom.compiler.ir`` via ``StringLiteral`` / ``_postfix_expr``; there is no separate Lark Transformer class in this module.
