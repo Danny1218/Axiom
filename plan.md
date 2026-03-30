@@ -2,7 +2,7 @@
 
 ## Current phase
 
-**Phase 44** — HTML Glass Box report via **`AxiomModel.export_report`** / **`tools/html_exporter.py`** (see plan § Phase 44).
+**Phase 45** — Gymnasium CartPole neuro-symbolic REINFORCE (**`examples/cartpole.ax`**, **`examples/train_cartpole.py`**) — see plan § Phase 45.
 
 **Phase 1–5:** Parser/IR, supernet + topology + Sinkhorn + shadow meta + Liquid KAN / `OP_LOOP`, dataloader, evolutionary trainer, serializer, CLI (now **`axiom train`**).
 
@@ -76,9 +76,10 @@
 - `src/axiom/cli.py` — train / inspect subcommands
 - `src/axiom/datasets.py` — Titanic, sine, finance mock
 - `src/axiom/tools/inspector.py`, `glass_box.py`, `html_exporter.py` — Glass Box (Streamlit + static HTML report)
-- `examples/titanic.ax`, `examples/sequence.ax`, `examples/portfolio.ax`, `examples/spy_alpha.ax`, `examples/statarb.ax` — domain sketches
+- `examples/titanic.ax`, `examples/sequence.ax`, `examples/portfolio.ax`, `examples/spy_alpha.ax`, `examples/statarb.ax`, `examples/cartpole.ax` — domain sketches
 - `examples/train_portfolio.py` — Phase 36 train + symbolic ablation
 - `examples/train_spy.py` — live SPY + Phase 38 backtest (optional: `pip install -e ".[spy]"`)
+- `examples/train_cartpole.py` — Phase 45 REINFORCE on CartPole-v1 (optional: `pip install -e ".[cartpole]"`)
 - `train.ax` — default **`axiom train`** sketch (cwd)
 - `src/axiom/compiler/`, `src/axiom/engine/`, `src/axiom/primitives/`
 - `tests/`
@@ -101,6 +102,8 @@ axiom predict --bundle examples/portfolio_trained.axb --input '{"volatility":0.6
 pip install -e ".[spy]"
 python examples/train_spy.py
 python examples/train_statarb.py
+pip install -e ".[cartpole]"
+python examples/train_cartpole.py
 axiom inspect
 ```
 
@@ -119,5 +122,7 @@ axiom inspect
 **Phase 43 (complete):** **Neural architecture strings** — Grammar string literals (**`STRING_DQ` / `STRING_SQ`**) under **`atom`**; IR **`StringLiteral`**, **`OP_NEURAL`** is **`("OP_NEURAL", node_id, input_ir, arch_type)`** (one-arg form defaults **`arch_type`** to **`mlp`**; legacy 3-tuples load as **`mlp`**). **`extract_neural_node_specs`** → **`node_id → (width, arch_type)`**. **`InterpretedBlock` / `InterpretedLiquidLoop`**: **`build_neural_module`** — **`kan`** → **`LiquidKANNode` + readout**, **`liquid`** → **`LiquidFeatureReadout`** (**`primitives/liquid_tensor.py`**, τ-mix + MLP), else small MLP. **`eval_expr`** ignores **`arch_type`** (registry only). **`examples/spy_alpha.ax`**: **`neural(features, "liquid")`**. Tests: **`tests/test_phase43_neural_arch.py`**, updated **`tests/test_ir.py`**.
 
 **Phase 44 (complete):** **HTML Glass Box** — **`src/axiom/tools/html_exporter.py`**: **`export_html_report(model, data, output_path, source_code=None)`** calls **`explain`** + **`predict`**, writes standalone dark-themed HTML (outputs cards, inputs vs trace “Neural adapters” with highlight on **`alpha` / `neural` / `prediction`**, full trace table, optional **`<pre>`** strategy source). **`AxiomModel.export_report`**. **`examples/train_spy.py`** Autopsy writes **`examples/worst_trade_report.html`** (gitignored **`examples/*.html`**). Readme API one-liner. Tests: **`tests/test_html_exporter.py`**, **`tests/test_api.py`**.
+
+**Phase 45 (complete):** **Neuro-symbolic RL (CartPole)** — **`examples/cartpole.ax`**: four state features, **`neural(features, "liquid")`**, symbolic **pole_angle** safety rails (**±0.15** rad → fixed logits **±5**), **`prob_right`** via **`exp`**. **`examples/train_cartpole.py`**: pure PyTorch **REINFORCE** (**`Bernoulli`**, **γ=0.99**, normalized returns), **`_inputs_to_tensor`** + **`InterpretedBlock`** forward, **Adam lr=0.01**, up to **1000** episodes, **`save_bundle`** on **500** reward; **`axiom.load`** + **`render_mode="human"`** demo (graceful skip without display). Extra: **`pyproject.toml`** **`[cartpole]`** → **`gymnasium`**. Tests: **`tests/test_cartpole_agent.py`**.
 
 **Later ideas:** **`return` inside `while`**; call targets like **`f()[i]`**. Glass Box upgrades (**`--inspect`** / graph of **`OP_NEURAL`**). See **`readme.md` § Road ahead**.

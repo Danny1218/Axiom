@@ -1,0 +1,22 @@
+// State from the Gymnasium environment
+features = [cart_pos, cart_vel, pole_angle, pole_vel];
+
+// Let the Liquid Neural Network calculate the raw intent
+raw_action_logit = neural(features, "liquid");
+
+// The Symbolic Safety Rail (Physics Override)
+// If the pole is leaning dangerously to the right (> 0.15 radians),
+// OVERRIDE the AI and force the cart to move right to catch it.
+// If leaning dangerously left (< -0.15 radians), force left.
+if (pole_angle > 0.15) {
+    action_logit = 5.0;
+} else {
+    if (pole_angle < -0.15) {
+        action_logit = -5.0;
+    } else {
+        action_logit = raw_action_logit;
+    }
+}
+
+// Sigmoid → probability of moving right (0.0 to 1.0)
+prob_right = 1.0 / (1.0 + exp(-action_logit));
