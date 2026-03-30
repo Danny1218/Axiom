@@ -47,6 +47,8 @@ class EvolutionaryTrainer:
     With ``target_col``, only that trunk column is supervised (``out[:, c:c+1]`` vs batch targets);
     other channels stay free for latent working memory. Default ``None`` keeps full-vector MSE
     (e.g. denoising loaders where ``y`` matches ``out`` shape).
+
+    ``train_epoch(..., device=...)`` moves each batch ``x,y`` to that device when set (e.g. CUDA graph).
     """
 
     def __init__(
@@ -74,6 +76,8 @@ class EvolutionaryTrainer:
         self,
         loader,
         meta_compiler: Optional[MetaCompiler] = None,
+        *,
+        device: Optional[torch.device] = None,
     ) -> float:
         self.graph.train()
         total = 0.0
@@ -81,6 +85,9 @@ class EvolutionaryTrainer:
         shadow_sum: Dict[str, float] = {}
         shadow_cnt: Dict[str, int] = {}
         for x, y in loader:
+            if device is not None:
+                x = x.to(device, non_blocking=True)
+                y = y.to(device, non_blocking=True)
             self.optimizer.zero_grad(set_to_none=True)
             out, locs, signals = self.step_fn(x)
             if self.target_col is not None:

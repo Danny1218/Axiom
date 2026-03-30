@@ -1,0 +1,13 @@
+// Titanic survival — symbolic priors; TT-LoRA + Sinkhorn refine residuals.
+
+if (Sex > 0.5) {
+  survived_prob = 0.7;
+} else {
+  survived_prob = 0.2;
+}
+
+if (Pclass > 2.5) {
+  survived_prob = survived_prob - 0.3;
+} else {
+  survived_prob = survived_prob + 0.1;
+}

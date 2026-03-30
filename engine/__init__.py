@@ -1,5 +1,5 @@
 from engine.block_executor import InterpretedBlock
-from engine.dataloader import AxiomDataset, LiquidSequenceLoader, sequential_to_features
+from engine.dataloader import AxiomDataset, LiquidSequenceLoader, load_csv_to_dicts, sequential_to_features
 from engine.inference import AxiomRunner
 from engine.fitness import (
     ShadowFitnessEvaluator,
@@ -32,6 +32,7 @@ __all__ = [
     "LiquidKANNode",
     "InterpretedBlock",
     "AxiomDataset",
+    "load_csv_to_dicts",
     "LiquidSequenceLoader",
     "sequential_to_features",
     "EvolutionaryTrainer",

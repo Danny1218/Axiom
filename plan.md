@@ -30,9 +30,12 @@
 
 **Phase 18 (complete):** **Hybrid symbolic–neural execution** — **`engine/block_executor.py`**: **`InterpretedBlock`** runs IR stmts with **`exec_stmt`**, seeds **`env`** from **`h`** via **`abi`**, repacks trunk columns. Root **`OP_ASSIGN` / `OP_EXPR_STMT`** use **`InterpretedBlock`** (DAG node carries **`ir`** for bundles). **`ConditionalSinkhornBlock`** runs symbolic **`then_ir` / `else_ir`** per branch, then **`out = w0*(h_then+y0) + w1*(h_else+y1)`** (same shadow semantics on raw adapter outputs). **`load_execution_bundle`** rebuilds stmt/conditional IR from JSON. Tests: **`tests/test_hybrid_execution.py`**. **`torch._dynamo.reset()`** in **`test_evolutionary_trainer_compile_fullgraph_with_loop_one_epoch`** avoids Dynamo cache exhaustion after other compile tests.
 
+**Phase 19 (complete):** **Domain tooling — Titanic** — **`load_csv_to_dicts`** / **`_cell_to_float`** in **`engine/dataloader.py`** ( **`csv.DictReader`**, numeric parse, **`female`/`male`**, empty → **0** ). **`examples/titanic.ax`**: hybrid priors on **`Sex`** / **`Pclass`** → **`survived_prob`**. **`examples/run_titanic.py`**: compile graph (**`dim=32`**), download CSV if missing (public mirror), 80/20 split, **`AxiomDataset`**, **`EvolutionaryTrainer(..., target_col=abi["survived_prob"], device=...)`** via **`train_epoch(..., device=)`** so batches match CUDA. **`EvolutionaryTrainer.train_epoch`** optional **`device`** moves **`x,y`** to that device. Tests: **`tests/test_csv_titanic.py`**. **`examples/titanic.csv`** gitignored (downloaded on first run).
+
 ## Layout
 
 - `main.py` — CLI entry
+- `examples/titanic.ax`, `examples/run_titanic.py` — applied Titanic pipeline
 - `train.ax` — default training sketch
 - `compiler/serializer.py`, `compiler/deserializer.py` — bundle save / reload
 - `engine/block_executor.py`, `engine/dataloader.py`, `engine/trainer.py`, `engine/inference.py`, `engine/interpreter.py`, `engine/loop_executor.py`
@@ -53,4 +56,4 @@ python -m pytest tests -q
 
 ## Next
 
-Distributed dataloader (see `readme.md`). Bundles without **`abi`** or embedded **`ir`** deserialize with empty ABI (legacy inference layout). Further Dynamo hardening if new IR ops add Python breaks. Optional: CSV/JSON loaders that build **`AxiomDataset`** rows.
+More domain examples, feature-rich Titanic encodings (Age/Fare in ABI), distributed dataloader (see `readme.md`). Further Dynamo hardening if new IR ops add Python breaks.

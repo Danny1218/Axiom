@@ -1,9 +1,41 @@
 from __future__ import annotations
 
-from typing import Dict, Iterator, List, Optional, Tuple
+import csv
+from pathlib import Path
+from typing import Dict, Iterator, List, Optional, Tuple, Union
 
 import torch
 from torch.utils.data import Dataset
+
+
+def _cell_to_float(raw: str) -> float:
+    s = (raw or "").strip()
+    if not s:
+        return 0.0
+    low = s.lower()
+    if low in ("female", "f"):
+        return 1.0
+    if low in ("male", "m"):
+        return 0.0
+    try:
+        return float(s)
+    except ValueError:
+        return 0.0
+
+
+def load_csv_to_dicts(filepath: Union[str, Path]) -> List[Dict[str, float]]:
+    """Load a CSV into ``List[Dict[str, float]]`` for ``AxiomDataset`` / runners.
+
+    Numeric strings become floats; empty cells → ``0.0``. ``female``/``male`` (case-insensitive)
+    → ``1.0``/``0.0`` for Titanic-style ``Sex``. Unparseable text → ``0.0``.
+    """
+    path = Path(filepath)
+    rows: List[Dict[str, float]] = []
+    with path.open(newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for rec in reader:
+            rows.append({k: _cell_to_float(v) for k, v in rec.items() if k is not None})
+    return rows
 
 
 class AxiomDataset(Dataset):
