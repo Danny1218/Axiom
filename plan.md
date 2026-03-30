@@ -2,7 +2,7 @@
 
 ## Current phase
 
-**Phase 60** — **Copilot compile / validate / evaluate harness** — **`src/axiom/copilot/`**: **`ProgramCandidate`**, **`ProgramValidationReport`**, **`ProgramEvaluationReport`**, **`ProgramMetric`**, **`ProgramFailure`**; **`validate_program`**, **`evaluate_program`** with modes **`compile_only`**, **`predict_rows`**, and explicit **`train_tabular`** “not implemented” failure. In-memory **`.ax`** → parse / IR / **`InterpretedBlock`**; optional batched **`AxiomModel.predict`** + caller **`score_fn(predictions, expected) -> dict[str, float]`**; structured failures (no raw crashes). Tests: **`tests/test_copilot_evaluator.py`**.
+**Phase 60** — **Copilot compile / validate / evaluate + draft–repair search** — **`src/axiom/copilot/`**: **`ProgramCandidate`**, **`ProgramValidationReport`**, **`ProgramEvaluationReport`**, **`ProgramMetric`**, **`ProgramFailure`**; **`validate_program`**, **`evaluate_program`** with modes **`compile_only`**, **`predict_rows`**, and explicit **`train_tabular`** “not implemented” failure. In-memory **`.ax`** → parse / IR / **`InterpretedBlock`**; optional batched **`AxiomModel.predict`** + caller **`score_fn`**. **`search.py`**: **`CopilotSearchConfig`**, **`CopilotIterationRecord`**, **`CopilotSearchResult`**, **`run_copilot_search`** — expert **`draft_program`** then evaluate / optional **`repair_program`** with structured repair prompts (goal, current source, failures/metrics); keeps best candidate (valid over invalid; higher **`score_sort_key`** when metrics exist). No network in the search module. Tests: **`tests/test_copilot_evaluator.py`**, **`tests/test_copilot_search.py`**.
 
 **Phase 59** — **Onyx / Qwen expert HTTP adapter** — **`src/axiom/experts/onyx_qwen.py`**, **`[copilot]`** extra (**`requests`**). Tests: **`tests/test_onyx_qwen_backend.py`**.
 
@@ -119,14 +119,14 @@
 - `train.ax` — default **`axiom train`** sketch (cwd)
 - `src/axiom/compiler/`, `src/axiom/engine/`, `src/axiom/primitives/`
 - `src/axiom/experts/` — Phase 58 protocol + registry; Phase 59 **`onyx_qwen.py`** (optional **`[copilot]`**)
-- `src/axiom/copilot/` — Phase 60 validate / evaluate harness for semantic search & expert repair loops
-- `tests/` — **`tests/test_architecture_baseline.py`**, **`tests/test_experts.py`**, **`tests/test_onyx_qwen_backend.py`**, **`tests/test_copilot_evaluator.py`**
+- `src/axiom/copilot/` — Phase 60 validate / evaluate harness + **`search.py`** draft–repair loop
+- `tests/` — **`tests/test_architecture_baseline.py`**, **`tests/test_experts.py`**, **`tests/test_onyx_qwen_backend.py`**, **`tests/test_copilot_evaluator.py`**, **`tests/test_copilot_search.py`**
 
 ## Next target (semantic copilot — wiring)
 
-**Done:** typed **expert** API (**Phase 58**) + **Onyx/Qwen HTTP adapter** (**Phase 59**) + **in-memory evaluate harness** (**Phase 60**).
+**Done:** typed **expert** API (**Phase 58**) + **Onyx/Qwen HTTP adapter** (**Phase 59**) + **in-memory evaluate harness** + **semantic draft–repair–search loop** (**Phase 60** — **`run_copilot_search`**).
 
-**Not started:** copilot **CLI** or **FastAPI** routes, **`train_tabular`** inside the harness (use **`axiom train`** / **`EvolutionaryTrainer`**), and end-to-end orchestration after expert draft/repair.
+**Not started:** copilot **CLI** or **FastAPI** routes, **`train_tabular`** inside the harness (use **`axiom train`** / **`EvolutionaryTrainer`**), and end-to-end product wiring beyond **`run_copilot_search`**.
 
 ## IR opcodes
 
