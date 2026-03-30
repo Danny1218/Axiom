@@ -7,6 +7,7 @@ venv/
 dist/
 build/
 examples/titanic.csv
+examples/*.axb
 axiom_bundle.pt
 axiom_bundle_topology.json
 axiom_bundle_*.pt

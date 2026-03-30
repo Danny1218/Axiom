@@ -66,6 +66,8 @@
 
 **Phase 36 (complete):** **Quant flagship (productization)** — **`axiom.datasets.load_finance_mock`**: temp CSV (**`volatility`**, **`drawdown`**, **`momentum`**, **`volume`**, **`target_position`**) with piecewise base + **`0.2*sin(momentum*volume)`** clamped to **[0,1]**. **`examples/portfolio.ax`**: **`calc_base_risk`** (masked early returns) + **`neural([momentum, volume, base_risk])`** + **`max(0, min(1, 1 - base_risk + alpha))`**. **`examples/train_portfolio.py`**: **`AxiomDataset`**, Adam on **`InterpretedBlock.parameters()`**, MSE vs **`target_position`**; Glass Box step: swap **`neural_registry`** for empty **`ModuleDict`**, report symbolic MSE, restore. Tests: **`tests/test_phase36_finance.py`**, **`tests/test_documentation_contract.py`**.
 
+**Phase 37 (complete):** **`.axb` bundle + predict CLI** — **`save_bundle` / `load_bundle`**: single **`torch.save`** payload **`{version, topology, abi_widths, neural_weights}`**; topology holds **`interpreted_block`** IR (**JSONable**), ABI, **`max_unroll`**. Reload builds **`InterpretedBlock`** then **`neural_registry.load_state_dict`** when weights present. **`examples/train_portfolio.py`** writes **`examples/portfolio_trained.axb`** and checks forward round-trip. **`axiom predict --bundle … --input '{...}'`**: JSON features → trunk via **`_inputs_to_tensor`**, decode with **`_abi_outputs_from_trunk_row`**, print JSON. Tests: **`tests/test_serializer.py`**, **`tests/test_deserializer.py`**, **`tests/test_cli_predict.py`**. **`examples/*.axb`** gitignored.
+
 ## Layout
 
 - `pyproject.toml` — **`axiom-engine`**, script **`axiom` → `axiom.cli:main`**
@@ -92,9 +94,10 @@ axiom train train.ax --epochs 10 --out axiom_bundle
 axiom train examples/titanic.ax --dataset titanic --epochs 30 --out axiom_bundle
 axiom train examples/sequence.ax --dataset sine --epochs 30 --dim 32 --out axiom_bundle
 python examples/train_portfolio.py
+axiom predict --bundle examples/portfolio_trained.axb --input '{"volatility":0.6,"drawdown":0.1,"momentum":-0.8,"volume":1.5}'
 axiom inspect
 ```
 
 ## Next
 
-**Phase 37 (ideas):** **`return` inside `while`**; call targets like **`f()[i]`**. Glass Box upgrades (**`--inspect`** / graph of **`OP_NEURAL`**). See **`readme.md` § Road ahead**.
+**Phase 38 (ideas):** **`return` inside `while`**; call targets like **`f()[i]`**. Glass Box upgrades (**`--inspect`** / graph of **`OP_NEURAL`**). See **`readme.md` § Road ahead**.

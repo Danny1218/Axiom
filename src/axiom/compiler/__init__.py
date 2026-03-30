@@ -9,8 +9,8 @@ from axiom.compiler.ir import (
     parse_program,
 )
 from axiom.compiler.parser import parse_ax, parse_ax_file
-from axiom.compiler.deserializer import load_execution_bundle
-from axiom.compiler.serializer import load_state_dict, save_execution_bundle
+from axiom.compiler.deserializer import load_bundle, load_execution_bundle
+from axiom.compiler.serializer import load_state_dict, save_bundle, save_execution_bundle
 
 __all__ = [
     "parse_ax",
@@ -23,7 +23,9 @@ __all__ = [
     "RESERVED_REDUCTION_BUILTINS",
     "extract_global_abi",
     "wire_execution_graph",
+    "save_bundle",
     "save_execution_bundle",
     "load_state_dict",
+    "load_bundle",
     "load_execution_bundle",
 ]

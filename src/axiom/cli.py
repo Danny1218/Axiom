@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -9,14 +10,18 @@ from typing import List, Optional, Tuple
 import torch
 from torch.utils.data import DataLoader
 
-from axiom.compiler.deserializer import load_execution_bundle
+from axiom.compiler.deserializer import load_bundle, load_execution_bundle
 from axiom.compiler.flow import wire_execution_graph
 from axiom.compiler.ir import ast_to_ir
 from axiom.compiler.parser import parse_ax_file
 from axiom.compiler.serializer import save_execution_bundle
 from axiom.datasets import generate_sine_wave, load_titanic, train_val_split
 from axiom.engine.dataloader import AxiomDataset, LiquidSequenceLoader, load_csv_to_dicts
-from axiom.engine.inference import AxiomRunner
+from axiom.engine.inference import (
+    AxiomRunner,
+    _abi_outputs_from_trunk_row,
+    _inputs_to_tensor,
+)
 from axiom.engine.meta_compiler import MetaCompiler
 from axiom.engine.supernet import LatentSupernet
 from axiom.engine.topology import ExecutionGraph
@@ -252,6 +257,31 @@ def _train_tabular_and_eval(
     print(f"Saved {args.out}.pt and {args.out}_topology.json")
 
 
+def _trunk_dim_from_block_abi(block) -> int:
+    abi, aw = block.abi, getattr(block, "abi_widths", {}) or {}
+    return max((abi[n] + max(1, int(aw.get(n, 1))) for n in abi), default=16)
+
+
+def _cmd_predict(args: argparse.Namespace) -> None:
+    block = load_bundle(args.bundle)
+    try:
+        feats = json.loads(args.input)
+    except json.JSONDecodeError as e:
+        raise SystemExit(f"invalid --input JSON: {e}") from e
+    if not isinstance(feats, dict):
+        raise SystemExit("--input must be a JSON object")
+    block.eval()
+    dim = _trunk_dim_from_block_abi(block)
+    dev = torch.device("cpu")
+    dt = torch.float32
+    aw = getattr(block, "abi_widths", {}) or {}
+    h = _inputs_to_tensor(feats, block.abi, dim, device=dev, dtype=dt, abi_widths=aw)
+    with torch.no_grad():
+        out = block(h)
+    decoded = _abi_outputs_from_trunk_row(out[0], block.abi, dict(aw))
+    print(json.dumps(decoded, indent=2))
+
+
 def _cmd_inspect(_args: argparse.Namespace) -> int:
     import axiom.tools
 
@@ -336,10 +366,31 @@ def main(argv: list[str] | None = None) -> None:
     p_inspect = sub.add_parser("inspect", help="Launch Glass Box Streamlit visualizer.")
     p_inspect.set_defaults(_handler=_cmd_inspect)
 
+    p_predict = sub.add_parser(
+        "predict",
+        help="Run a saved InterpretedBlock .axb on one JSON feature row (production-style).",
+    )
+    p_predict.add_argument(
+        "--bundle",
+        type=Path,
+        required=True,
+        help="Path to .axb from save_bundle (e.g. portfolio_trained.axb).",
+    )
+    p_predict.add_argument(
+        "--input",
+        type=str,
+        required=True,
+        help='JSON object of ABI feature names, e.g. \'{"volatility":0.6,"drawdown":0.1}\'',
+    )
+    p_predict.set_defaults(_handler=_cmd_predict)
+
     args = ap.parse_args(argv)
     handler = args._handler
     if handler is _cmd_inspect:
         raise SystemExit(handler(args))
+    if handler is _cmd_predict:
+        handler(args)
+        return
     handler(args)
 
 

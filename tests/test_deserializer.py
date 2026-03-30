@@ -5,11 +5,12 @@ from pathlib import Path
 import pytest
 import torch
 
-from axiom.compiler.deserializer import _ir_from_json, load_execution_bundle
+from axiom.compiler.deserializer import _ir_from_json, load_bundle, load_execution_bundle
 from axiom.compiler.flow import wire_execution_graph
-from axiom.compiler.ir import ast_to_ir
+from axiom.compiler.ir import ast_to_ir, extract_abi_widths, extract_global_abi
 from axiom.compiler.parser import parse_ax, reset_parser
-from axiom.compiler.serializer import execution_topology_to_dict, save_execution_bundle
+from axiom.compiler.serializer import execution_topology_to_dict, save_bundle, save_execution_bundle
+from axiom.engine.block_executor import InterpretedBlock
 from axiom.engine.supernet import LatentSupernet
 
 
@@ -90,6 +91,26 @@ def test_load_execution_bundle_stmt_only(tmp_path):
     assert set(sg1.keys()) == set(sg2.keys())
     for k in sg1:
         assert torch.allclose(sg1[k], sg2[k], atol=0, rtol=0)
+
+
+def test_load_bundle_restores_neural_weights(tmp_path):
+    reset_parser()
+    ir = ast_to_ir(parse_ax("z = neural([0.5]);"))
+    gabi = extract_global_abi(ir, max_vars=16)
+    gaw = extract_abi_widths(ir, max_vars=16)
+    b = InterpretedBlock(ir, gabi, abi_widths=gaw)
+    opt = torch.optim.SGD(b.parameters(), lr=0.1)
+    for _ in range(5):
+        x = torch.randn(2, 16)
+        opt.zero_grad()
+        b(x).sum().backward()
+        opt.step()
+    p = tmp_path / "n.axb"
+    save_bundle(b, p)
+    b2 = load_bundle(p)
+    x2 = torch.randn(4, 16)
+    with torch.no_grad():
+        assert torch.allclose(b(x2), b2(x2), atol=0, rtol=0)
 
 
 def test_load_execution_bundle_raises_missing_json(tmp_path):

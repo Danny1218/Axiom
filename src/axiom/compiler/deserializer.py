@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import networkx as nx
+import torch
 import torch.nn as nn
 
 from axiom.compiler.ir import extract_abi_widths, extract_global_abi
@@ -61,6 +62,35 @@ def _resolve_abi_widths(data: Dict[str, Any], dim: int) -> Dict[str, int]:
         ir_prog = _ir_program_from_json(data["ir"])
         return extract_abi_widths(ir_prog, max_vars=dim)
     return {}
+
+
+def load_bundle(path: str | Path) -> InterpretedBlock:
+    """Load ``.axb`` written by ``save_bundle`` (``InterpretedBlock`` + optional neural weights)."""
+    p = Path(path)
+    if not p.is_file():
+        raise FileNotFoundError(p)
+    try:
+        payload = torch.load(p, map_location="cpu", weights_only=False)
+    except TypeError:
+        payload = torch.load(p, map_location="cpu")
+    if not isinstance(payload, dict):
+        raise ValueError("invalid .axb payload")
+    topo = payload.get("topology") or {}
+    if topo.get("kind") != "interpreted_block":
+        raise ValueError("bundle topology is not an interpreted_block")
+    ir_raw = topo.get("ir")
+    if not isinstance(ir_raw, list):
+        raise ValueError("bundle missing IR list")
+    ir_prog = _ir_program_from_json(ir_raw)
+    abi = {str(k): int(v) for k, v in (topo.get("abi") or {}).items()}
+    max_unroll = int(topo.get("max_unroll", 8))
+    abi_widths_raw = payload.get("abi_widths") or {}
+    abi_widths = {str(k): int(v) for k, v in abi_widths_raw.items()}
+    block = InterpretedBlock(ir_prog, abi, max_unroll=max_unroll, abi_widths=abi_widths)
+    nw = payload.get("neural_weights")
+    if nw:
+        block.neural_registry.load_state_dict(nw, strict=True)
+    return block
 
 
 def load_execution_bundle(path_prefix: str | Path) -> ExecutionGraph:

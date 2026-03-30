@@ -6,8 +6,11 @@ from typing import Any, Dict, List, Optional
 
 import torch
 
+from axiom.engine.block_executor import InterpretedBlock
 from axiom.engine.loop_executor import InterpretedLiquidLoop
 from axiom.engine.topology import ConditionalSinkhornBlock, ExecutionGraph
+
+AXB_BUNDLE_VERSION = 1
 
 
 def _supernet_rank(graph: ExecutionGraph) -> int:
@@ -113,6 +116,37 @@ def save_execution_bundle(
         topo["ir"] = _jsonable_ir(ir)
     with open(str(prefix) + "_topology.json", "w", encoding="utf-8") as f:
         json.dump(topo, f, indent=2)
+
+
+def interpreted_block_topology_dict(block: InterpretedBlock) -> Dict[str, Any]:
+    """Symbolic payload for ``save_bundle`` / ``.axb`` (IR + ABI + loop unroll)."""
+    return {
+        "kind": "interpreted_block",
+        "ir": _jsonable_ir(list(block.ir_stmts)),
+        "abi": {str(k): int(v) for k, v in block.abi.items()},
+        "max_unroll": int(block.max_unroll),
+    }
+
+
+def save_bundle(block: InterpretedBlock, path: str | Path) -> None:
+    """Persist a trained ``InterpretedBlock`` (IR + ABI + ``neural_registry`` weights) in one ``.axb`` file."""
+    p = Path(path)
+    if str(p.parent) not in ("", "."):
+        p.parent.mkdir(parents=True, exist_ok=True)
+    topology = interpreted_block_topology_dict(block)
+    abi_widths = {str(k): int(v) for k, v in block.abi_widths.items()}
+    neural_weights: Optional[Dict[str, torch.Tensor]]
+    if hasattr(block, "neural_registry") and len(block.neural_registry) > 0:
+        neural_weights = block.neural_registry.state_dict()
+    else:
+        neural_weights = None
+    payload: Dict[str, Any] = {
+        "version": AXB_BUNDLE_VERSION,
+        "topology": topology,
+        "abi_widths": abi_widths,
+        "neural_weights": neural_weights,
+    }
+    torch.save(payload, str(p))
 
 
 def load_state_dict(path: str | Path) -> Dict[str, torch.Tensor]:

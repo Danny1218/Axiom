@@ -58,6 +58,7 @@ def test_array_literal_and_indexing_ir():
     [
         ["train", "--help"],
         ["inspect", "--help"],
+        ["predict", "--help"],
     ],
 )
 def test_cli_subcommands_help_exits_ok(argv: list):
@@ -73,6 +74,7 @@ def test_cli_source_wires_documented_train_features():
     assert "load_titanic" in src
     assert "generate_sine_wave" in src
     assert "Use either --dataset or --csv" in src
+    assert "predict" in src and "load_bundle" in src and "--bundle" in src
 
 
 def test_cli_rejects_dataset_and_csv_together():

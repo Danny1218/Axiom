@@ -4,9 +4,16 @@ from pathlib import Path
 import torch
 
 from axiom.compiler.flow import wire_execution_graph
-from axiom.compiler.ir import ast_to_ir
+from axiom.compiler.ir import ast_to_ir, extract_abi_widths, extract_global_abi
 from axiom.compiler.parser import parse_ax, reset_parser
-from axiom.compiler.serializer import execution_topology_to_dict, load_state_dict, save_execution_bundle
+from axiom.compiler.deserializer import load_bundle
+from axiom.compiler.serializer import (
+    execution_topology_to_dict,
+    load_state_dict,
+    save_bundle,
+    save_execution_bundle,
+)
+from axiom.engine.block_executor import InterpretedBlock
 from axiom.engine.dataloader import LiquidSequenceLoader
 from axiom.engine.supernet import LatentSupernet
 from axiom.engine.trainer import EvolutionaryTrainer
@@ -39,6 +46,24 @@ def test_topology_dict_serializable():
     g = wire_execution_graph(ir, sn, [])
     d = execution_topology_to_dict(g)
     json.dumps(d)
+
+
+def test_save_bundle_interpreted_block_neural_roundtrip_forward(tmp_path):
+    reset_parser()
+    ir = ast_to_ir(parse_ax("y = neural([1.0, 2.0]);"))
+    abi = extract_global_abi(ir, max_vars=16)
+    aw = extract_abi_widths(ir, max_vars=16)
+    b0 = InterpretedBlock(ir, abi, abi_widths=aw)
+    with torch.no_grad():
+        x = torch.randn(3, 16)
+        o0 = b0(x)
+    path = tmp_path / "m.axb"
+    save_bundle(b0, path)
+    assert path.is_file()
+    b1 = load_bundle(path)
+    with torch.no_grad():
+        o1 = b1(x)
+    assert torch.allclose(o0, o1, atol=0, rtol=0)
 
 
 def test_trainer_runs_consecutive_epochs(tmp_path):

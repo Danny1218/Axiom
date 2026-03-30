@@ -14,11 +14,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
+from axiom.compiler.deserializer import load_bundle
 from axiom.compiler.ir import ast_to_ir, extract_abi_widths, extract_global_abi
 from axiom.compiler.parser import parse_ax_file, reset_parser
+from axiom.compiler.serializer import save_bundle
 from axiom.datasets import load_finance_mock
 from axiom.engine.block_executor import InterpretedBlock
 from axiom.engine.dataloader import AxiomDataset, load_csv_to_dicts
+from axiom.engine.inference import _inputs_to_tensor
 
 
 def _trunk_dim_from_abi(abi: dict, aw: dict) -> int:
@@ -83,6 +86,34 @@ def main() -> None:
             f"Summary: neural adapter reduced MSE by {improve:.6f} "
             f"({pct:.1f}% vs symbolic-only clamp(1 - base_risk, [0,1]))."
         )
+
+        out_axb = Path(__file__).resolve().parent / "portfolio_trained.axb"
+        save_bundle(block, out_axb)
+        print(f"Saved {out_axb}")
+
+        reloaded = load_bundle(out_axb)
+        verify = {
+            "volatility": 0.6,
+            "drawdown": 0.1,
+            "momentum": -0.8,
+            "volume": 1.5,
+        }
+        h = _inputs_to_tensor(
+            verify,
+            abi,
+            dim,
+            device=torch.device("cpu"),
+            dtype=torch.float32,
+            abi_widths=aw,
+        )
+        block.eval()
+        reloaded.eval()
+        with torch.no_grad():
+            o1 = block(h)
+            o2 = reloaded(h)
+        if not torch.allclose(o1, o2, atol=1e-5, rtol=1e-4):
+            raise RuntimeError("bundle round-trip forward mismatch")
+        print("Round-trip OK: reloaded block matches original forward on sample features.")
     finally:
         try:
             os.unlink(csv_path)
