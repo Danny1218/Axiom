@@ -7,7 +7,11 @@ from torch.utils.data import Dataset
 
 
 class AxiomDataset(Dataset):
-    """Tabular samples as trunk-shaped vectors using the graph ABI (missing names → 0)."""
+    """Tabular samples as trunk-shaped vectors using the graph ABI (missing names → 0).
+
+    If ``target_key`` appears in ``abi``, that column is zeroed in ``x`` after filling so the label
+    is not leaked into inputs (supervision stays in ``y`` only).
+    """
 
     def __init__(
         self,
