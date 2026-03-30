@@ -2,6 +2,8 @@
 
 ## Current phase
 
+**Phase 52** — Genetic lock (**`src/axiom/security/genetic_lock.py`**) — optional AES-256-CTR on serialized **`neural_weights`** only; **`topology` / ABI / IR** stay readable in the **`.axb`**. Lock modes: **`none`** (default), **`device`** (CUDA identity; save requires GPU), **`host`**, **`env-secret`** (**`AXIOM_BUNDLE_SECRET`**). Payload **`lock`**: **`encrypted`**, **`lock_mode`**, **`nonce_hex`**, **`payload_len`**, **`key_fingerprint`**, **`ciphertext_hex`**. **`save_bundle(..., lock_mode=...)`**, **`load_bundle`** decrypts via **`unlock_payload`**. CLI **`axiom lock-bundle --input --output --mode`**. Optional **`pip install -e ".[lock]"`** (**`cryptography`**). Tests: **`tests/test_genetic_lock.py`**.
+
 **Phase 51** — Bundle HTTP API (**`axiom serve`**, **`src/axiom/serve.py`**, **`src/axiom/api_models.py`**) — FastAPI + uvicorn (optional **`pip install -e ".[serve]"`**): load one **`.axb`** at startup (**`--bundle`** or **`AXIOM_BUNDLE_PATH`**), **`GET /health`**, **`POST /predict`**, **`POST /explain`**, **`POST /report`** (JSON **`inputs`**; report optional **`output_path`** else inline **`html`**). Optional **`AXIOM_API_KEY`** → **`Authorization: Bearer`** or **`X-API-Key`** on mutating routes (health unauthenticated). **`html_exporter.render_html_report`** for inline HTML. Tests: **`tests/test_serve.py`**.
 
 **Phase 50** — Enterprise Glass-Box UI (**`examples/enterprise_ui.py`**) — Streamlit chat front-end: **`@st.cache_resource`** **`build_trained_policy`**, sidebar metrics + **`st.progress`** from **`scan_text` + `explain`**, block path **`export_report`** → **`examples/live_audit.html`** + **`st.download_button`**, approve path **`chat_with_onyx`** (Onyx POST or mock). **`[gateway]`** extra includes **`requests`** + **`streamlit`**. Run: **`streamlit run examples/enterprise_ui.py --server.fileWatcherType none`**. **`chat_with_onyx(..., verbose=False)`** for silent UIs. Tests: **`tests/test_enterprise_ui.py`**.
@@ -81,7 +83,8 @@
 ## Layout
 
 - `pyproject.toml` — **`axiom-engine`**, script **`axiom` → `axiom.cli:main`**
-- `src/axiom/cli.py` — train / inspect / predict / **serve** subcommands
+- `src/axiom/cli.py` — train / inspect / predict / **lock-bundle** / **serve** subcommands
+- `src/axiom/security/genetic_lock.py` — Phase 52 optional **`.axb`** neural encryption
 - `src/axiom/serve.py`, `src/axiom/api_models.py` — Phase 51 FastAPI bundle server
 - `src/axiom/datasets.py` — Titanic, sine, finance mock
 - `src/axiom/tools/inspector.py`, `glass_box.py`, `html_exporter.py` — Glass Box (Streamlit + static HTML report)
@@ -126,6 +129,10 @@ python examples/onyx_gateway.py
 streamlit run examples/enterprise_ui.py --server.fileWatcherType none
 pip install -e ".[serve]"
 axiom serve --bundle examples/portfolio_trained.axb --host 127.0.0.1 --port 8000
+pip install -e ".[lock]"
+$env:AXIOM_BUNDLE_SECRET="dev-secret"
+axiom lock-bundle --input examples/portfolio_trained.axb --output examples/portfolio_locked.axb --mode env-secret
+axiom predict --bundle examples/portfolio_locked.axb --input '{"volatility":0.6,"drawdown":0.1,"momentum":-0.8,"volume":1.5}'
 axiom inspect
 ```
 
@@ -158,5 +165,7 @@ axiom inspect
 **Phase 50 (complete):** **Enterprise Streamlit UI** — **`examples/enterprise_ui.py`**: cached policy, sidebar telemetry, **`st.chat_input`**, block → **`live_audit.html`** + download, allow → **`chat_with_onyx(..., verbose=False)`**. **`pyproject.toml`** **`[gateway]`** lists **`streamlit`**. Tests: **`tests/test_enterprise_ui.py`**.
 
 **Phase 51 (complete):** **Serve bundle API** — **`axiom serve`**, **`create_app`**, Pydantic request/response models, **`render_html_report`** for **`/report`** inline HTML. **`[serve]`** extra: **`fastapi`**, **`uvicorn`**. Tests: **`tests/test_serve.py`**.
+
+**Phase 52 (complete):** **Genetic lock** — **`save_bundle(..., lock_mode)`**, **`unlock_payload`** in **`load_bundle`**, **`axiom lock-bundle`**, **`[lock]`** → **`cryptography`**. Tests: **`tests/test_genetic_lock.py`**.
 
 **Later ideas:** **`return` inside `while`**; call targets like **`f()[i]`**. Glass Box upgrades (**`--inspect`** / graph of **`OP_NEURAL`**). See **`readme.md` § Road ahead**.

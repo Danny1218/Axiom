@@ -128,8 +128,17 @@ def interpreted_block_topology_dict(block: InterpretedBlock) -> Dict[str, Any]:
     }
 
 
-def save_bundle(block: InterpretedBlock, path: str | Path) -> None:
-    """Persist a trained ``InterpretedBlock`` (IR + ABI + ``neural_registry`` weights) in one ``.axb`` file."""
+def save_bundle(
+    block: InterpretedBlock,
+    path: str | Path,
+    *,
+    lock_mode: Optional[str] = None,
+) -> None:
+    """Persist a trained ``InterpretedBlock`` (IR + ABI + ``neural_registry`` weights) in one ``.axb`` file.
+
+    Optional ``lock_mode``: ``none`` (default), ``device``, ``host``, ``env-secret`` — encrypts only the
+    serialized neural weight blob (topology stays readable). Requires ``pip install -e ".[lock]"`` when not ``none``.
+    """
     p = Path(path)
     if str(p.parent) not in ("", "."):
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -146,6 +155,11 @@ def save_bundle(block: InterpretedBlock, path: str | Path) -> None:
         "abi_widths": abi_widths,
         "neural_weights": neural_weights,
     }
+    lm = lock_mode
+    if lm is not None and str(lm).lower().strip() not in ("none", ""):
+        from axiom.security.genetic_lock import apply_lock_to_payload
+
+        apply_lock_to_payload(payload, lm)
     torch.save(payload, str(p))
 
 

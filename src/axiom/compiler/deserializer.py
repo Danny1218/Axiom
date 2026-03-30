@@ -82,6 +82,9 @@ def load_bundle(
         payload = torch.load(p, map_location="cpu")
     if not isinstance(payload, dict):
         raise ValueError("invalid .axb payload")
+    from axiom.security.genetic_lock import unlock_payload
+
+    payload = unlock_payload(payload)
     topo = payload.get("topology") or {}
     if topo.get("kind") != "interpreted_block":
         raise ValueError("bundle topology is not an interpreted_block")

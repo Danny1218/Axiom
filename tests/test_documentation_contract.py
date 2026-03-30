@@ -68,6 +68,7 @@ def test_array_literal_and_indexing_ir():
         ["inspect", "--help"],
         ["predict", "--help"],
         ["serve", "--help"],
+        ["lock-bundle", "--help"],
     ],
 )
 def test_cli_subcommands_help_exits_ok(argv: list):
@@ -85,6 +86,7 @@ def test_cli_source_wires_documented_train_features():
     assert "Use either --dataset or --csv" in src
     assert "predict" in src and "load_bundle" in src and "--bundle" in src
     assert "serve" in src and "uvicorn" in src
+    assert "lock-bundle" in src and "lock_bundle_file" in src
 
 
 def test_cli_rejects_dataset_and_csv_together():

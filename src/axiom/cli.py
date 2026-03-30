@@ -263,6 +263,16 @@ def _trunk_dim_from_block_abi(block) -> int:
     return max((abi[n] + max(1, int(aw.get(n, 1))) for n in abi), default=16)
 
 
+def _cmd_lock_bundle(args: argparse.Namespace) -> None:
+    from axiom.security.genetic_lock import lock_bundle_file
+
+    try:
+        lock_bundle_file(Path(args.input), Path(args.output), args.mode)
+    except ImportError as e:
+        raise SystemExit('Bundle lock requires: pip install -e ".[lock]"') from e
+    print(f"Locked bundle written to {args.output}")
+
+
 def _cmd_predict(args: argparse.Namespace) -> None:
     block = load_bundle(args.bundle)
     try:
@@ -323,7 +333,7 @@ def _cmd_inspect(_args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(
         prog="axiom",
-        description="Axiom neural compiler CLI (train, predict, inspect, serve bundle API).",
+        description="Axiom neural compiler CLI (train, predict, lock-bundle, inspect, serve).",
     )
     sub = ap.add_subparsers(dest="cmd", required=True)
 
@@ -392,13 +402,13 @@ def main(argv: list[str] | None = None) -> None:
 
     p_predict = sub.add_parser(
         "predict",
-        help="Run a saved InterpretedBlock .axb on one JSON feature row (production-style).",
+        help="Run a saved InterpretedBlock .axb on one JSON feature row (unlocks locked bundles if the environment matches).",
     )
     p_predict.add_argument(
         "--bundle",
         type=Path,
         required=True,
-        help="Path to .axb from save_bundle (e.g. portfolio_trained.axb).",
+        help="Path to .axb from save_bundle (locked .axb decrypts when allowed).",
     )
     p_predict.add_argument(
         "--input",
@@ -407,6 +417,20 @@ def main(argv: list[str] | None = None) -> None:
         help='JSON object of ABI feature names, e.g. \'{"volatility":0.6,"drawdown":0.1}\'',
     )
     p_predict.set_defaults(_handler=_cmd_predict)
+
+    p_lock = sub.add_parser(
+        "lock-bundle",
+        help="Re-save an .axb with AES-256-CTR encrypted neural weights (topology stays readable).",
+    )
+    p_lock.add_argument("--input", type=Path, required=True, help="Source .axb (unlocked).")
+    p_lock.add_argument("--output", type=Path, required=True, help="Destination .axb.")
+    p_lock.add_argument(
+        "--mode",
+        choices=["device", "host", "env-secret"],
+        required=True,
+        help="device=CUDA identity, host=machine identity, env-secret=AXIOM_BUNDLE_SECRET.",
+    )
+    p_lock.set_defaults(_handler=_cmd_lock_bundle)
 
     p_serve = sub.add_parser(
         "serve",
@@ -427,6 +451,9 @@ def main(argv: list[str] | None = None) -> None:
     if handler is _cmd_inspect:
         raise SystemExit(handler(args))
     if handler is _cmd_predict:
+        handler(args)
+        return
+    if handler is _cmd_lock_bundle:
         handler(args)
         return
     if handler is _cmd_serve:
