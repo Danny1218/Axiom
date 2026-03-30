@@ -1,4 +1,9 @@
-"""FastAPI HTTP server for a single loaded ``.axb`` bundle (``axiom serve``)."""
+"""FastAPI HTTP server for a single loaded ``.axb`` bundle (``axiom serve``).
+
+This module's ``create_app`` is the **bundle inference** API (``/health``, ``/predict``, …). Do not
+confuse with ``axiom.gateway.server:create_app``, which is the **policy gateway** factory for
+uvicorn. External copilots may treat this as a headless ``AxiomModel`` over HTTP.
+"""
 
 from __future__ import annotations
 

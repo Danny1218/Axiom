@@ -1,4 +1,9 @@
-"""High-level Python API: load ``.axb`` bundles and predict with dicts / batches / DataFrames."""
+"""High-level Python API: load ``.axb`` bundles and predict with dicts / batches / DataFrames.
+
+``AxiomModel`` is the primary programmatic contract for bundles. Higher-level agents (e.g. a
+semantic copilot backed by an external LLM) should call ``predict`` / ``explain`` / ``export_report``
+here rather than duplicating trunk/ABI logic—see ``plan.md`` § Next target (not implemented).
+"""
 
 from __future__ import annotations
 

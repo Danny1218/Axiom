@@ -2,7 +2,9 @@
 
 ## Current phase
 
-**Phase 56** — **Packaging & documentation** — Core **`pyproject.toml`** deps: **`torch`**, **`lark`**, **`networkx`** only. Optional extras: **`[inspect]`** (Glass Box), **`[serve]`**, **`[lock]`**, **`[export]`**, **`[gateway]`**, **`[dev]`** (**`pytest`** + inspect deps for tests). **`axiom inspect`** errors with **`pip install -e ".[inspect]"`** if Streamlit missing. **`readme.md`**: narrative **compile → bundle → serve → secure → optionally export**; sections **`axiom serve`**, **Locked bundles**, **Docker deployment**, **ONNX export**, **Policy gateway**. Tests: **`tests/test_documentation_contract.py`** (readme + **`pyproject`** + CLI).
+**Phase 57** — **Semantic-copilot baseline (audit only)** — Frozen CLI surface and package boundaries documented in code comments; **`tests/test_architecture_baseline.py`** locks subcommands, **`pyproject`** optional extras, **`axiom`** public exports, **`serve`** vs **`gateway`** **`create_app`** split, and bundle HTTP routes. **No new features** in this phase.
+
+**Phase 56** — **Packaging & documentation** — Core **`pyproject.toml`** deps minimal; extras **`inspect`**, **`serve`**, **`lock`**, **`export`**, **`gateway`**, **`dev`**. **`readme.md`** pipeline narrative. Tests: **`tests/test_documentation_contract.py`**.
 
 **Phase 55** — **Gateway server** — **`src/axiom/gateway/core.py`**, **`src/axiom/gateway/server.py`**. CLI **`axiom gateway-serve`**. Optional **`pip install -e ".[gateway]"`**. Examples **`onyx_gateway.py`** / **`enterprise_ui.py`**. Tests: **`tests/test_gateway_server.py`**.
 
@@ -110,7 +112,11 @@
 - `examples/enterprise_ui.py` — Phase 50 Streamlit firewall UI (telemetry sidebar + chat + audit download)
 - `train.ax` — default **`axiom train`** sketch (cwd)
 - `src/axiom/compiler/`, `src/axiom/engine/`, `src/axiom/primitives/`
-- `tests/`
+- `tests/` — includes **`tests/test_architecture_baseline.py`** (Phase 57 layout / API contracts)
+
+## Next target (semantic copilot — not started)
+
+**Direction (placeholder only — not implemented):** a **semantic copilot** architecture that combines Axiom’s **symbolic–neural** bundles (**`.axb`**, **`AxiomModel.explain`**, policy **gateway**) with an **external expert backend** (hosted LLM, RAG, or tool APIs). Expected integration layers: orchestration **outside** the core compiler, reusing **`predict` / `explain` / `export_report`** and/or **gateway** downstream forwarding; **no new `axiom` CLI subcommands or default dependencies** are committed until a future phase explicitly adds them.
 
 ## IR opcodes
 
@@ -186,4 +192,4 @@ axiom inspect
 
 **Phase 52 (complete):** **Genetic lock** — **`save_bundle(..., lock_mode)`**, **`unlock_payload`** in **`load_bundle`**, **`axiom lock-bundle`**, **`[lock]`** → **`cryptography`**. Tests: **`tests/test_genetic_lock.py`**.
 
-**Later ideas:** **`return` inside `while`**; call targets like **`f()[i]`**. Glass Box upgrades (**`--inspect`** / graph of **`OP_NEURAL`**). See **`readme.md` § Road ahead**.
+**Later ideas:** **`return` inside `while`**; call targets like **`f()[i]`**. Glass Box upgrades (**`--inspect`** / graph of **`OP_NEURAL`**). **Semantic copilot** (see **Next target** above). See **`readme.md` § Road ahead**.

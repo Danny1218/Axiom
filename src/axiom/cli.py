@@ -1,3 +1,10 @@
+"""Axiom CLI entrypoint.
+
+Subcommands are the stable user surface (train, predict, bundle I/O, optional HTTP). Future work
+(e.g. semantic copilot) should not add subcommands without a dedicated phase; prefer composing
+``AxiomModel`` / ``axiom serve`` / ``axiom gateway-serve`` from external orchestrators.
+"""
+
 from __future__ import annotations
 
 import argparse

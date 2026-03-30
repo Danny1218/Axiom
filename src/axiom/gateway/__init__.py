@@ -1,4 +1,9 @@
-"""Policy gateway (optional): scan → explain → approve/block → audit / downstream forward."""
+"""Policy gateway (optional): scan → explain → approve/block → audit / downstream forward.
+
+``create_gateway_app`` / ``gateway_app_from_env`` implement ``POST /gateway/chat``. The symbol
+``create_app`` here is the **gateway** uvicorn factory (env-based), not ``axiom.serve.create_app``.
+Semantic-copilot designs can treat the gateway as a policy shell with a pluggable downstream URL.
+"""
 
 from axiom.gateway.core import (
     build_block_audit,
