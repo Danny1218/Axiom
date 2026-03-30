@@ -9,8 +9,8 @@ from typing import Any, Dict, List, Tuple
 import networkx as nx
 import torch.nn as nn
 
+from compiler.ir import extract_global_abi
 from compiler.serializer import load_state_dict
-from engine.interpreter import make_seed_map
 from engine.loop_executor import InterpretedLiquidLoop
 from engine.supernet import LatentSupernet
 from engine.topology import ConditionalSinkhornBlock, ExecutionGraph
@@ -25,6 +25,23 @@ def _ir_from_json(obj: Any) -> Any:
 
 def _node_attrs(record: Dict[str, Any]) -> Dict[str, Any]:
     return {k: v for k, v in record.items() if k != "id"}
+
+
+def _ir_program_from_json(obj: Any) -> list:
+    """Top-level IR list from JSON (nested lists → stmt tuples)."""
+    if not isinstance(obj, list):
+        return []
+    return [_ir_from_json(x) for x in obj]
+
+
+def _resolve_global_abi(data: Dict[str, Any], dim: int) -> Dict[str, int]:
+    raw = data.get("abi")
+    if isinstance(raw, dict) and raw:
+        return {str(k): int(v) for k, v in raw.items()}
+    if data.get("ir") is not None:
+        ir_prog = _ir_program_from_json(data["ir"])
+        return extract_global_abi(ir_prog, max_vars=dim)
+    return {}
 
 
 def load_execution_bundle(path_prefix: str | Path) -> ExecutionGraph:
@@ -50,6 +67,8 @@ def load_execution_bundle(path_prefix: str | Path) -> ExecutionGraph:
     lc = data.get("loop_config") or {}
     default_num_basis = int(lc.get("num_basis", 8))
     default_max_unroll = int(lc.get("max_unroll", 8))
+
+    global_abi = _resolve_global_abi(data, dim)
 
     sn = LatentSupernet(dim, adapter_names, rank=rank)
     G = nx.DiGraph()
@@ -79,7 +98,6 @@ def load_execution_bundle(path_prefix: str | Path) -> ExecutionGraph:
             cond_ir = _ir_from_json(attr["cond_ir"])
             body_ir: List = list(_ir_from_json(attr["body_ir"]))
             prelude = list(_ir_from_json(attr["prelude_stmts"]))
-            seed_map = make_seed_map(cond_ir, body_ir, dim)
             num_basis = int(attr.get("loop_num_basis", default_num_basis))
             max_unroll = int(attr.get("loop_max_unroll", default_max_unroll))
             modules[name] = InterpretedLiquidLoop(
@@ -87,7 +105,7 @@ def load_execution_bundle(path_prefix: str | Path) -> ExecutionGraph:
                 cond_ir,
                 body_ir,
                 prelude,
-                seed_map,
+                global_abi,
                 num_basis=num_basis,
                 max_unroll=max_unroll,
             )
@@ -97,7 +115,7 @@ def load_execution_bundle(path_prefix: str | Path) -> ExecutionGraph:
             raise ValueError(f"unknown node kind {kind!r} for {name!r}")
 
     md = nn.ModuleDict(modules)
-    graph = ExecutionGraph(G, sn, md, topo)
+    graph = ExecutionGraph(G, sn, md, topo, abi=global_abi)
     sd = load_state_dict(pt_path)
     graph.load_state_dict(sd, strict=True)
     return graph

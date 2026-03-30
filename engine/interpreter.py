@@ -85,9 +85,11 @@ def collect_load_names(cond_ir: ExprIR, body_ir: List[Stmt]) -> List[str]:
     return sorted(found)
 
 
-def make_seed_map(cond_ir: ExprIR, body_ir: List[Stmt], dim: int) -> Dict[int, str]:
-    names = collect_load_names(cond_ir, body_ir)
-    return {i: names[i] for i in range(min(len(names), dim))}
+def make_seed_map(cond_ir: ExprIR, body_ir: List[Stmt], dim: int) -> Dict[str, int]:
+    """Loop-shaped ABI slice (name -> column) in first-seen order for cond then body; caps at ``dim`` names."""
+    from compiler.ir import extract_global_abi
+
+    return extract_global_abi([("OP_LOOP", list(cond_ir), list(body_ir))], max_vars=dim)
 
 
 def build_var_order(
@@ -283,7 +285,7 @@ def run_loop_snapshots(
     *,
     dim: int,
     max_unroll: int,
-    seed_map: Dict[int, str],
+    seed_map: Dict[str, int],  # global ABI: variable name -> trunk column index
     prelude_stmts: Optional[List[Stmt]] = None,
     device: Optional[torch.device] = None,
     dtype: Optional[torch.dtype] = None,
@@ -302,11 +304,11 @@ def run_loop_snapshots(
     B, D_in = h_batch.shape
     dev = device if device is not None else h_batch.device
     dt = dtype if dtype is not None else h_batch.dtype
-    seed_vals = set(seed_map.values())
+    seed_vals = set(seed_map.keys())
     extra = set(collect_load_names_from_stmts(prelude_stmts))
     var_order = build_var_order(cond_ir, body_ir, dim, seed_names=seed_vals | extra)
     env: Dict[str, torch.Tensor] = {k: _batch_zeros(B, dev, dt) for k in var_order}
-    for idx, name in seed_map.items():
+    for name, idx in seed_map.items():
         if idx < D_in:
             env[name] = h_batch[:, idx]
     for st in prelude_stmts:

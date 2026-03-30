@@ -7,8 +7,53 @@ import torch
 from engine.topology import ExecutionGraph
 
 
+def _legacy_rows_to_tensor(
+    rows: List[Dict[str, float]],
+    dim: int,
+    *,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> torch.Tensor:
+    """Deprecated path when ``graph.abi`` is empty (very old bundles)."""
+    if not rows:
+        raise ValueError("predict_batch requires a non-empty list")
+    union = sorted(set(k for row in rows for k in row.keys()))
+    if len(union) > dim:
+        raise ValueError(f"too many distinct input keys ({len(union)}) for trunk dim {dim}")
+    B = len(rows)
+    t = torch.zeros(B, dim, device=device, dtype=dtype)
+    if len(union) == 1 and all(len(r) == 1 for r in rows):
+        k0 = union[0]
+        for b, row in enumerate(rows):
+            t[b, :] = float(row[k0])
+        return t
+    for b, row in enumerate(rows):
+        for j, k in enumerate(union):
+            if k in row:
+                t[b, j] = float(row[k])
+    return t
+
+
+def _abi_rows_to_tensor(
+    rows: List[Dict[str, float]],
+    abi: Dict[str, int],
+    dim: int,
+    *,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> torch.Tensor:
+    B = len(rows)
+    t = torch.zeros(B, dim, device=device, dtype=dtype)
+    for b, row in enumerate(rows):
+        for name, col in abi.items():
+            if col < dim:
+                t[b, col] = float(row.get(name, 0.0))
+    return t
+
+
 def _inputs_to_tensor(
     inputs: Dict[str, float],
+    abi: Dict[str, int],
     dim: int,
     *,
     device: torch.device,
@@ -16,22 +61,25 @@ def _inputs_to_tensor(
 ) -> torch.Tensor:
     if dim < 1:
         raise ValueError("supernet dim must be positive")
-    if not inputs:
-        return torch.zeros(1, dim, device=device, dtype=dtype)
-    keys = sorted(inputs.keys())
-    if len(keys) == 1:
-        v = float(inputs[keys[0]])
-        return torch.full((1, dim), v, device=device, dtype=dtype)
-    if len(keys) > dim:
-        raise ValueError(f"too many input keys ({len(keys)}) for trunk dim {dim}")
-    row = torch.zeros(1, dim, device=device, dtype=dtype)
-    for i, k in enumerate(keys):
-        row[0, i] = float(inputs[k])
-    return row
+    if not abi:
+        if not inputs:
+            return torch.zeros(1, dim, device=device, dtype=dtype)
+        keys = sorted(inputs.keys())
+        if len(keys) == 1:
+            v = float(inputs[keys[0]])
+            return torch.full((1, dim), v, device=device, dtype=dtype)
+        if len(keys) > dim:
+            raise ValueError(f"too many input keys ({len(keys)}) for trunk dim {dim}")
+        row = torch.zeros(1, dim, device=device, dtype=dtype)
+        for i, k in enumerate(keys):
+            row[0, i] = float(inputs[k])
+        return row
+    return _abi_rows_to_tensor([inputs], abi, dim, device=device, dtype=dtype)
 
 
 def _batch_inputs_to_tensor(
     batch: List[Dict[str, float]],
+    abi: Dict[str, int],
     dim: int,
     *,
     device: torch.device,
@@ -39,21 +87,9 @@ def _batch_inputs_to_tensor(
 ) -> torch.Tensor:
     if not batch:
         raise ValueError("predict_batch requires a non-empty list")
-    union = sorted(set(k for row in batch for k in row.keys()))
-    if len(union) > dim:
-        raise ValueError(f"too many distinct input keys ({len(union)}) for trunk dim {dim}")
-    B = len(batch)
-    t = torch.zeros(B, dim, device=device, dtype=dtype)
-    if len(union) == 1 and all(len(r) == 1 for r in batch):
-        k0 = union[0]
-        for b, row in enumerate(batch):
-            t[b, :] = float(row[k0])
-        return t
-    for b, row in enumerate(batch):
-        for j, k in enumerate(union):
-            if k in row:
-                t[b, j] = float(row[k])
-    return t
+    if not abi:
+        return _legacy_rows_to_tensor(batch, dim, device=device, dtype=dtype)
+    return _abi_rows_to_tensor(batch, abi, dim, device=device, dtype=dtype)
 
 
 class AxiomRunner:
@@ -71,7 +107,8 @@ class AxiomRunner:
         dt = torch.float32
         self.graph.to(dev)
         self.graph.eval()
-        x = _inputs_to_tensor(inputs, self.graph.supernet.dim, device=dev, dtype=dt)
+        abi = getattr(self.graph, "abi", {}) or {}
+        x = _inputs_to_tensor(inputs, abi, self.graph.supernet.dim, device=dev, dtype=dt)
         with torch.no_grad():
             out, _, _ = self.graph(x)
         return out
@@ -85,7 +122,8 @@ class AxiomRunner:
         dt = torch.float32
         self.graph.to(dev)
         self.graph.eval()
-        x = _batch_inputs_to_tensor(inputs, self.graph.supernet.dim, device=dev, dtype=dt)
+        abi = getattr(self.graph, "abi", {}) or {}
+        x = _batch_inputs_to_tensor(inputs, abi, self.graph.supernet.dim, device=dev, dtype=dt)
         with torch.no_grad():
             out, _, _ = self.graph(x)
         return out
@@ -99,7 +137,8 @@ class AxiomRunner:
         dt = torch.float32
         self.graph.to(dev)
         self.graph.eval()
-        x = _inputs_to_tensor(inputs, self.graph.supernet.dim, device=dev, dtype=dt)
+        abi = getattr(self.graph, "abi", {}) or {}
+        x = _inputs_to_tensor(inputs, abi, self.graph.supernet.dim, device=dev, dtype=dt)
         with torch.no_grad():
             out, _, signals = self.graph(x)
         return out, signals

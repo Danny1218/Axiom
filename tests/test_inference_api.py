@@ -17,38 +17,41 @@ from engine.supernet import LatentSupernet
 from engine.trainer import EvolutionaryTrainer
 
 
-def test_inputs_to_tensor_broadcast_single_key():
+def test_inputs_to_tensor_broadcast_single_key_legacy_empty_abi():
     dev = torch.device("cpu")
-    t = _inputs_to_tensor({"x": 3.5}, 4, device=dev, dtype=torch.float32)
+    t = _inputs_to_tensor({"x": 3.5}, {}, 4, device=dev, dtype=torch.float32)
     assert t.shape == (1, 4)
     assert torch.allclose(t, torch.full((1, 4), 3.5))
 
 
-def test_inputs_to_tensor_sorted_multi_key():
+def test_inputs_to_tensor_abi_column_order_not_key_order():
     dev = torch.device("cpu")
-    t = _inputs_to_tensor({"b": -1.5, "a": 1.0}, 8, device=dev, dtype=torch.float32)
-    assert t[0, 0] == 1.0 and t[0, 1] == -1.5
+    abi = {"a": 1, "z": 0}
+    t = _inputs_to_tensor({"z": 5.0, "a": 1.0}, abi, 8, device=dev, dtype=torch.float32)
+    assert t[0, 0] == 5.0 and t[0, 1] == 1.0
     assert t[0, 2:].abs().max() == 0
 
 
-def test_inputs_to_tensor_too_many_keys_raises():
+def test_inputs_to_tensor_too_many_keys_raises_legacy_empty_abi():
     dev = torch.device("cpu")
     with pytest.raises(ValueError, match="too many input keys"):
-        _inputs_to_tensor({"a": 1.0, "b": 2.0, "c": 3.0}, 2, device=dev, dtype=torch.float32)
+        _inputs_to_tensor({"a": 1.0, "b": 2.0, "c": 3.0}, {}, 2, device=dev, dtype=torch.float32)
 
 
-def test_batch_inputs_broadcast():
+def test_batch_inputs_broadcast_legacy_empty_abi():
     dev = torch.device("cpu")
-    t = _batch_inputs_to_tensor([{"x": 1.0}, {"x": 2.0}], 3, device=dev, dtype=torch.float32)
+    t = _batch_inputs_to_tensor([{"x": 1.0}, {"x": 2.0}], {}, 3, device=dev, dtype=torch.float32)
     assert t.shape == (2, 3)
     assert torch.allclose(t[0], torch.full((3,), 1.0))
     assert torch.allclose(t[1], torch.full((3,), 2.0))
 
 
-def test_batch_inputs_multi_key():
+def test_batch_inputs_multi_key_with_abi():
     dev = torch.device("cpu")
+    abi = {"a": 0, "b": 1}
     t = _batch_inputs_to_tensor(
         [{"a": 1.0, "b": -1.0}, {"a": 0.0, "b": 2.0}],
+        abi,
         4,
         device=dev,
         dtype=torch.float32,

@@ -24,7 +24,7 @@ def test_save_and_load_state_dict(tmp_path):
     jpath = Path(str(prefix) + "_topology.json")
     assert jpath.exists()
     data = json.loads(jpath.read_text(encoding="utf-8"))
-    assert "nodes" in data and "edges" in data and "ir" in data
+    assert "nodes" in data and "edges" in data and "ir" in data and "abi" in data
     assert data["supernet_config"]["dim"] == 5
     assert "then_0" in data["supernet_config"]["adapter_names"]
     assert data["router_config"]["num_iters"] == 8

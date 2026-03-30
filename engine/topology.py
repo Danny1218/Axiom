@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from typing import Dict, List, Sequence, Set, Tuple
+from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 import networkx as nx
 import torch
 import torch.nn as nn
 
-from engine.interpreter import make_seed_map
+from compiler.ir import extract_global_abi
 from engine.loop_executor import InterpretedLiquidLoop
 from engine.router import SinkhornRouter
 from engine.supernet import LatentSupernet
@@ -107,12 +107,15 @@ class ExecutionGraph(nn.Module):
         node_modules: nn.ModuleDict,
         topo_names: Tuple[str, ...],
         entry: str = "src",
+        *,
+        abi: Optional[Dict[str, int]] = None,
     ) -> None:
         super().__init__()
         self.dag = dag
         self.supernet = supernet
         self.topo_names = topo_names
         self.entry = entry
+        self.abi: Dict[str, int] = dict(abi or {})
         self.add_module("supernet", supernet)
         self.add_module("node_modules", node_modules)
 
@@ -167,6 +170,7 @@ def build_execution_graph_from_ir(
     mutation_entropy_norm_threshold: float = 0.92,
     loop_max_unroll: int = 8,
     loop_num_basis: int = 8,
+    global_abi: Optional[Dict[str, int]] = None,
 ) -> ExecutionGraph:
     """
     Map IR to a DAG: OP_CONDITIONAL → ConditionalSinkhornBlock; OP_LOOP → InterpretedLiquidLoop
@@ -179,6 +183,8 @@ def build_execution_graph_from_ir(
             f"need one expert pair per OP_CONDITIONAL: got {len(conditional_experts)} pairs, "
             f"{len(conds)} conditionals in IR"
         )
+    if global_abi is None:
+        global_abi = extract_global_abi(ir, max_vars=supernet.dim)
 
     G = nx.DiGraph()
     G.add_node("src", kind="source")
@@ -214,13 +220,12 @@ def build_execution_graph_from_ir(
             name = f"loop_{lidx}"
             _, cond_ir, body_ir = instr
             prelude = _prelude_stmts_before_loop(ir, idx)
-            seed_map = make_seed_map(cond_ir, body_ir, supernet.dim)
             modules[name] = InterpretedLiquidLoop(
                 supernet.dim,
                 cond_ir,
                 body_ir,
                 prelude,
-                seed_map,
+                global_abi,
                 num_basis=loop_num_basis,
                 max_unroll=loop_max_unroll,
             )
@@ -248,4 +253,4 @@ def build_execution_graph_from_ir(
     topo = tuple(n for n in nx.topological_sort(G) if n != "src")
     if tuple(order) != topo:
         raise RuntimeError("IR linear chain order mismatch vs topological sort")
-    return ExecutionGraph(G, supernet, md, topo)
+    return ExecutionGraph(G, supernet, md, topo, abi=global_abi)

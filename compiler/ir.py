@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, List
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import networkx as nx
 from lark import Token, Tree
@@ -147,3 +147,53 @@ def _number(tok: Token) -> int | float:
     if "." in s or "e" in s.lower():
         return float(s)
     return int(s)
+
+
+Stmt = Tuple[Any, ...]
+ExprIR = List[Tuple[Any, ...]]
+
+
+def extract_global_abi(ir: IRList, *, max_vars: Optional[int] = None) -> Dict[str, int]:
+    """First-seen variable order across the whole program (document order). Maps name -> trunk column."""
+    order: List[str] = []
+    seen: Set[str] = set()
+
+    def add_name(name: str) -> None:
+        n = str(name)
+        if n in seen:
+            return
+        if max_vars is not None and len(order) >= max_vars:
+            return
+        seen.add(n)
+        order.append(n)
+
+    def walk_expr(expr: ExprIR) -> None:
+        for tup in expr:
+            if not isinstance(tup, tuple) or not tup:
+                continue
+            if tup[0] == "OP_LOAD" and len(tup) > 1:
+                add_name(tup[1])
+
+    def walk_stmt(stmt: Stmt) -> None:
+        if not isinstance(stmt, tuple) or not stmt:
+            return
+        op = stmt[0]
+        if op == "OP_ASSIGN":
+            add_name(stmt[1])
+            walk_expr(list(stmt[2]))
+        elif op == "OP_EXPR_STMT":
+            walk_expr(list(stmt[1]))
+        elif op == "OP_CONDITIONAL":
+            walk_expr(list(stmt[1]))
+            for s in stmt[2]:
+                walk_stmt(tuple(s) if isinstance(s, list) else s)
+            for s in stmt[3]:
+                walk_stmt(tuple(s) if isinstance(s, list) else s)
+        elif op == "OP_LOOP":
+            walk_expr(list(stmt[1]))
+            for s in stmt[2]:
+                walk_stmt(tuple(s) if isinstance(s, list) else s)
+
+    for instr in ir:
+        walk_stmt(tuple(instr) if isinstance(instr, list) else instr)
+    return {name: i for i, name in enumerate(order)}

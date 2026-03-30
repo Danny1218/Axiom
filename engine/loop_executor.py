@@ -21,7 +21,7 @@ class InterpretedLiquidLoop(nn.Module):
         cond_ir: ExprIR,
         body_ir: List[Stmt],
         prelude_stmts: List[Stmt],
-        seed_map: Dict[int, str],
+        seed_map: Dict[str, int],
         *,
         num_basis: int = 8,
         max_unroll: int = 8,
