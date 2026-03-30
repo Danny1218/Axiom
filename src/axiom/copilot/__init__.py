@@ -28,6 +28,11 @@ from axiom.copilot.search import (
     format_metrics_for_repair,
     run_copilot_search,
 )
+from axiom.copilot.summarize import (
+    safe_summarize_evaluation,
+    summary_context_from_report,
+    trace_and_metrics_for_summary,
+)
 
 __all__ = [
     "COPILOT_ARTIFACT_SCHEMA_VERSION",
@@ -52,5 +57,8 @@ __all__ = [
     "format_metrics_for_repair",
     "persist_copilot_artifacts",
     "run_copilot_search",
+    "safe_summarize_evaluation",
+    "summary_context_from_report",
+    "trace_and_metrics_for_summary",
     "validate_program",
 ]

@@ -15,6 +15,7 @@ from axiom.copilot.models import (
     ProgramFailure,
     ProgramMetric,
 )
+from axiom.copilot.summarize import safe_summarize_evaluation
 from axiom.experts.base import ExpertDraftRequest, ExpertRepairRequest, SemanticExpert
 
 ExpertRequestPayload = Dict[str, Any]
@@ -122,6 +123,8 @@ class CopilotSearchConfig:
     metric_repair_if_below: Optional[float] = None
     predictions_sample_limit: int = 3
     include_trace_snippet: bool = True
+    # If True, after each evaluation call expert.summarize_trace (extra latency; failures are ignored).
+    summarize_traces: bool = False
     # If set, run_copilot_search writes best.ax, iterations.json, search_report.json under this path.
     artifact_dir: Optional[Path] = None
 
@@ -135,6 +138,8 @@ class CopilotIterationRecord:
     outgoing_repair_error_report: Optional[str] = None
     producing_expert: Dict[str, Any] = field(default_factory=dict)
     """Expert response metadata for the call that produced ``source`` (draft or repair)."""
+    semantic_trace_summary: Optional[str] = None
+    """Natural-language trace/metrics narrative when :attr:`CopilotSearchConfig.summarize_traces` is on."""
 
 
 @dataclass
@@ -244,6 +249,8 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
     final_report: Optional[ProgramEvaluationReport] = None
     converged = False
 
+    need_trace = config.include_trace_snippet or config.summarize_traces
+
     for i in range(max_it):
         source_evaluated = current
         producing = ingress_payload
@@ -257,9 +264,18 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
             expected_rows=config.expected_rows,
             score_fn=config.score_fn,
             predictions_sample_limit=config.predictions_sample_limit,
-            include_trace_snippet=config.include_trace_snippet,
+            include_trace_snippet=need_trace,
         )
         final_report = report
+
+        sem_summary: Optional[str] = None
+        if config.summarize_traces:
+            sem_summary = safe_summarize_evaluation(
+                config.expert,
+                goal=config.goal,
+                program=source_evaluated,
+                report=report,
+            )
 
         if _is_better(report, best_eval, sort_key):
             best_eval = report
@@ -305,6 +321,7 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
                 producing_payload=producing,
                 outgoing_repair_error_report=err_full,
                 producing_expert=iter_expert_meta,
+                semantic_trace_summary=sem_summary,
             )
         )
 

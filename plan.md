@@ -2,6 +2,8 @@
 
 ## Current phase
 
+**Phase 64** — **Semantic trace summarization** — **`src/axiom/copilot/summarize.py`**: **`safe_summarize_evaluation`**, **`trace_and_metrics_for_summary`**, **`summary_context_from_report`** — builds **`ExpertTraceSummaryRequest`** (goal, program, explain **`trace_snippet`**, scalar **`metrics`**, failures / program_metrics / samples in **`context`**) and calls **`SemanticExpert.summarize_trace`**; failures return **`None`** (never affects eval). **`CopilotSearchConfig.summarize_traces`** (default off) + **`CopilotIterationRecord.semantic_trace_summary`**. Search turns on explain capture when summarization is enabled. **`search_report.json`** / **`iterations.json`**: sibling **`semantic_summaries`** / per-row **`semantic_trace_summary`** (separate from **`metrics`**). CLI **`axiom copilot-search --summarize-traces`**; **`--report-out`** adds **`semantic_summaries`** when flag set. Copilot Studio checkbox + table column **`trace_summary`** + expander. Tests: **`tests/test_copilot_summarize.py`**, updates to search / artifacts / CLI / studio tests.
+
 **Phase 63** — **Copilot Studio (Streamlit)** — **`src/axiom/tools/copilot_studio.py`**: optional UI for expert URL / model / API key, goal, context, iteration budget, **`compile_only`** vs **`predict_rows`** (+ examples JSON). Buttons **Draft once** / **Run search** (no work on load). Shows best **`.ax`**, iteration summary table, eval JSON expanders, downloads **`draft.ax`** / **`best.ax`** / **`copilot_report.json`**. Logic helpers are importable without Streamlit. CLI **`axiom copilot-studio`** (`streamlit run`); requires **`pip install -e ".[inspect,copilot]"`**. Tests: **`tests/test_copilot_studio.py`**.
 
 **Phase 62** — **Copilot artifact persistence** — **`src/axiom/copilot/artifacts.py`**: stable JSON **`schema_version`**, **`persist_copilot_artifacts`**, **`build_iterations_document`**, **`build_search_report_document`**, **`evaluation_report_to_dict`**, **`expert_response_to_dict`**. Optional **`CopilotSearchConfig.artifact_dir`** → **`run_copilot_search`** writes **`best.ax`**, **`iterations.json`** (per-iteration candidate source, success, metrics, **`failure_summaries`**, **`producing_expert`** / backend metadata), **`search_report.json`** (goal, backend name, converged, best/final eval blobs, **`failures_metrics_summary`**). CLI **`axiom copilot-search --artifact-dir`**. No writes unless a directory is explicitly set. Tests: **`tests/test_copilot_artifacts.py`**.
@@ -125,12 +127,12 @@
 - `train.ax` — default **`axiom train`** sketch (cwd)
 - `src/axiom/compiler/`, `src/axiom/engine/`, `src/axiom/primitives/`
 - `src/axiom/experts/` — Phase 58 protocol + registry; Phase 59 **`onyx_qwen.py`** (optional **`[copilot]`**)
-- `src/axiom/copilot/` — Phase 60 **`search.py`** + Phase 62 **`artifacts.py`** (persisted traces)
-- `tests/` — **`tests/test_architecture_baseline.py`**, **`tests/test_experts.py`**, **`tests/test_onyx_qwen_backend.py`**, **`tests/test_copilot_evaluator.py`**, **`tests/test_copilot_search.py`**, **`tests/test_cli_copilot.py`**, **`tests/test_copilot_artifacts.py`**, **`tests/test_copilot_studio.py`**
+- `src/axiom/copilot/` — Phase 60 **`search.py`** + Phase 62 **`artifacts.py`** + Phase 64 **`summarize.py`**
+- `tests/` — **`tests/test_architecture_baseline.py`**, **`tests/test_experts.py`**, **`tests/test_onyx_qwen_backend.py`**, **`tests/test_copilot_evaluator.py`**, **`tests/test_copilot_search.py`**, **`tests/test_cli_copilot.py`**, **`tests/test_copilot_artifacts.py`**, **`tests/test_copilot_studio.py`**, **`tests/test_copilot_summarize.py`**
 
 ## Next target (semantic copilot — wiring)
 
-**Done:** typed **expert** API (**Phase 58**) + **Onyx/Qwen HTTP adapter** (**Phase 59**) + **in-memory evaluate harness** + **semantic draft–repair–search loop** (**Phase 60**) + **copilot CLI** (**Phase 61**) + **artifact persistence** (**Phase 62**) + **Copilot Studio** Streamlit UI (**Phase 63**).
+**Done:** typed **expert** API (**Phase 58**) + **Onyx/Qwen HTTP adapter** (**Phase 59**) + **in-memory evaluate harness** + **semantic draft–repair–search loop** (**Phase 60**) + **copilot CLI** (**Phase 61**) + **artifact persistence** (**Phase 62**) + **Copilot Studio** Streamlit UI (**Phase 63**) + **optional `summarize_trace` integration** (**Phase 64**).
 
 **Not started:** copilot **FastAPI** routes, **`train_tabular`** inside the harness (use **`axiom train`** / **`EvolutionaryTrainer`**).
 
@@ -179,6 +181,7 @@ axiom inspect
 # pip install -e ".[copilot]"
 # axiom copilot-draft --backend onyx-qwen --goal "..." --expert-url https://host/v1/ --expert-model qwen-7b
 # axiom copilot-search --backend onyx-qwen --goal "..." --expert-url https://host/v1/ --expert-model qwen-7b --iterations 5 --artifact-dir ./copilot_trace
+# axiom copilot-search ... --summarize-traces   # optional expert trace narration (Phase 64)
 # axiom copilot-studio   # Streamlit UI — pip install -e ".[inspect,copilot]"
 ```
 

@@ -92,6 +92,20 @@ def test_iterations_table_rows_shape():
     rows = cs.iterations_table_rows(out)
     assert len(rows) == 2
     assert "iter" in rows[0] and "failure_count" in rows[0]
+    assert "trace_summary" in rows[0]
+
+
+def test_run_studio_search_summarize_traces():
+    class _Talkative(_ScriptedExpert):
+        def summarize_trace(self, *args, **kwargs) -> str:
+            return "explained"
+
+    ex = _Talkative()
+    cfg, out = cs.run_studio_search("g", None, ex, 1, compile_only=True, summarize_traces=True)
+    assert cfg.summarize_traces is True
+    assert out.iterations[0].semantic_trace_summary == "explained"
+    row = cs.iterations_table_rows(out)[0]
+    assert row["trace_summary"] == "explained"
 
 
 def test_build_studio_download_payload_keys():
@@ -147,6 +161,7 @@ def test_main_with_mock_streamlit(monkeypatch):
     fake.text_input.side_effect = ["http://127.0.0.1/v1/", "m", ""]
     fake.text_area.side_effect = ["my goal", "", "[]"]
     fake.number_input.return_value = 8
+    fake.checkbox.return_value = False
     fake.radio.return_value = "predict_rows"
     c1, c2 = MagicMock(), MagicMock()
     c1.button.return_value = False

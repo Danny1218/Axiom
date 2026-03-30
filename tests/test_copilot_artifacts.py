@@ -48,7 +48,24 @@ class _StubExpert:
         return ExpertDraftResponse(ax_source="y = 2.0;\n", backend_name="stub", metadata={"n": self.n})
 
     def summarize_trace(self, *args, **kwargs) -> str:
-        return ""
+        return "stub narrative"
+
+
+def test_search_report_semantic_summaries_when_enabled(tmp_path: Path):
+    cfg = CopilotSearchConfig(
+        expert=_StubExpert(),
+        goal="g_sum",
+        max_iterations=1,
+        mode="compile_only",
+        summarize_traces=True,
+    )
+    res = run_copilot_search(cfg)
+    doc = build_search_report_document(cfg, res)
+    assert doc["semantic_summaries"]["enabled"] is True
+    assert doc["semantic_summaries"]["per_iteration"][0]["semantic_trace_summary"] == "stub narrative"
+    persist_copilot_artifacts(cfg, res, tmp_path / "s")
+    sr = json.loads((tmp_path / "s" / SEARCH_REPORT_JSON_NAME).read_text(encoding="utf-8"))
+    assert sr["semantic_summaries"]["per_iteration"][0]["semantic_trace_summary"] == "stub narrative"
 
 
 def test_json_safe_tuple_becomes_list():
@@ -90,6 +107,8 @@ def test_persist_copilot_artifacts_writes_three_files(tmp_path: Path):
     assert sr["converged"] is True
     assert sr["failures_metrics_summary"]["best"]["success"] is True
     assert sr["artifact_files"]["best_ax"] == BEST_AX_NAME
+    assert sr["semantic_summaries"]["enabled"] is False
+    assert sr["semantic_summaries"]["per_iteration"][0]["semantic_trace_summary"] is None
 
 
 def test_run_copilot_search_artifact_dir_same_as_persist(tmp_path: Path):

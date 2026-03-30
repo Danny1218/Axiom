@@ -46,6 +46,7 @@ class ScriptedExpert:
         self._repairs = list(repair_sources)
         self.draft_calls: list[ExpertDraftRequest] = []
         self.repair_calls: list[ExpertRepairRequest] = []
+        self.summarize_calls: list[ExpertTraceSummaryRequest] = []
 
     def draft_program(self, request: ExpertDraftRequest) -> ExpertDraftResponse:
         self.draft_calls.append(request)
@@ -67,6 +68,7 @@ class ScriptedExpert:
         )
 
     def summarize_trace(self, request: ExpertTraceSummaryRequest) -> str:
+        self.summarize_calls.append(request)
         return "ok"
 
 
@@ -151,6 +153,39 @@ def test_best_candidate_higher_score_wins():
     q1 = out.iterations[1].evaluation.metrics["quality"]
     assert q1 > q0
     assert out.best_evaluation.metrics["quality"] == q1
+
+
+def test_summarize_traces_calls_expert_and_sets_iteration_field():
+    ex = ScriptedExpert(GOOD_AX, [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="emit neural y",
+        max_iterations=1,
+        mode="compile_only",
+        summarize_traces=True,
+    )
+    out = run_copilot_search(cfg)
+    assert len(ex.summarize_calls) == 1
+    assert ex.summarize_calls[0].goal == "emit neural y"
+    assert out.iterations[0].semantic_trace_summary == "ok"
+
+
+def test_summarize_traces_expert_failure_still_completes_search():
+    class _Flaky(ScriptedExpert):
+        def summarize_trace(self, request: ExpertTraceSummaryRequest) -> str:
+            raise RuntimeError("no summary")
+
+    ex = _Flaky(GOOD_AX, [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="g",
+        max_iterations=1,
+        mode="compile_only",
+        summarize_traces=True,
+    )
+    out = run_copilot_search(cfg)
+    assert out.iterations[0].evaluation.success is True
+    assert out.iterations[0].semantic_trace_summary is None
 
 
 def test_converged_false_when_still_failing_at_budget():

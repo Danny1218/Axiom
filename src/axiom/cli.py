@@ -551,6 +551,7 @@ def _cmd_copilot_search(args: argparse.Namespace) -> None:
         score_fn = None
         sort_key = None
 
+    summarize = bool(getattr(args, "summarize_traces", False))
     cfg = CopilotSearchConfig(
         expert=expert,
         goal=args.goal,
@@ -561,7 +562,8 @@ def _cmd_copilot_search(args: argparse.Namespace) -> None:
         mode=mode,  # type: ignore[arg-type]
         score_fn=score_fn,
         score_sort_key=sort_key,
-        include_trace_snippet=False,
+        include_trace_snippet=summarize,
+        summarize_traces=summarize,
         artifact_dir=args.artifact_dir,
     )
     result = run_copilot_search(cfg)
@@ -592,10 +594,19 @@ def _cmd_copilot_search(args: argparse.Namespace) -> None:
                     "producing_payload": rec.producing_payload,
                     "producing_expert": rec.producing_expert,
                     "outgoing_repair_error_report": rec.outgoing_repair_error_report,
+                    "semantic_trace_summary": rec.semantic_trace_summary,
                 }
                 for rec in result.iterations
             ],
         }
+        if summarize:
+            payload["semantic_summaries"] = {
+                "enabled": True,
+                "per_iteration": [
+                    {"index": r.index, "semantic_trace_summary": r.semantic_trace_summary}
+                    for r in result.iterations
+                ],
+            }
         args.report_out.parent.mkdir(parents=True, exist_ok=True)
         args.report_out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         print(f"Wrote report to {args.report_out}", file=sys.stderr)
@@ -873,6 +884,11 @@ def main(argv: list[str] | None = None) -> None:
         type=Path,
         default=None,
         help="Write reproducible bundle: best.ax, iterations.json, search_report.json (creates dir).",
+    )
+    p_cs.add_argument(
+        "--summarize-traces",
+        action="store_true",
+        help="After each iteration, call the expert summarize_trace API (optional; extra latency).",
     )
     p_cs.set_defaults(_handler=_cmd_copilot_search)
 

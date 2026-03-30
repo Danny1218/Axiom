@@ -161,6 +161,42 @@ def test_copilot_search_runs_with_stub_expert(tmp_path: Path, capsys, monkeypatc
     assert data["best_evaluation"]["success"] is True
     assert len(data["iterations"]) == 2
     assert "neural" in out_ax.read_text(encoding="utf-8")
+    assert data["iterations"][0].get("semantic_trace_summary") is None
+    assert "semantic_summaries" not in data
+
+
+def test_copilot_search_report_includes_semantic_summaries_when_flag(tmp_path: Path, monkeypatch):
+    fake = _FakeExpert()
+    fake.draft_source = "y = neural([1.0, 2.0]);\n"
+    fake.repair_queue = []
+    monkeypatch.setattr(cli_mod, "_make_copilot_expert", lambda _a: fake)
+    rep = tmp_path / "rs.json"
+    examples = tmp_path / "ex2.json"
+    examples.write_text(json.dumps([{"inputs": {}, "expected": {"y": 0.5}}]), encoding="utf-8")
+    main(
+        [
+            "copilot-search",
+            "--backend",
+            "onyx-qwen",
+            "--goal",
+            "predict y",
+            "--expert-url",
+            "http://x/",
+            "--expert-model",
+            "m",
+            "--iterations",
+            "1",
+            "--examples-json",
+            str(examples),
+            "--report-out",
+            str(rep),
+            "--summarize-traces",
+        ]
+    )
+    data = json.loads(rep.read_text(encoding="utf-8"))
+    assert data["semantic_summaries"]["enabled"] is True
+    assert data["iterations"][0]["semantic_trace_summary"] == "ok"
+    assert data["semantic_summaries"]["per_iteration"][0]["semantic_trace_summary"] == "ok"
 
 
 def test_copilot_search_compile_only_ignores_predict(tmp_path: Path, monkeypatch):

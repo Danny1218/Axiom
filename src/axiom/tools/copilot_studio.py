@@ -95,6 +95,7 @@ def run_studio_search(
     *,
     compile_only: bool,
     examples_text: Optional[str] = None,
+    summarize_traces: bool = False,
 ) -> Tuple[CopilotSearchConfig, CopilotSearchResult]:
     example_in: Optional[List[dict]] = None
     example_exp: Optional[List[dict]] = None
@@ -122,7 +123,8 @@ def run_studio_search(
         mode=mode,  # type: ignore[arg-type]
         score_fn=score_fn,
         score_sort_key=sort_key,
-        include_trace_snippet=False,
+        include_trace_snippet=bool(summarize_traces),
+        summarize_traces=bool(summarize_traces),
     )
     return cfg, run_copilot_search(cfg)
 
@@ -132,6 +134,7 @@ def iterations_table_rows(result: CopilotSearchResult) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
     for rec in result.iterations:
         ev = rec.evaluation
+        summ = rec.semantic_trace_summary or ""
         rows.append(
             {
                 "iter": rec.index,
@@ -140,6 +143,7 @@ def iterations_table_rows(result: CopilotSearchResult) -> List[Dict[str, Any]]:
                 "metrics": json.dumps(ev.metrics, sort_keys=True) if ev.metrics else "",
                 "failure_count": len(ev.failures),
                 "failure_kinds": ", ".join(sorted({f.kind for f in ev.failures})),
+                "trace_summary": summ[:200] + ("…" if len(summ) > 200 else ""),
             }
         )
     return rows
@@ -187,6 +191,11 @@ def main() -> None:
     goal = st.text_area("Goal", placeholder="Describe the .ax program you want.", height=100, key="goal")
     context = st.text_area("Context (optional)", placeholder="Domain notes, columns, constraints.", height=80, key="ctx")
     iterations = st.number_input("Max search iterations", min_value=1, max_value=64, value=8, step=1)
+    summarize_traces = st.checkbox(
+        "Summarize traces (calls expert after each iteration; extra latency)",
+        value=False,
+        key="summarize_traces",
+    )
     eval_mode = st.radio("Search evaluation", ("compile_only", "predict_rows"), horizontal=True)
     examples_text = None
     if eval_mode == "predict_rows":
@@ -238,6 +247,7 @@ def main() -> None:
                     int(iterations),
                     compile_only=(eval_mode == "compile_only"),
                     examples_text=examples_text if eval_mode == "predict_rows" else None,
+                    summarize_traces=summarize_traces,
                 )
                 st.session_state.search_cfg = cfg
                 st.session_state.search_result = res
@@ -298,6 +308,12 @@ def main() -> None:
                     ],
                 }
             )
+        if any(rec.semantic_trace_summary for rec in res.iterations):
+            with st.expander("Semantic trace summaries (expert)"):
+                for rec in res.iterations:
+                    if rec.semantic_trace_summary:
+                        st.markdown(f"**Iteration {rec.index}**")
+                        st.write(rec.semantic_trace_summary)
         payload = build_studio_download_payload(cfg, res)
         st.download_button(
             "Download copilot_report.json",

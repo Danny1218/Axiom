@@ -85,6 +85,7 @@ def iteration_entry_to_dict(rec: CopilotIterationRecord) -> Dict[str, Any]:
         "producing_expert": dict(rec.producing_expert),
         "producing_payload": dict(rec.producing_payload),
         "outgoing_repair_error_report": rec.outgoing_repair_error_report,
+        "semantic_trace_summary": rec.semantic_trace_summary,
     }
 
 
@@ -154,6 +155,13 @@ def build_search_report_document(config: CopilotSearchConfig, result: CopilotSea
                 "metrics": dict(fe.metrics),
                 "failure_count": len(fe.failures),
             },
+        },
+        "semantic_summaries": {
+            "enabled": config.summarize_traces,
+            "per_iteration": [
+                {"index": rec.index, "semantic_trace_summary": rec.semantic_trace_summary}
+                for rec in result.iterations
+            ],
         },
     }
 

@@ -96,9 +96,11 @@ python -m pytest tests -q
 
 Install **`[copilot]`** so `requests` is available. Pass **`--expert-url`** (API base, e.g. `https://your-host/v1/`), **`--expert-model`**, and optionally **`--expert-api-key`** or set **`AXIOM_EXPERT_API_KEY`**. Iteration logs and “wrote file” lines go to **stderr**; the generated **`.ax`** source is printed to **stdout** so you can redirect it.
 
-**Reproducible runs:** **`axiom copilot-search --artifact-dir path/to/run/`** writes a fixed bundle — **`best.ax`**, **`iterations.json`** (per-iteration source, metrics, failure summaries, expert **`metadata`**), **`search_report.json`** (run header + **`failures_metrics_summary`**) — only when that flag is set (no silent writes).
+**Reproducible runs:** **`axiom copilot-search --artifact-dir path/to/run/`** writes a fixed bundle — **`best.ax`**, **`iterations.json`** (per-iteration source, metrics, failure summaries, expert **`metadata`**, optional **`semantic_trace_summary`**), **`search_report.json`** (run header + **`failures_metrics_summary`** + sibling **`semantic_summaries`** when summarization ran) — only when that flag is set (no silent writes).
 
-**Copilot Studio (optional UI):** install **`[inspect]`** and **`[copilot]`** (`pip install -e ".[inspect,copilot]"`), then run **`axiom copilot-studio`**. It opens a separate Streamlit app from Glass Box (`axiom inspect`): enter expert URL / model / API key, goal, optional context, iteration limit, then use **Draft once** or **Run search** — nothing calls the network until you click. You get tables for iteration summaries, expandable eval/metrics/failure JSON, and download buttons for **`draft.ax`**, **`best.ax`**, and **`copilot_report.json`**.
+**Trace summaries (optional):** pass **`--summarize-traces`** on **`copilot-search`** to call the expert’s **`summarize_trace`** after each iteration (natural-language narration of explain trace + metrics + failures). Default is off; if the call fails, search still completes and the summary field is empty. Scalar metrics stay in **`metrics`**; prose lives in **`semantic_trace_summary`** / **`semantic_summaries`** only.
+
+**Copilot Studio (optional UI):** install **`[inspect]`** and **`[copilot]`** (`pip install -e ".[inspect,copilot]"`), then run **`axiom copilot-studio`**. It opens a separate Streamlit app from Glass Box (`axiom inspect`): enter expert URL / model / API key, goal, optional context, iteration limit, optional **Summarize traces**, then use **Draft once** or **Run search** — nothing calls the network until you click. You get tables for iteration summaries, expandable eval/metrics/failure JSON, and download buttons for **`draft.ax`**, **`best.ax`**, and **`copilot_report.json`**.
 
 **Draft** (goal → single program):
 
@@ -122,8 +124,11 @@ Set-Content -Path examples.json -Value $examples -Encoding utf8
 axiom copilot-search --backend onyx-qwen --goal "Output y from defaults" `
   --expert-url "https://api.example.com/v1/" --expert-model "qwen-7b" `
   --iterations 5 --examples-json examples.json `
-  --out best.ax --report-out search_report.json --artifact-dir ./copilot_run_01
+  --out best.ax --report-out search_report.json --artifact-dir ./copilot_run_01 `
+  --summarize-traces
 ```
+
+Omit **`--summarize-traces`** to skip the extra expert round-trips.
 
 ---
 
