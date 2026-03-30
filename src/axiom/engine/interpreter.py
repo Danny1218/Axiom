@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# ``exec_stmt`` mutates ``env`` in place; ``InterpretedBlock.forward(..., return_env=True)`` exposes it (Phase 41).
+
 from typing import Dict, List, Optional, Set, Tuple, Union
 
 import torch

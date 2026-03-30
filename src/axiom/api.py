@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import torch
 import torch.nn as nn
@@ -11,6 +11,19 @@ import torch.nn as nn
 from axiom.compiler.deserializer import load_bundle
 from axiom.engine.block_executor import InterpretedBlock
 from axiom.engine.inference import _abi_outputs_from_trunk_row, _inputs_to_tensor
+
+
+def _env_tensor_to_python(t: torch.Tensor) -> Union[float, List[float]]:
+    """Map batch-1 env tensor to float or list of floats (first row only)."""
+    x = t.detach().cpu()
+    if x.dim() >= 1:
+        x = x[0]
+    if x.dim() == 0:
+        return float(x.item())
+    flat = x.flatten().tolist()
+    if len(flat) == 1:
+        return float(flat[0])
+    return [float(v) for v in flat]
 
 
 def _trunk_dim_from_block_abi(block: InterpretedBlock) -> int:
@@ -68,3 +81,25 @@ class AxiomModel:
         with torch.no_grad():
             out_trunk = block(h)
         return _abi_outputs_from_trunk_row(out_trunk[0], abi, aw)
+
+    def explain(self, data: dict) -> Dict[str, Any]:
+        """Return a JSON-serializable snapshot of symbolic variables after one forward (batch size 1)."""
+        if not isinstance(data, dict):
+            raise TypeError("explain expects a single dict (one row of features)")
+        block = self.block
+        block.eval()
+        dim = _trunk_dim_from_block_abi(block)
+        dev = torch.device("cpu")
+        dt = torch.float32
+        abi = block.abi
+        aw = dict(getattr(block, "abi_widths", {}) or {})
+        h = _inputs_to_tensor(data, abi, dim, device=dev, dtype=dt, abi_widths=aw)
+        with torch.no_grad():
+            _out, env = block(h, return_env=True)
+        trace: Dict[str, Any] = {}
+        for k, v in env.items():
+            if k.startswith("_"):
+                continue
+            if isinstance(v, torch.Tensor):
+                trace[k] = _env_tensor_to_python(v)
+        return trace

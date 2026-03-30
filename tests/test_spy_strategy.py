@@ -102,7 +102,7 @@ def test_backtest_metrics_matches_manual():
         {"prediction": -1.0},
         {"prediction": 0.0},
     ]
-    m = ts.backtest_metrics(test_df, preds)
+    m, _ = ts.backtest_metrics(test_df, preds)
     # pos 1, -1, 0 -> strategy returns = target * [1,-1,0]
     strat = (1 + 0.01) * (1 + 0.02) * (1 + 0.0) - 1.0
     bh = (1 + 0.01) * (1 - 0.02) * (1 + 0.03) - 1.0
@@ -163,7 +163,7 @@ def test_mini_train_save_load_predict_backtest(tmp_path):
     model = axiom.load(axb)
     results = model.predict(test_df)
     assert len(results) == len(test_df)
-    m = ts.backtest_metrics(test_df, results)
+    m, _ = ts.backtest_metrics(test_df, results)
     assert "cumulative_strategy" in m and "cumulative_buy_hold" in m
     assert "sharpe_strategy" in m and "max_drawdown_strategy" in m
     import math

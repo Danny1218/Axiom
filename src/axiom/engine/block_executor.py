@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -20,7 +20,11 @@ def _neural_mlp(in_dim: int) -> nn.Sequential:
 
 
 class InterpretedBlock(nn.Module):
-    """Runs a list of IR statements on the trunk tensor (symbolic path); other columns pass through."""
+    """Runs a list of IR statements on the trunk tensor (symbolic path); other columns pass through.
+
+    With ``forward(h, return_env=True)``, returns ``(out, env)`` so callers can inspect per-variable tensors
+    after execution (Phase 41 explainability).
+    """
 
     def __init__(
         self,
@@ -46,9 +50,11 @@ class InterpretedBlock(nn.Module):
                 built[nid] = _neural_mlp(w)
         self.neural_registry: nn.ModuleDict = nn.ModuleDict(built)
 
-    def forward(self, h: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, h: torch.Tensor, return_env: bool = False
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, Dict[str, torch.Tensor]]]:
         if not self.ir_stmts:
-            return h
+            return (h, {}) if return_env else h
         if h.dim() != 2:
             raise ValueError("InterpretedBlock expects h (B, D)")
         B, D = h.shape
@@ -95,4 +101,4 @@ class InterpretedBlock(nn.Module):
                 out[:, col : col + w] = t
             elif t.dim() == 1 and w == 1:
                 out[:, col] = t
-        return out
+        return (out, env) if return_env else out

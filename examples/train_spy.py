@@ -8,6 +8,7 @@ Run from repo root: ``python examples/train_spy.py``
 
 from __future__ import annotations
 
+import json
 import math
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
@@ -94,11 +95,11 @@ def max_drawdown_from_returns(returns: pd.Series) -> float:
 
 def backtest_metrics(
     test_df: pd.DataFrame, predictions: List[Dict[str, Any]]
-) -> Dict[str, float]:
-    """Align ``model.predict`` outputs with ``test_df`` rows; return cum returns, Sharpe, max DD."""
+) -> Tuple[Dict[str, float], pd.DataFrame]:
+    """Align ``model.predict`` outputs with ``test_df`` rows; return metrics and augmented OOS frame."""
     if len(predictions) != len(test_df):
         raise ValueError("predictions length must match test_df rows")
-    df_test = test_df.reset_index(drop=True).copy()
+    df_test = test_df.copy()
     df_test["model_prediction"] = [float(r["prediction"]) for r in predictions]
     df_test["position"] = df_test["model_prediction"].map(position_from_prediction)
     df_test["strategy_return"] = df_test["position"] * df_test["target_return"]
@@ -108,14 +109,31 @@ def backtest_metrics(
     sh_bh = annualized_sharpe(df_test["target_return"])
     mdd_s = max_drawdown_from_returns(df_test["strategy_return"])
     mdd_bh = max_drawdown_from_returns(df_test["target_return"])
-    return {
-        "cumulative_strategy": strat,
-        "cumulative_buy_hold": bh,
-        "sharpe_strategy": sh_s,
-        "sharpe_buy_hold": sh_bh,
-        "max_drawdown_strategy": mdd_s,
-        "max_drawdown_buy_hold": mdd_bh,
-    }
+    return (
+        {
+            "cumulative_strategy": strat,
+            "cumulative_buy_hold": bh,
+            "sharpe_strategy": sh_s,
+            "sharpe_buy_hold": sh_bh,
+            "max_drawdown_strategy": mdd_s,
+            "max_drawdown_buy_hold": mdd_bh,
+        },
+        df_test,
+    )
+
+
+def row_series_to_plain_dict(row: "pd.Series") -> Dict[str, Any]:
+    """Scalar floats for ``AxiomModel.explain`` (one trading row)."""
+    out: Dict[str, Any] = {}
+    for k in row.index:
+        v = row[k]
+        if hasattr(v, "item"):
+            out[str(k)] = float(v.item())
+        elif isinstance(v, (float, int)):
+            out[str(k)] = float(v)
+        else:
+            out[str(k)] = float(v)
+    return out
 
 
 def fetch_spy_frame(period: str = "6y") -> pd.DataFrame:
@@ -181,13 +199,29 @@ def main() -> None:
     print("\n--- RUNNING OUT-OF-SAMPLE BACKTEST ---\n")
     model = axiom.load(BUNDLE_PATH, custom_neural_registry={nid: make_spy_alpha_custom_brain()})
     results = model.predict(test_df)
-    metrics = backtest_metrics(test_df, results)
+    metrics, df_oos = backtest_metrics(test_df, results)
     print(f"Cumulative strategy return (OOS): {metrics['cumulative_strategy']:.4f}")
     print(f"Cumulative buy-and-hold return (OOS): {metrics['cumulative_buy_hold']:.4f}")
     print(f"Sharpe ratio (strategy, ann.): {metrics['sharpe_strategy']:.4f}")
     print(f"Sharpe ratio (buy-and-hold, ann.): {metrics['sharpe_buy_hold']:.4f}")
     print(f"Max drawdown (strategy): {metrics['max_drawdown_strategy']*100:.2f}%")
     print(f"Max drawdown (buy-and-hold): {metrics['max_drawdown_buy_hold']*100:.2f}%")
+
+    worst_idx = df_oos["strategy_return"].idxmin()
+    worst_row = df_oos.loc[worst_idx]
+    worst_dict = row_series_to_plain_dict(worst_row)
+    trace = model.explain(worst_dict)
+    print("\n--- THE AUTOPSY (WORST TRADE) ---\n")
+    dname = worst_row.name
+    if hasattr(dname, "strftime"):
+        dstr = dname.strftime("%Y-%m-%d")
+    else:
+        dstr = str(dname)
+    print(f"Date: {dstr}")
+    print(f"Market return that day (target_return): {float(worst_row['target_return'])*100:.2f}%")
+    print(f"Strategy return that day: {float(worst_row['strategy_return'])*100:.2f}%")
+    print("AI internal trace:")
+    print(json.dumps(trace, indent=2))
 
 
 if __name__ == "__main__":

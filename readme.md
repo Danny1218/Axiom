@@ -141,7 +141,9 @@ Install extras: **`pip install -e ".[spy]"`** (**pandas**, **yfinance**). **`exa
 python examples/train_spy.py
 ```
 
-This downloads ~6y of data, trains 50 epochs, writes **`examples/spy_trained.axb`**, reloads with **`axiom.load(..., custom_neural_registry=...)`** (same architecture as training), runs **`model.predict`** on the held-out last **500** trading days, and prints **cumulative returns**, **annualized Sharpe ratios**, and **max drawdowns** (strategy vs buy-and-hold)—better risk-aware readouts than raw return alone.
+This downloads ~6y of data, trains 50 epochs, writes **`examples/spy_trained.axb`**, reloads with **`axiom.load(..., custom_neural_registry=...)`** (same architecture as training), runs **`model.predict`** on the held-out last **500** trading days, and prints **cumulative returns**, **annualized Sharpe ratios**, and **max drawdowns** (strategy vs buy-and-hold)—better risk-aware readouts than raw return alone. It ends with an **Autopsy** on the worst single-day strategy loss: **`model.explain({...})`** dumps **`alpha_signal`**, **`prediction`**, and inputs so you can audit why the model traded.
+
+For any **`.axb`**, **`model.explain({"feature": ...})`** returns a JSON-friendly dict of symbolic variable values after one forward pass (Phase 41).
 
 ---
 

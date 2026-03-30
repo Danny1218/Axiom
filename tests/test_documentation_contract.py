@@ -25,6 +25,7 @@ def test_readme_documents_python_api():
     text = (_root() / "readme.md").read_text(encoding="utf-8")
     assert "## Quickstart — Native Python API" in text
     assert "axiom.load" in text and "model.predict" in text
+    assert "model.explain" in text
 
 
 def test_readme_version_matches_pyproject():
