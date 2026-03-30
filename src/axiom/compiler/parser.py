@@ -26,3 +26,10 @@ def parse_ax(source: str) -> Tree:
 
 def parse_ax_file(path: str | Path) -> Tree:
     return parse_ax(Path(path).read_text(encoding="utf-8"))
+
+
+def parse_ax_program(source: str):
+    """Return ``(function_defs, main_ir)`` with calls not yet expanded (see ``ast_to_ir``)."""
+    from axiom.compiler.ir import parse_program as program_from_tree
+
+    return program_from_tree(parse_ax(source))

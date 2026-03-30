@@ -59,6 +59,7 @@ class InterpretedBlock(nn.Module):
                 max_unroll=self.max_unroll,
                 device=device,
                 dtype=dtype,
+                abi_widths=self.abi_widths,
             )
         out = h.clone()
         for name, col in self.abi.items():

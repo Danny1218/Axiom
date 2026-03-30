@@ -2,7 +2,8 @@ import pytest
 from lark import UnexpectedCharacters, UnexpectedToken
 from lark.tree import Tree
 
-from axiom.compiler.parser import parse_ax, parse_ax_file, reset_parser
+from axiom.compiler.ir import ast_to_ir, parse_program
+from axiom.compiler.parser import parse_ax, parse_ax_file, parse_ax_program, reset_parser
 
 
 @pytest.fixture(autouse=True)
@@ -87,3 +88,22 @@ def test_parse_array_literal_and_index():
     t = parse_ax("a = [1.0, 2.0]; b = a[1];")
     kinds = [c.data for c in t.children if hasattr(c, "data")]
     assert kinds.count("assign_stmt") == 2
+
+
+def test_parse_function_def_return_and_call():
+    src = "def add(a, b) { return a + b; } x = add(1, 2);"
+    t = parse_ax(src)
+    assert t.children[0].data == "function_def"
+    assert t.children[1].data == "assign_stmt"
+    funcs, main = parse_program(t)
+    assert "add" in funcs and funcs["add"].params == ("a", "b")
+    assert main[0][0] == "OP_ASSIGN" and main[0][1] == "x"
+    ir = ast_to_ir(t)
+    assert ir[-1][0] == "OP_ASSIGN" and ir[-1][1] == "x"
+    assert ir[-1][2] == [("OP_LOAD", "_inline_add_0_ret")]
+
+
+def test_parse_ax_program_helper():
+    funcs, main = parse_ax_program("def z() { return 1; } k = 1;")
+    assert "z" in funcs and funcs["z"].params == ()
+    assert len(main) == 1 and main[0][0] == "OP_ASSIGN"

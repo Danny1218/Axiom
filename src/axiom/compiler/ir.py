@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import networkx as nx
@@ -15,12 +16,332 @@ IRList = List[tuple]
 _CMP = {"GT": "OP_CMP_GT", "LT": "OP_CMP_LT", "EQ": "OP_CMP_EQ", "NE": "OP_CMP_NE"}
 
 
-def ast_to_ir(tree: Tree) -> IRList:
+@dataclass(frozen=True)
+class FunctionDef:
+    """User function for macro inlining; body ends with ``OP_RETURN`` (MVP: single tail return)."""
+
+    name: str
+    params: Tuple[str, ...]
+    body: IRList
+
+
+ExprIR = List[Tuple[Any, ...]]
+Stmt = Tuple[Any, ...]
+
+
+@dataclass(frozen=True)
+class ReturnStatement:
+    """Structured form of ``return expr`` (lowers to ``("OP_RETURN", expr_ir)``)."""
+
+    value_ir: ExprIR
+
+
+@dataclass(frozen=True)
+class FunctionCall:
+    """Structured call (IR embeds ``("OP_CALL", name, arg_irs)`` in ``ExprIR``)."""
+
+    name: str
+    args: Tuple[ExprIR, ...]
+
+
+def parse_program(tree: Tree) -> Tuple[Dict[str, FunctionDef], IRList]:
+    """Split top-level ``function_def`` nodes from main statements; main may contain ``OP_CALL``."""
     assert tree.data == "start"
-    out: IRList = []
+    funcs: Dict[str, FunctionDef] = {}
+    main: IRList = []
     for child in tree.children:
-        out.extend(_stmt(child))
+        if not isinstance(child, Tree):
+            continue
+        if child.data == "function_def":
+            fd = _function_def_from_tree(child)
+            if fd.name in funcs:
+                raise ValueError(f"duplicate function {fd.name!r}")
+            funcs[fd.name] = fd
+        else:
+            main.extend(_stmt(child, allow_return=False))
+    return funcs, main
+
+
+def ast_to_ir(tree: Tree) -> IRList:
+    funcs, main = parse_program(tree)
+    return expand_function_calls(main, funcs)
+
+
+def expand_function_calls(ir: IRList, funcs: Dict[str, FunctionDef]) -> IRList:
+    """Inline ``OP_CALL`` into mangled assignments (static graph; no call stack)."""
+    if not funcs and not _ir_contains_op_call(ir):
+        return list(ir)
+    ctr = [0]
+    out: IRList = []
+    for st in ir:
+        out.extend(expand_stmt(st, funcs, ctr))
     return out
+
+
+def _ir_contains_op_call(ir: IRList) -> bool:
+    for st in ir:
+        if _stmt_contains_op_call(st):
+            return True
+    return False
+
+
+def _stmt_contains_op_call(stmt: Stmt) -> bool:
+    op = stmt[0]
+    if op == "OP_ASSIGN":
+        return _expr_contains_op_call(list(stmt[2]))
+    if op == "OP_EXPR_STMT":
+        return _expr_contains_op_call(list(stmt[1]))
+    if op == "OP_CONDITIONAL":
+        if _expr_contains_op_call(list(stmt[1])):
+            return True
+        for s in stmt[2]:
+            if _stmt_contains_op_call(tuple(s) if isinstance(s, list) else s):
+                return True
+        for s in stmt[3]:
+            if _stmt_contains_op_call(tuple(s) if isinstance(s, list) else s):
+                return True
+        return False
+    if op == "OP_LOOP":
+        if _expr_contains_op_call(list(stmt[1])):
+            return True
+        for s in stmt[2]:
+            if _stmt_contains_op_call(tuple(s) if isinstance(s, list) else s):
+                return True
+        return False
+    return False
+
+
+def _expr_contains_op_call(expr: ExprIR) -> bool:
+    for tup in expr:
+        if not isinstance(tup, tuple) or not tup:
+            continue
+        if tup[0] == "OP_CALL":
+            return True
+    return False
+
+
+def expand_stmt(stmt: Stmt, funcs: Dict[str, FunctionDef], ctr: List[int]) -> IRList:
+    op = stmt[0]
+    if op == "OP_ASSIGN":
+        h, rhs = expand_expr(list(stmt[2]), funcs, ctr)
+        return h + [("OP_ASSIGN", str(stmt[1]), rhs)]
+    if op == "OP_EXPR_STMT":
+        h, e = expand_expr(list(stmt[1]), funcs, ctr)
+        return h + [("OP_EXPR_STMT", e)]
+    if op == "OP_CONDITIONAL":
+        hc, cond = expand_expr(list(stmt[1]), funcs, ctr)
+        then_ir: IRList = []
+        for s in stmt[2]:
+            then_ir.extend(expand_stmt(tuple(s) if isinstance(s, list) else s, funcs, ctr))
+        else_ir: IRList = []
+        for s in stmt[3]:
+            else_ir.extend(expand_stmt(tuple(s) if isinstance(s, list) else s, funcs, ctr))
+        return hc + [("OP_CONDITIONAL", cond, then_ir, else_ir)]
+    if op == "OP_LOOP":
+        hc, cond = expand_expr(list(stmt[1]), funcs, ctr)
+        body_ir: IRList = []
+        for s in stmt[2]:
+            body_ir.extend(expand_stmt(tuple(s) if isinstance(s, list) else s, funcs, ctr))
+        return hc + [("OP_LOOP", cond, body_ir)]
+    raise ValueError(f"expand_stmt: unknown {op}")
+
+
+def expand_expr(expr: ExprIR, funcs: Dict[str, FunctionDef], ctr: List[int]) -> Tuple[IRList, ExprIR]:
+    hoists: IRList = []
+    out: ExprIR = []
+    for tup in expr:
+        if isinstance(tup, tuple) and tup and tup[0] == "OP_CALL":
+            h, repl = _expand_call_op(tup, funcs, ctr)
+            hoists.extend(h)
+            out.extend(repl)
+        else:
+            out.append(tup)
+    return hoists, out
+
+
+def _expand_call_op(
+    tup: Tuple[Any, ...], funcs: Dict[str, FunctionDef], ctr: List[int]
+) -> Tuple[IRList, ExprIR]:
+    name = str(tup[1])
+    arg_irs: Tuple[ExprIR, ...] = tuple(tuple(x) for x in tup[2])
+    if name not in funcs:
+        raise ValueError(f"undefined function {name!r}")
+    fd = funcs[name]
+    if len(arg_irs) != len(fd.params):
+        raise ValueError(f"{name}: expected {len(fd.params)} args, got {len(arg_irs)}")
+    pre: IRList = []
+    cid = ctr[0]
+    ctr[0] += 1
+    prefix = f"_inline_{name}_{cid}_"
+    locals_ = _function_locals(fd.body, fd.params)
+    mp = {n: prefix + n for n in locals_}
+    arg_tmps: List[str] = []
+    for i, air in enumerate(arg_irs):
+        h_sub, eir = expand_expr(list(air), funcs, ctr)
+        pre.extend(h_sub)
+        an = f"{prefix}__arg{i}"
+        pre.append(("OP_ASSIGN", an, eir))
+        arg_tmps.append(an)
+    for pname, an in zip(fd.params, arg_tmps):
+        pre.append(("OP_ASSIGN", mp[pname], [("OP_LOAD", an)]))
+    body = fd.body
+    assert body[-1][0] == "OP_RETURN"
+    for st in body[:-1]:
+        mst = _mangle_stmt(tuple(st) if isinstance(st, list) else st, mp)
+        pre.extend(expand_stmt(mst, funcs, ctr))
+    ret_ir = list(body[-1][1])
+    ret_ir = _mangle_expr(ret_ir, mp)
+    hret, re = expand_expr(ret_ir, funcs, ctr)
+    pre.extend(hret)
+    res = f"{prefix}ret"
+    pre.append(("OP_ASSIGN", res, re))
+    return pre, [("OP_LOAD", res)]
+
+
+def _function_locals(body: IRList, params: Tuple[str, ...]) -> Set[str]:
+    names: Set[str] = set(params)
+    for st in body[:-1]:
+        names |= _names_assigned_in_stmt(tuple(st) if isinstance(st, list) else st)
+    return names
+
+
+def _names_assigned_in_stmt(stmt: Stmt) -> Set[str]:
+    op = stmt[0]
+    if op == "OP_ASSIGN":
+        return {str(stmt[1])}
+    if op == "OP_CONDITIONAL":
+        s: Set[str] = set()
+        for x in stmt[2]:
+            s |= _names_assigned_in_stmt(tuple(x) if isinstance(x, list) else x)
+        for x in stmt[3]:
+            s |= _names_assigned_in_stmt(tuple(x) if isinstance(x, list) else x)
+        return s
+    if op == "OP_LOOP":
+        s = set()
+        for x in stmt[2]:
+            s |= _names_assigned_in_stmt(tuple(x) if isinstance(x, list) else x)
+        return s
+    return set()
+
+
+def _mangle_stmt(stmt: Stmt, mp: Dict[str, str]) -> Stmt:
+    op = stmt[0]
+    if op == "OP_ASSIGN":
+        k = str(stmt[1])
+        return ("OP_ASSIGN", mp.get(k, k), _mangle_expr(list(stmt[2]), mp))
+    if op == "OP_EXPR_STMT":
+        return ("OP_EXPR_STMT", _mangle_expr(list(stmt[1]), mp))
+    if op == "OP_CONDITIONAL":
+        return (
+            "OP_CONDITIONAL",
+            _mangle_expr(list(stmt[1]), mp),
+            [_mangle_stmt(tuple(x) if isinstance(x, list) else x, mp) for x in stmt[2]],
+            [_mangle_stmt(tuple(x) if isinstance(x, list) else x, mp) for x in stmt[3]],
+        )
+    if op == "OP_LOOP":
+        return (
+            "OP_LOOP",
+            _mangle_expr(list(stmt[1]), mp),
+            [_mangle_stmt(tuple(x) if isinstance(x, list) else x, mp) for x in stmt[2]],
+        )
+    if op == "OP_RETURN":
+        return ("OP_RETURN", _mangle_expr(list(stmt[1]), mp))
+    raise ValueError(f"_mangle_stmt: unknown {op}")
+
+
+def _mangle_expr(expr: ExprIR, mp: Dict[str, str]) -> ExprIR:
+    out: ExprIR = []
+    for tup in expr:
+        if not isinstance(tup, tuple) or not tup:
+            out.append(tup)
+            continue
+        op = tup[0]
+        if op == "OP_LOAD" and len(tup) > 1:
+            k = str(tup[1])
+            out.append(("OP_LOAD", mp.get(k, k)))
+        elif op == "OP_CALL":
+            args = tuple(_mangle_expr(list(a), mp) for a in tup[2])
+            out.append(("OP_CALL", str(tup[1]), args))
+        elif op == "OP_CONST":
+            out.append(tup)
+        elif op == "OP_NEG":
+            out.append(tup)
+        elif op == "OP_VEC_PACK":
+            out.append(tup)
+        elif op in ("OP_ADD", "OP_SUB", "OP_MUL", "OP_DIV", "OP_INDEX") or (
+            isinstance(op, str) and op.startswith("OP_CMP_")
+        ):
+            out.append(tup)
+        else:
+            raise ValueError(f"_mangle_expr: unknown {op}")
+    return out
+
+
+def _function_def_from_tree(t: Tree) -> FunctionDef:
+    assert t.data == "function_def"
+    ch = list(t.children)
+    name = str(ch[0])
+    if len(ch) == 2:
+        params = ()
+        inner = ch[1]
+    elif len(ch) == 3:
+        mid, inner = ch[1], ch[2]
+        if mid is None:
+            params = ()
+        elif isinstance(mid, Tree) and mid.data == "param_list":
+            params = tuple(str(x) for x in mid.children)
+        else:
+            raise ValueError("malformed function_def")
+    else:
+        raise ValueError("malformed function_def")
+    if not isinstance(inner, Tree) or inner.data != "inner":
+        raise ValueError("malformed function_def")
+    body = _inner(inner, allow_return=True)
+    _validate_fn_body(body)
+    return FunctionDef(name=name, params=params, body=body)
+
+
+def _validate_fn_body(body: IRList) -> None:
+    if not body or body[-1][0] != "OP_RETURN":
+        raise ValueError("function must end with a return statement")
+    if _returns_before_tail(body[:-1]):
+        raise ValueError("MVP: only a single return allowed, at end of function body")
+
+
+def _returns_before_tail(stmts: IRList) -> bool:
+    for st in stmts:
+        if _stmt_has_return(tuple(st) if isinstance(st, list) else st):
+            return True
+    return False
+
+
+def _stmt_has_return(stmt: Stmt) -> bool:
+    op = stmt[0]
+    if op == "OP_RETURN":
+        return True
+    if op == "OP_CONDITIONAL":
+        for x in stmt[2]:
+            if _stmt_has_return(tuple(x) if isinstance(x, list) else x):
+                return True
+        for x in stmt[3]:
+            if _stmt_has_return(tuple(x) if isinstance(x, list) else x):
+                return True
+    if op == "OP_LOOP":
+        for x in stmt[2]:
+            if _stmt_has_return(tuple(x) if isinstance(x, list) else x):
+                return True
+    return False
+
+
+def _function_name_from_postfix(t: Tree) -> str:
+    if t.data == "postfix_expr" and len(t.children) == 1:
+        t = t.children[0]
+    if t.data != "atom":
+        raise ValueError("only direct name calls are supported (e.g. add(1, 2))")
+    ch = t.children
+    if len(ch) != 1 or not isinstance(ch[0], Token) or ch[0].type != "NAME":
+        raise ValueError("call target must be a simple identifier")
+    return str(ch[0])
 
 
 def ir_to_digraph(ir: IRList) -> nx.DiGraph:
@@ -34,7 +355,11 @@ def ir_to_digraph(ir: IRList) -> nx.DiGraph:
     return G
 
 
-def _stmt(t: Tree) -> IRList:
+def _stmt(t: Tree, *, allow_return: bool = False) -> IRList:
+    if t.data == "return_stmt":
+        if not allow_return:
+            raise ValueError("return outside function")
+        return [("OP_RETURN", _expr(t.children[0]))]
     if t.data == "assign_stmt":
         name = str(t.children[0])
         return [("OP_ASSIGN", name, _expr(t.children[1]))]
@@ -42,27 +367,27 @@ def _stmt(t: Tree) -> IRList:
         return [("OP_EXPR_STMT", _expr(t.children[0]))]
     if t.data == "if_stmt":
         cond = _expr(t.children[0])
-        then_ir = _inner(t.children[1])
+        then_ir = _inner(t.children[1], allow_return=allow_return)
         if len(t.children) > 2:
             eb = t.children[2]
             assert eb.data == "else_block"
-            else_ir = _inner(eb.children[0])
+            else_ir = _inner(eb.children[0], allow_return=allow_return)
         else:
             else_ir = []
         return [("OP_CONDITIONAL", cond, then_ir, else_ir)]
     if t.data == "while_stmt":
         trees = _child_trees(t)
         cond = _expr(trees[0])
-        body_ir = _inner(trees[1])
+        body_ir = _inner(trees[1], allow_return=allow_return)
         return [("OP_LOOP", cond, body_ir)]
     raise ValueError(f"unknown statement {t.data}")
 
 
-def _inner(t: Tree) -> IRList:
+def _inner(t: Tree, *, allow_return: bool = False) -> IRList:
     assert t.data == "inner"
     acc: IRList = []
     for c in t.children:
-        acc.extend(_stmt(c))
+        acc.extend(_stmt(c, allow_return=allow_return))
     return acc
 
 
@@ -138,8 +463,12 @@ def _postfix_expr(t: Tree) -> List[tuple]:
             if c0.data == "atom":
                 return _atom(c0)
             return _postfix_expr(c0)
-        base, idx_tree = ch[0], ch[1]
-        return _postfix_expr(base) + _expr(idx_tree) + [("OP_INDEX",)]
+        base, second = ch[0], ch[1]
+        if isinstance(second, Tree) and second.data == "call_args":
+            fname = _function_name_from_postfix(base)
+            arg_irs = tuple(_expr(c) for c in second.children)
+            return [("OP_CALL", fname, arg_irs)]
+        return _postfix_expr(base) + _expr(second) + [("OP_INDEX",)]
     raise ValueError(f"unknown postfix_expr {t.data}")
 
 
@@ -181,10 +510,6 @@ def _number(tok: Token) -> int | float:
     if "." in s or "e" in s.lower():
         return float(s)
     return int(s)
-
-
-Stmt = Tuple[Any, ...]
-ExprIR = List[Tuple[Any, ...]]
 
 
 def _infer_expr_output_width(expr: ExprIR, known: Dict[str, int]) -> int:

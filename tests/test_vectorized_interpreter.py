@@ -96,3 +96,37 @@ def test_literal_vector_times_scalar_interpreted_block():
     out = block(h)
     yc = abi["y"]
     assert torch.allclose(out[:, yc : yc + 2], torch.tensor([[2.0, 4.0], [2.0, 4.0]]))
+
+
+def test_loop_snapshots_preserve_vector_column_width():
+    """``snapshot_env`` stacks (B,K) state when ``abi_widths`` names a width > 1."""
+    reset_parser()
+    ir = ast_to_ir(
+        parse_ax(
+            "x = [1.0, 2.0];\n"
+            "while (i > 0) {\n"
+            "  x = x * 2.0;\n"
+            "  i = i - 1;\n"
+            "}\n"
+        )
+    )
+    loop = next(s for s in ir if s[0] == "OP_LOOP")
+    cond_ir, body_ir = loop[1], loop[2]
+    prelude = [ir[0]]
+    abi = extract_global_abi(ir, max_vars=16)
+    aw = extract_abi_widths(ir, max_vars=16)
+    seed = make_seed_map(cond_ir, body_ir, 16)
+    h = torch.zeros(2, 16)
+    h[:, abi["i"]] = torch.tensor([2.0, 1.0])
+    seq, m = run_loop_snapshots(
+        h,
+        cond_ir,
+        body_ir,
+        dim=16,
+        max_unroll=3,
+        seed_map=seed,
+        prelude_stmts=prelude,
+        abi_widths=aw,
+    )
+    assert seq.shape[0] == 2 and seq.shape[1] == 3
+    assert seq.shape[2] >= 16

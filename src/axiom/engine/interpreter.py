@@ -205,18 +205,29 @@ def snapshot_env(
     B: int,
     device: torch.device,
     dtype: torch.dtype,
+    var_widths: Optional[Dict[str, int]] = None,
 ) -> torch.Tensor:
-    z = _batch_zeros(B, device, dtype)
+    z1 = _batch_zeros(B, device, dtype)
+    vw = var_widths or {}
     cols: List[torch.Tensor] = []
     for k in var_order:
-        t = env.get(k, z)
-        if t.dim() != 1:
-            raise ValueError(
-                f"snapshot_env: variable {k!r} has shape {tuple(t.shape)}; "
-                "only (B,) loop state is supported (no vector temporaries in loop env)."
-            )
-        cols.append(t)
-    return torch.stack(cols, dim=1)
+        w = max(1, int(vw.get(k, 1)))
+        t = env.get(k)
+        if t is None:
+            cols.append(torch.zeros(B, w, device=device, dtype=dtype))
+        elif w == 1:
+            if t.dim() != 1 or int(t.shape[0]) != B:
+                raise ValueError(
+                    f"snapshot_env: variable {k!r} expected (B,) with B={B}, got {tuple(t.shape)}"
+                )
+            cols.append(t.unsqueeze(1))
+        else:
+            if t.dim() != 2 or int(t.shape[0]) != B or int(t.shape[1]) != w:
+                raise ValueError(
+                    f"snapshot_env: variable {k!r} expected (B, {w}), got {tuple(t.shape)}"
+                )
+            cols.append(t)
+    return torch.cat(cols, dim=1) if cols else torch.zeros(B, 0, device=device, dtype=dtype)
 
 
 def run_while_loop(
@@ -231,6 +242,7 @@ def run_while_loop(
     device: torch.device,
     dtype: torch.dtype,
     parent_active: Optional[torch.Tensor] = None,
+    var_widths: Optional[Dict[str, int]] = None,
 ) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
     """
     Runs exactly ``max_unroll`` iterations (no early ``break``). When the condition is false,
@@ -256,8 +268,13 @@ def run_while_loop(
                 device=device,
                 dtype=dtype,
                 active_mask=entering,
+                abi_widths=var_widths,
             )
-        snaps.append(snapshot_env(env, var_order, B=B, device=device, dtype=dtype))
+        snaps.append(
+            snapshot_env(
+                env, var_order, B=B, device=device, dtype=dtype, var_widths=var_widths
+            )
+        )
         masks.append(entering.clone())
     return snaps, masks
 
@@ -272,9 +289,11 @@ def exec_stmt(
     device: torch.device,
     dtype: torch.dtype,
     active_mask: Optional[torch.Tensor] = None,
+    abi_widths: Optional[Dict[str, int]] = None,
 ) -> None:
     if active_mask is None:
         active_mask = _all_active(B, device)
+    aw = abi_widths or {}
     op = stmt[0]
     if op == "OP_ASSIGN":
         nv = eval_expr(env, stmt[2], B=B, device=device, dtype=dtype)
@@ -289,10 +308,30 @@ def exec_stmt(
         base = {k: v.clone() for k, v in env.items()}
         then_env = {k: v.clone() for k, v in env.items()}
         for s in stmt[2]:
-            exec_stmt(then_env, s, B=B, dim=dim, max_unroll=max_unroll, device=device, dtype=dtype, active_mask=active_mask)
+            exec_stmt(
+                then_env,
+                s,
+                B=B,
+                dim=dim,
+                max_unroll=max_unroll,
+                device=device,
+                dtype=dtype,
+                active_mask=active_mask,
+                abi_widths=aw,
+            )
         else_env = {k: v.clone() for k, v in env.items()}
         for s in stmt[3]:
-            exec_stmt(else_env, s, B=B, dim=dim, max_unroll=max_unroll, device=device, dtype=dtype, active_mask=active_mask)
+            exec_stmt(
+                else_env,
+                s,
+                B=B,
+                dim=dim,
+                max_unroll=max_unroll,
+                device=device,
+                dtype=dtype,
+                active_mask=active_mask,
+                abi_widths=aw,
+            )
         sel = cond_vec != 0
         for k in env.keys():
             te, ee = then_env[k], else_env[k]
@@ -316,6 +355,7 @@ def exec_stmt(
             device=device,
             dtype=dtype,
             parent_active=active_mask,
+            var_widths=aw,
         )
     else:
         raise ValueError(f"unknown stmt {op}")
@@ -366,7 +406,17 @@ def run_loop_snapshots(
             else:
                 env[name] = h_batch[:, idx : idx + w].clone()
     for st in prelude_stmts:
-        exec_stmt(env, st, B=B, dim=dim, max_unroll=max_unroll, device=dev, dtype=dt, active_mask=None)
+        exec_stmt(
+            env,
+            st,
+            B=B,
+            dim=dim,
+            max_unroll=max_unroll,
+            device=dev,
+            dtype=dt,
+            active_mask=None,
+            abi_widths=aw,
+        )
     if max_unroll == 0:
         z = torch.zeros(B, 0, dim, device=dev, dtype=dt)
         m = torch.empty(B, 0, dtype=torch.bool, device=dev)
@@ -382,6 +432,7 @@ def run_loop_snapshots(
         device=dev,
         dtype=dt,
         parent_active=None,
+        var_widths=aw,
     )
     mat = torch.stack(snaps, dim=1)
     seq_mask = torch.stack(masks, dim=1)

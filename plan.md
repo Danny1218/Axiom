@@ -50,7 +50,11 @@
 
 **Phase 28 (removed):** Premier League / **`football`** dataset and **`examples/football.ax`** were dropped to narrow scope.
 
-**Phase 29 (in progress):** **1D tensor literals & indexing** — Grammar **`array_literal`** / **`postfix_expr`** index; IR **`OP_VEC_PACK`**, **`OP_INDEX`**. **`extract_abi_layout` / `extract_abi_widths`**: per-name **start column** + **width**; stack-based **`_infer_expr_output_width`** so e.g. **`y = x * 2`** gets **`width(y) = width(x)`** when **`x`** is a packed vector. **`ExecutionGraph.abi_widths`**, topology **`build_execution_graph_from_ir`** span check vs **`supernet.dim`**. **`InterpretedBlock`**, **`InterpretedLiquidLoop`**, **`ConditionalSinkhornBlock`**, **`run_loop_snapshots`**: load/store **column spans**. **`execution_topology_to_dict`** writes **`abi_widths`**; **`load_execution_bundle`** resolves from JSON or IR. **`AxiomRunner`** / **`AxiomDataset`**: fill and decode **multi-column** ABI rows (scalar dict values **broadcast** across width).
+**Phase 29 (complete):** **1D tensor literals & indexing** — Grammar **`array_literal`** / **`postfix_expr`** index; IR **`OP_VEC_PACK`**, **`OP_INDEX`**. **`extract_abi_layout` / `extract_abi_widths`**: per-name **start column** + **width**; stack-based **`_infer_expr_output_width`**. **`ExecutionGraph.abi_widths`**, **`InterpretedBlock` / loops**: load/store **column spans**. **`execution_topology_to_dict`** / **`load_execution_bundle`** / **`AxiomRunner`** / **`AxiomDataset`**: multi-column ABI.
+
+**Phase 30 (complete):** **User functions (macro inlining)** — Grammar **`def`**, **`return`**, calls **`name(args)`** via **`postfix_expr`**. IR **`OP_CALL`**, **`OP_RETURN`** inside function bodies only. **`parse_program(tree)`** → **`dict[str, FunctionDef]`** + main stmt IR; **`ast_to_ir`** runs **`expand_function_calls`** (per-call **`_inline_{name}_{id}_`** mangling, param bind, body rewrite). MVP: **one tail `return`**, no early return inside **`if`/`while`**. **`parser.parse_ax_program`** wraps parse + split. Tests: **`tests/test_parser.py`**, **`tests/test_function_inline.py`**.
+
+**Phase 31 (complete):** **Vectorized loops + compile parity** — **`snapshot_env`**: optional **`var_widths`** so loop state can be **`(B, K)`** per name (concat on dim 1). **`run_while_loop` / `run_loop_snapshots` / `exec_stmt`**: thread **`abi_widths`**. **`tests/test_vectorized_interpreter.py`** loop + vector; **`tests/test_meta_compiler.py`** **`torch.compile(..., aot_eager, fullgraph=True)`** on **`InterpretedBlock`** with **`a = [1.0, 2.0]; b = a * 2.0;`** (note: PyTorch **`(B,2)*(B,)`** only broadcasts for **`B <= 2`** on this path — broader fix is future **`OP_CONST` → (B,1)** / explicit broadcast in **`eval_expr`**).
 
 ## Layout
 
@@ -81,4 +85,4 @@ axiom inspect
 
 ## Next
 
-**Phase 2:** **`def` / call** with macro inlining on the flow graph. **Phase 3:** Broader tensor ops / **`meta_compiler`** parity for vector code paths. Product fork: **Path A** (vertical app) vs **B** (language) vs **C** (PyPI)—see **`readme.md` § Road ahead**. Engineering: CSV classification metric; richer Titanic ABI; Dynamo hardening; optional Graphviz WASM on Windows.
+**Phase 32 (ideas):** **`OP_CONST` broadcasting** for **`(B,K)`** rhs consistently for all **`B`**; early **`return`** via masking or restricted control flow; nested non-trivial call targets (**`f()[i]`**). Product fork: **Path A** / **B** / **C** — **`readme.md` § Road ahead**. Engineering: CSV metric; richer Titanic ABI; Dynamo hardening; optional Graphviz WASM on Windows.

@@ -1,4 +1,4 @@
-// Axiom — statements, arithmetic, comparisons, if/else, while, array literals, indexing
+// Axiom — statements, arithmetic, comparisons, if/else, while, array literals, indexing, functions
 // Unsigned NUMBER only: SIGNED_NUMBER would merge `1+2` into `1` and `+2`.
 %import common.CNAME -> NAME
 %import common.WS_INLINE
@@ -9,7 +9,12 @@
 COMMENT: "//" /[^\n]/*
 %ignore COMMENT
 
-start: statement*
+start: program_item*
+
+?program_item: function_def | statement
+
+function_def: "def" NAME "(" [param_list] ")" "{" inner "}"
+param_list: NAME ("," NAME)*
 
 WHILE: "while"
 
@@ -17,6 +22,9 @@ WHILE: "while"
          | if_stmt
          | while_stmt
          | expr_stmt
+         | return_stmt
+
+return_stmt: "return" expr ";"
 
 assign_stmt: NAME "=" expr ";"
 
@@ -49,7 +57,9 @@ DIV: "/"
 
 ?product: postfix_expr ((MUL | DIV) postfix_expr)*
 
-postfix_expr: atom | postfix_expr "[" expr "]"
+call_args: expr ("," expr)*
+
+postfix_expr: atom | postfix_expr "[" expr "]" | postfix_expr "(" [call_args] ")"
 
 array_literal: "[" _array_elems "]"
 _array_elems: expr ("," expr)*

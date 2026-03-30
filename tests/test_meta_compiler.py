@@ -1,6 +1,10 @@
 import torch
+import torch._dynamo.config as dynamo_config
 import torch.nn as nn
 
+from axiom.compiler.ir import ast_to_ir, extract_abi_widths, extract_global_abi
+from axiom.compiler.parser import parse_ax, reset_parser
+from axiom.engine.block_executor import InterpretedBlock
 from axiom.engine.meta_compiler import MetaCompiler
 from axiom.engine.router import SinkhornRouter
 from axiom.engine.supernet import LatentSupernet
@@ -39,3 +43,20 @@ def test_meta_respects_max_unmasks():
     thr = {"cond_0": 0.3, "cond_1": 0.3}
     out = mc.react_to_signals(sigs, sn, max_unmasks=1, block_thresholds=thr)
     assert len(out) == 1
+
+
+def test_compile_interpreted_block_vector_literal_aot_eager():
+    """Array literal path uses ``torch.stack``; compiled forward must match eager (Phase 3)."""
+    reset_parser()
+    ir = ast_to_ir(parse_ax("a = [1.0, 2.0]; b = a * 2.0;"))
+    abi = extract_global_abi(ir, max_vars=16)
+    aw = extract_abi_widths(ir, max_vars=16)
+    block = InterpretedBlock(ir, abi, abi_widths=aw)
+    # B=2: PyTorch broadcasts (B,K)*(B,) only for certain B; B>2 can error on this IR path.
+    h = torch.zeros(2, 16, requires_grad=True)
+    dynamo_config.capture_dynamic_output_shape_ops = True
+    out_e = block(h)
+    out_j = torch.compile(block, backend="aot_eager", fullgraph=True)(h)
+    assert torch.allclose(out_e, out_j, atol=1e-5, rtol=1e-5)
+    bc = abi["b"]
+    assert torch.allclose(out_j[:, bc : bc + 2], torch.tensor([[2.0, 4.0], [2.0, 4.0]]))

@@ -1,4 +1,8 @@
-"""Compile-time wiring: IR → execution DAG (Sinkhorn at OP_CONDITIONAL)."""
+"""Compile-time wiring: IR → execution DAG (Sinkhorn at OP_CONDITIONAL).
+
+User ``def`` / calls are expanded to a flat IR in ``ast_to_ir`` via
+``expand_function_calls`` before graphs are built (macro inlining, no call stack).
+"""
 
 from __future__ import annotations
 
