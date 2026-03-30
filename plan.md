@@ -40,12 +40,15 @@
 
 **Phase 23 (complete):** **Packaging** — Installable **`axiom-engine`** (**`pyproject.toml`**, **`src/axiom/`**): **`compiler/`**, **`engine/`**, **`primitives/`**, **`tools/`**, **`cli.py`**. Imports are **`axiom.*`**. Global CLI: **`axiom train …`**, **`axiom inspect`** (**`streamlit run`** with **`--server.fileWatcherType none`** to avoid PyTorch / file-watcher noise). **`pip install -e .`** for dev; **`grammar.lark`** in **`package-data`**. **`tests/`**, **`examples/`** stay at repo root; examples assume editable install.
 
+**Phase 24 (complete):** **Sequence crucible** — **`examples/sequence.ax`**: prelude **`x`**, **`step`**, **`while (step < 10.0)`** body **`step = step + 1.0`**, then **`y_pred`**. Drives **`InterpretedLiquidLoop`** (**`loop_max_unroll=10`**) → **`LiquidKANNode`** on **`(B, T, D)`** snapshots. **`examples/run_sequence.py`**: 1k **`x ~ U(0, 2π)`**, target **`sin(x)`**, **`AxiomDataset`** (**`target_key="target"`**), **`EvolutionaryTrainer`** (**`target_col=abi["y_pred"]`**), test MSE on **`y_pred`**. Tests: **`tests/test_sequence_crucible.py`**.
+
 ## Layout
 
 - `pyproject.toml` — **`axiom-engine`**, script **`axiom` → `axiom.cli:main`**
 - `src/axiom/cli.py` — train / inspect subcommands
 - `src/axiom/tools/inspector.py`, `glass_box.py` — Glass Box
 - `examples/titanic.ax`, `examples/run_titanic.py` — Titanic pipeline (**`pip install -e .`** first)
+- `examples/sequence.ax`, `examples/run_sequence.py` — sine + **`OP_LOOP`** / Liquid-KAN smoke
 - `train.ax` — default **`axiom train`** sketch (cwd)
 - `src/axiom/compiler/`, `src/axiom/engine/`, `src/axiom/primitives/`
 - `tests/`
@@ -66,4 +69,4 @@ axiom inspect
 
 ## Next
 
-More domain examples, feature-rich Titanic encodings (Age/Fare in ABI), distributed dataloader (see `readme.md`). Further Dynamo hardening if new IR ops add Python breaks. Optional: embed Graphviz WASM fallback if `dot` is missing on Windows.
+Tune sequence example (lr, epochs, trunk trainable slice) for lower sine MSE; richer time-series encodings. Feature-rich Titanic (Age/Fare in ABI), distributed dataloader (see `readme.md`). Dynamo hardening for new IR ops. Optional: Graphviz WASM if **`dot`** missing on Windows.
