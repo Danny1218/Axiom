@@ -14,6 +14,6 @@ def test_wire_execution_graph_matches_build():
     sn.set_masks({"then_ex": 1.0, "else_ex": 1.0})
     g = wire_execution_graph(ir, sn, [("then_ex", "else_ex")])
     x = torch.randn(4, 6, requires_grad=True)
-    y = g(x)
+    y, _ = g(x)
     y.sum().backward()
     assert x.grad is not None

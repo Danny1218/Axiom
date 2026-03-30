@@ -54,14 +54,17 @@ while (i > 0) {
     torch.manual_seed(42)
     x = torch.randn(4, 5)
     with torch.no_grad():
-        y0 = g(x)
+        y0, s0 = g(x)
     prefix = tmp_path / "bundle"
     save_execution_bundle(g, prefix, ir=ir)
     assert Path(str(prefix) + "_topology.json").is_file()
     g2 = load_execution_bundle(prefix)
     with torch.no_grad():
-        y1 = g2(x)
+        y1, s1 = g2(x)
     assert torch.allclose(y0, y1, atol=0, rtol=0)
+    assert set(s0.keys()) == set(s1.keys())
+    for k in s0:
+        assert torch.allclose(s0[k], s1[k], atol=0, rtol=0)
 
 
 def test_load_execution_bundle_stmt_only(tmp_path):
@@ -73,7 +76,12 @@ def test_load_execution_bundle_stmt_only(tmp_path):
     save_execution_bundle(g, prefix, ir=ir)
     g2 = load_execution_bundle(prefix)
     x = torch.randn(2, 4)
-    assert torch.allclose(g(x), g2(x))
+    o1, sh1 = g(x)
+    o2, sh2 = g2(x)
+    assert torch.allclose(o1, o2)
+    assert set(sh1.keys()) == set(sh2.keys())
+    for k in sh1:
+        assert torch.allclose(sh1[k], sh2[k], atol=0, rtol=0)
 
 
 def test_load_execution_bundle_raises_missing_json(tmp_path):
@@ -98,4 +106,9 @@ def test_conditional_node_carries_expert_names_in_topology_json(tmp_path):
     save_execution_bundle(g, prefix, ir=ir)
     g2 = load_execution_bundle(prefix)
     x = torch.randn(1, 5)
-    assert torch.allclose(g(x), g2(x))
+    o1, sh1 = g(x)
+    o2, sh2 = g2(x)
+    assert torch.allclose(o1, o2)
+    assert set(sh1.keys()) == set(sh2.keys())
+    for k in sh1:
+        assert torch.allclose(sh1[k], sh2[k], atol=0, rtol=0)

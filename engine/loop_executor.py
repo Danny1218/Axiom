@@ -35,7 +35,7 @@ class InterpretedLiquidLoop(nn.Module):
         self.max_unroll = max_unroll
         self.kan = LiquidKANNode(dim, num_basis=num_basis, max_unroll=max_unroll)
 
-    def forward(self, h: torch.Tensor) -> torch.Tensor:
+    def forward(self, h: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         lead = h.shape[:-1]
         d = h.shape[-1]
         flat = h.reshape(-1, d)
@@ -54,4 +54,4 @@ class InterpretedLiquidLoop(nn.Module):
             y = self.kan.forward(flat)
         else:
             y = self.kan.forward_sequence_tensors(seq, h_init=flat, mask=seq_mask)
-        return y.reshape(*lead, d)
+        return y.reshape(*lead, d), {}

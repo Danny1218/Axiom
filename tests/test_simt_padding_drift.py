@@ -27,8 +27,8 @@ while (x > 0) {
     h_batch[0, 0] = 2.0
     h_batch[1, 0] = 10.0
 
-    out_single = g(h_single)
-    out_batch = g(h_batch)
+    out_single, _ = g(h_single)
+    out_batch, _ = g(h_batch)
 
     assert torch.allclose(out_single[0], out_batch[0], atol=1e-5, rtol=1e-5)
 

@@ -64,10 +64,9 @@ class ConditionalSinkhornBlock(nn.Module):
             epsilon=epsilon,
             mutation_entropy_norm_threshold=mutation_entropy_norm_threshold,
         )
-        self.last_shadow_outputs: Dict[str, torch.Tensor] = {}
 
-    def forward(self, h: torch.Tensor) -> torch.Tensor:
-        self.last_shadow_outputs = {}
+    def forward(self, h: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+        local_shadows: Dict[str, torch.Tensor] = {}
         it = self.supernet._name_to_idx[self.expert_then]
         ie = self.supernet._name_to_idx[self.expert_else]
         mask = torch.zeros(2, device=h.device, dtype=torch.bool)
@@ -76,7 +75,7 @@ class ConditionalSinkhornBlock(nn.Module):
         if self.supernet.adapter_mask[ie] >= 0.5:
             mask[1] = True
         if not mask.any():
-            return h
+            return h, local_shadows
         w = self.router(h, expert_mask=mask)
         *lead, _ = w.shape
         w2 = w.reshape(-1, 2)
@@ -88,13 +87,13 @@ class ConditionalSinkhornBlock(nn.Module):
         c0 = w2[:, 0:1] * y0
         c1 = w2[:, 1:2] * y1
         if sh0:
-            self.last_shadow_outputs[self.expert_then] = y0
+            local_shadows[self.expert_then] = y0
             c0 = c0.detach()
         if sh1:
-            self.last_shadow_outputs[self.expert_else] = y1
+            local_shadows[self.expert_else] = y1
             c1 = c1.detach()
         out = h_flat + c0 + c1
-        return out.reshape(*lead, h.shape[-1])
+        return out.reshape(*lead, h.shape[-1]), local_shadows
 
 
 class ExecutionGraph(nn.Module):
@@ -116,13 +115,19 @@ class ExecutionGraph(nn.Module):
         self.add_module("supernet", supernet)
         self.add_module("node_modules", node_modules)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         h = self.supernet.trunk(x)
+        all_shadows: Dict[str, torch.Tensor] = {}
         for name in self.topo_names:
             if name == self.entry:
                 continue
-            h = self.node_modules[name](h)
-        return h
+            mod = self.node_modules[name]
+            if isinstance(mod, (ConditionalSinkhornBlock, InterpretedLiquidLoop)):
+                h, shadows = mod(h)
+                all_shadows.update(shadows)
+            else:
+                h = mod(h)
+        return h, all_shadows
 
     def node_kind(self, name: str) -> str:
         return self.dag.nodes[name].get("kind", "unknown")
@@ -136,13 +141,6 @@ class ExecutionGraph(nn.Module):
 
     def routers(self) -> List[SinkhornRouter]:
         return [b.router for b in self.conditional_blocks()]
-
-    def shadow_locals(self) -> Dict[str, torch.Tensor]:
-        """Raw adapter outputs for shadow experts after the last `forward` (for localized loss)."""
-        acc: Dict[str, torch.Tensor] = {}
-        for b in self.conditional_blocks():
-            acc.update(b.last_shadow_outputs)
-        return acc
 
 
 def build_execution_graph_from_ir(

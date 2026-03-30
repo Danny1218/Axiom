@@ -24,20 +24,20 @@ def test_conditional_shadow_no_grad_through_main_but_local_ok():
     sn.is_shadow[sn._name_to_idx["t"]] = True
     blk = ConditionalSinkhornBlock(sn, "t", "e", num_iters=20, mutation_entropy_norm_threshold=1.01)
     h1 = torch.randn(4, 5, requires_grad=True)
-    out = blk(h1)
+    out, _ = blk(h1)
     out.sum().backward()
     assert sn.adapters["t"].U.grad is None
     assert sn.adapters["e"].U.grad is not None
 
     sn.zero_grad(set_to_none=True)
     h2 = torch.randn(4, 5, requires_grad=True)
-    blk(h2)
-    y_t = blk.last_shadow_outputs["t"]
+    _, shadows = blk(h2)
+    y_t = shadows["t"]
     (y_t.pow(2).mean()).backward()
     assert sn.adapters["t"].U.grad is not None
 
 
-def test_execution_graph_exposes_shadow_locals():
+def test_execution_graph_forward_returns_shadow_dict():
     reset_parser()
     ir = ast_to_ir(parse_ax("if (1 > 0) { a = 1; } else { a = 2; }"))
     sn = LatentSupernet(5, ("then_ex", "else_ex", "latent"), rank=2)
@@ -45,6 +45,5 @@ def test_execution_graph_exposes_shadow_locals():
     sn.is_shadow[sn._name_to_idx["then_ex"]] = True
     g = wire_execution_graph(ir, sn, [("then_ex", "else_ex")], mutation_entropy_norm_threshold=1.01)
     x = torch.randn(2, 5)
-    g(x)
-    loc = g.shadow_locals()
+    _, loc = g(x)
     assert "then_ex" in loc and loc["then_ex"].shape[0] == 2

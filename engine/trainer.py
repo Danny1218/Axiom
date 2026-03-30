@@ -13,7 +13,7 @@ from engine.topology import ExecutionGraph
 
 class EvolutionaryTrainer:
     """
-    Train `ExecutionGraph` with Adam. Main MSE plus summed localized MSE on `shadow_locals()`
+    Train `ExecutionGraph` with Adam. Main MSE plus summed localized MSE on returned shadow dict
     so shadow adapters receive gradients while their contribution to `out` stays detached.
     Shadow fitness uses epoch averages of those localized losses (not a single no_grad pass).
     """
@@ -24,6 +24,7 @@ class EvolutionaryTrainer:
         *,
         lr: float = 1e-2,
         shadow_fitness_epochs: int = 5,
+        compile_graph: bool = False,
     ) -> None:
         self.graph = graph
         self.lr = float(lr)
@@ -31,6 +32,15 @@ class EvolutionaryTrainer:
         self.criterion = nn.MSELoss()
         self.shadow_evaluators: Dict[str, ShadowFitnessEvaluator] = {}
         self.optimizer = torch.optim.Adam(self.graph.parameters(), lr=self.lr)
+        if compile_graph:
+            # SinkhornRouter uses `.item()` for mutation metadata; allow scalar capture so Dynamo does not diverge on restarts.
+            import torch._dynamo.config as dynamo_config
+
+            dynamo_config.capture_scalar_outputs = True
+            # aot_eager: no Inductor (portable); use default backend on Linux+GPU for Triton fusion.
+            self.step_fn: nn.Module = torch.compile(graph, backend="aot_eager")
+        else:
+            self.step_fn = graph
 
     def train_epoch(
         self,
@@ -44,9 +54,8 @@ class EvolutionaryTrainer:
         shadow_cnt: Dict[str, int] = {}
         for x, y in loader:
             self.optimizer.zero_grad(set_to_none=True)
-            out = self.graph(x)
+            out, locs = self.step_fn(x)
             loss = self.criterion(out, y)
-            locs = self.graph.shadow_locals()
             shadow_loss: Optional[torch.Tensor] = None
             for name, loc in locs.items():
                 m = F.mse_loss(loc, y)

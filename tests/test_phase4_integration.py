@@ -19,7 +19,7 @@ def test_loop_ax_file_and_graph_forward():
     sn.set_masks({"p": 1.0, "q": 1.0})
     g = wire_execution_graph(ir, sn, [], loop_max_unroll=4, loop_num_basis=6)
     x = torch.randn(3, 7, requires_grad=True)
-    y = g(x)
+    y, _ = g(x)
     assert y.shape == (3, 7)
     y.pow(2).sum().backward()
     assert x.grad is not None

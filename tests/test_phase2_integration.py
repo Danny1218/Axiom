@@ -21,7 +21,7 @@ def test_test_ax_topology_forward_backward():
     g = wire_execution_graph(ir, sn, [("branch_then", "branch_else")])
     assert any(g.node_kind(n) == "conditional" for n in g.topo_names)
     x = torch.randn(5, dim, requires_grad=True)
-    y = g(x)
+    y, _ = g(x)
     assert y.shape == (5, dim)
     y.pow(2).sum().backward()
     assert x.grad is not None and torch.isfinite(x.grad).all()
