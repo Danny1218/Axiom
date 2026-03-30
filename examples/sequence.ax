@@ -1,9 +1,13 @@
-// Sequence crucible: while loop drives InterpretedLiquidLoop + LiquidKANNode (RBF splines).
-// Trunk supplies angle x; loop integrates step; y_pred is the supervised output (fit to sin(x)).
-
-x = 0.0;
+// We multiply the input 'x' by 0.0 to initialize y_pred.
+// This adds 'x' to the global ABI so the DataLoader feeds it in,
+// WITHOUT destroying the dataset's value.
+y_pred = x * 0.0;
 step = 0.0;
+
+// The Liquid-KAN processes these 10 timesteps, evolving the entire 32-dim
+// latent space (including y_pred) using its non-linear RBF splines.
 while (step < 10.0) {
   step = step + 1.0;
 }
-y_pred = 0.0;
+// DO NOT add any assignments after the loop!
+// Let the KAN's final evolved state be the output.
