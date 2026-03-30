@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Iterable, List, Optional
+from typing import Dict, List, Optional
 
-from engine.router import SinkhornRouter
+import torch
+
 from engine.supernet import LatentSupernet
 
 
@@ -12,31 +13,31 @@ class MetaCompiler:
     def __init__(self, supernet: LatentSupernet) -> None:
         self.supernet = supernet
 
-    def react_to_router_signals(
+    def react_to_signals(
         self,
-        routers: Iterable[SinkhornRouter],
-        *,
+        signals_dict: Dict[str, torch.Tensor],
+        supernet: LatentSupernet,
         max_unmasks: int = 1,
+        *,
+        block_thresholds: Optional[Dict[str, float]] = None,
     ) -> List[str]:
         """
-        For each router whose last forward emitted `MutationSignal.triggered`, unmask up to
-        `max_unmasks` inactive experts as shadow (sandbox).
+        For each conditional block whose normalized routing entropy (scalar tensor) meets that
+        block's threshold, unmask up to `max_unmasks` inactive experts as shadow. `.item()` is
+        only used here, outside the compiled forward.
         """
         out: List[str] = []
         n = 0
-        for r in routers:
+        thr_map = block_thresholds or {}
+        default_thr = 0.92
+        for name, entropy_tensor in signals_dict.items():
             if n >= max_unmasks:
                 break
-            sig = r.last_mutation_signal
-            if sig is None or not sig.triggered:
+            thr = thr_map.get(name, default_thr)
+            if float(entropy_tensor.item()) < thr:
                 continue
-            name = self.supernet.unmask_next_inactive(shadow=True)
-            if name is not None:
-                out.append(name)
+            un = supernet.unmask_next_inactive(shadow=True)
+            if un is not None:
+                out.append(un)
                 n += 1
         return out
-
-    def on_mutation_signal(self, router: SinkhornRouter) -> Optional[str]:
-        """Convenience: single-router reaction (first unmask if triggered)."""
-        names = self.react_to_router_signals([router], max_unmasks=1)
-        return names[0] if names else None

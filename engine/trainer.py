@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from engine.fitness import ShadowFitnessEvaluator, Verdict, apply_shadow_verdict
+from engine.loop_executor import InterpretedLiquidLoop
 from engine.meta_compiler import MetaCompiler
 from engine.topology import ExecutionGraph
 
@@ -33,12 +34,19 @@ class EvolutionaryTrainer:
         self.shadow_evaluators: Dict[str, ShadowFitnessEvaluator] = {}
         self.optimizer = torch.optim.Adam(self.graph.parameters(), lr=self.lr)
         if compile_graph:
-            # SinkhornRouter uses `.item()` for mutation metadata; allow scalar capture so Dynamo does not diverge on restarts.
             import torch._dynamo.config as dynamo_config
 
-            dynamo_config.capture_scalar_outputs = True
-            # aot_eager: no Inductor (portable); use default backend on Linux+GPU for Triton fusion.
-            self.step_fn: nn.Module = torch.compile(graph, backend="aot_eager")
+            # SinkhornRouter uses mask.nonzero (dynamic A); required for compile + aot_eager.
+            dynamo_config.capture_dynamic_output_shape_ops = True
+            has_loop = any(
+                isinstance(graph.node_modules[n], InterpretedLiquidLoop)
+                for n in graph.topo_names
+            )
+            # InterpretedLiquidLoop uses Python control flow in the IR interpreter; fullgraph only for cond-only DAGs.
+            use_fullgraph = not has_loop
+            self.step_fn: nn.Module = torch.compile(
+                graph, backend="aot_eager", fullgraph=use_fullgraph
+            )
         else:
             self.step_fn = graph
 
@@ -54,10 +62,14 @@ class EvolutionaryTrainer:
         shadow_cnt: Dict[str, int] = {}
         for x, y in loader:
             self.optimizer.zero_grad(set_to_none=True)
-            out, locs = self.step_fn(x)
+            out, locs, signals = self.step_fn(x)
             loss = self.criterion(out, y)
             shadow_loss: Optional[torch.Tensor] = None
+            sn = self.graph.supernet
             for name, loc in locs.items():
+                i = sn._name_to_idx.get(name)
+                if i is None or not bool(sn.is_shadow[i].item()):
+                    continue
                 m = F.mse_loss(loc, y)
                 shadow_loss = m if shadow_loss is None else shadow_loss + m
                 key = name
@@ -71,7 +83,12 @@ class EvolutionaryTrainer:
             total += float(loss.detach().item())
             count += 1
             if meta_compiler is not None:
-                meta_compiler.react_to_router_signals(self.graph.routers(), max_unmasks=1)
+                meta_compiler.react_to_signals(
+                    signals,
+                    self.graph.supernet,
+                    max_unmasks=1,
+                    block_thresholds=self.graph.block_mutation_thresholds(),
+                )
         mean_loss = total / max(count, 1)
         epoch_means = {n: shadow_sum[n] / shadow_cnt[n] for n in shadow_sum if shadow_cnt.get(n, 0) > 0}
         self._shadow_epoch_end(epoch_means)

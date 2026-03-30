@@ -18,7 +18,7 @@ def test_op_loop_instantiates_interpreted_loop():
     assert isinstance(loop_mod.kan, LiquidKANNode)
     assert g.dag.nodes["loop_0"].get("body_ir") is not None
     x = torch.randn(2, 5)
-    y, _ = g(x)
+    y, _, _ = g(x)
     assert y.shape == (2, 5)
 
 

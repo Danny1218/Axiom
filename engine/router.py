@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import math
-from typing import Optional
+from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
-
-from engine.signals import MutationSignal
 
 
 def sinkhorn_balance(
@@ -48,12 +46,22 @@ class SinkhornRouter(nn.Module):
         self.epsilon = epsilon
         self.mutation_entropy_norm_threshold = mutation_entropy_norm_threshold
         self.proj = nn.Linear(dim, num_experts, bias=True)
-        self.last_mutation_signal: Optional[MutationSignal] = None
 
-    def forward(self, x: torch.Tensor, expert_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def _normalized_entropy_tensor(self, p_a: torch.Tensor) -> torch.Tensor:
+        """Batch-mean routing entropy / log(max(A,2)), clamped to [0, 1]; no Python branch on A (compile-safe)."""
+        p = p_a.clamp_min(1e-12)
+        ent = -(p * p.log()).sum(dim=-1).mean()
+        a = int(p_a.shape[-1])
+        den = math.log(max(a, 2))
+        return (ent / den).clamp(0.0, 1.0)
+
+    def forward(
+        self, x: torch.Tensor, expert_mask: Optional[torch.Tensor] = None
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         x: (..., dim) -> P: (..., E) with row-sums 1 on active support and balanced column totals
         over the batch. Inactive experts (mask 0) receive zero mass.
+        Also returns normalized_entropy as a 0-dim tensor (requires_grad follows P_active).
         """
         *lead, d = x.shape
         flat = x.reshape(-1, d)
@@ -65,29 +73,20 @@ class SinkhornRouter(nn.Module):
             mask = expert_mask.to(device=x.device, dtype=torch.bool).reshape(-1)
             if mask.numel() != self.num_experts:
                 raise ValueError("expert_mask length must match num_experts")
-        if not mask.any():
-            self.last_mutation_signal = MutationSignal(False, 0.0, 0, 0.0)
-            return torch.zeros(B, self.num_experts, device=x.device, dtype=x.dtype)
-
-        idx = mask.nonzero(as_tuple=False).squeeze(1)
+        # Dummy first expert when nothing is active so Sinkhorn always has A>=1 (no Python branch on mask.any()).
+        idx0 = torch.zeros(1, device=mask.device, dtype=torch.long)
+        dummy_active = torch.zeros(self.num_experts, device=mask.device, dtype=torch.bool).scatter(0, idx0, True)
+        none_active = (~mask.any()).expand_as(mask)
+        mask_eff = mask | (none_active & dummy_active)
+        idx = mask_eff.nonzero(as_tuple=False).squeeze(1)
         A = idx.numel()
         logits_a = logits[:, idx]
-        K = torch.exp(logits_a - logits_a.max(dim=-1, keepdim=True).values.detach())
+        k = torch.exp(logits_a - logits_a.max(dim=-1, keepdim=True).values.detach())
         row_target = torch.ones(B, device=x.device, dtype=x.dtype)
         col_target = torch.full((A,), float(B) / float(A), device=x.device, dtype=x.dtype)
-        P_a = sinkhorn_balance(K, row_target=row_target, col_target=col_target, num_iters=self.num_iters)
-        P = torch.zeros(B, self.num_experts, device=x.device, dtype=x.dtype)
-        P[:, idx] = P_a
-        self.last_mutation_signal = self._mutation_from_routing(P_a, A)
-        return P.reshape(*lead, self.num_experts)
-
-    def _mutation_from_routing(self, P_active: torch.Tensor, num_active: int) -> MutationSignal:
-        """High entropy ⇒ nearly uniform routing ⇒ trigger NAS mutation."""
-        if num_active <= 1:
-            return MutationSignal(False, 0.0, num_active, 0.0)
-        p = P_active.clamp_min(1e-12)
-        ent = -(p * p.log()).sum(dim=-1).mean()
-        h_max = math.log(num_active)
-        norm = (ent / h_max).clamp(0.0, 1.0).item()
-        triggered = norm >= self.mutation_entropy_norm_threshold
-        return MutationSignal(triggered, float(ent.item()), num_active, norm)
+        p_a = sinkhorn_balance(k, row_target=row_target, col_target=col_target, num_iters=self.num_iters)
+        p = torch.zeros(B, self.num_experts, device=x.device, dtype=x.dtype)
+        p[:, idx] = p_a
+        p = p * mask.to(dtype=p.dtype)
+        norm_ent = self._normalized_entropy_tensor(p_a) * mask.any().to(dtype=p.dtype)
+        return p.reshape(*lead, self.num_experts), norm_ent

@@ -47,6 +47,7 @@ class ConditionalSinkhornBlock(nn.Module):
         expert_then: str,
         expert_else: str,
         *,
+        block_name: str = "cond",
         num_iters: int = 8,
         epsilon: float = 0.1,
         mutation_entropy_norm_threshold: float = 0.92,
@@ -57,6 +58,7 @@ class ConditionalSinkhornBlock(nn.Module):
         self.supernet = supernet
         self.expert_then = expert_then
         self.expert_else = expert_else
+        self.block_name = block_name
         self.router = SinkhornRouter(
             supernet.dim,
             2,
@@ -65,35 +67,34 @@ class ConditionalSinkhornBlock(nn.Module):
             mutation_entropy_norm_threshold=mutation_entropy_norm_threshold,
         )
 
-    def forward(self, h: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    def forward(
+        self, h: torch.Tensor
+    ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
         local_shadows: Dict[str, torch.Tensor] = {}
         it = self.supernet._name_to_idx[self.expert_then]
         ie = self.supernet._name_to_idx[self.expert_else]
-        mask = torch.zeros(2, device=h.device, dtype=torch.bool)
-        if self.supernet.adapter_mask[it] >= 0.5:
-            mask[0] = True
-        if self.supernet.adapter_mask[ie] >= 0.5:
-            mask[1] = True
-        if not mask.any():
-            return h, local_shadows
-        w = self.router(h, expert_mask=mask)
+        mask = torch.stack(
+            [
+                (self.supernet.adapter_mask[it] >= 0.5).to(device=h.device, dtype=torch.bool),
+                (self.supernet.adapter_mask[ie] >= 0.5).to(device=h.device, dtype=torch.bool),
+            ],
+            dim=0,
+        )
+        w, entropy_tensor = self.router(h, expert_mask=mask)
         *lead, _ = w.shape
         w2 = w.reshape(-1, 2)
         h_flat = h.reshape(-1, h.shape[-1])
         y0 = self.supernet.adapters[self.expert_then](h_flat)
         y1 = self.supernet.adapters[self.expert_else](h_flat)
-        sh0 = bool(self.supernet.is_shadow[it].item())
-        sh1 = bool(self.supernet.is_shadow[ie].item())
-        c0 = w2[:, 0:1] * y0
-        c1 = w2[:, 1:2] * y1
-        if sh0:
-            local_shadows[self.expert_then] = y0
-            c0 = c0.detach()
-        if sh1:
-            local_shadows[self.expert_else] = y1
-            c1 = c1.detach()
+        y0_mix = torch.where(self.supernet.is_shadow[it] >= 0.5, y0.detach(), y0)
+        y1_mix = torch.where(self.supernet.is_shadow[ie] >= 0.5, y1.detach(), y1)
+        c0 = w2[:, 0:1] * y0_mix
+        c1 = w2[:, 1:2] * y1_mix
+        # Always expose raw adapter outputs; trainer applies localized MSE only when is_shadow.
+        local_shadows[self.expert_then] = y0
+        local_shadows[self.expert_else] = y1
         out = h_flat + c0 + c1
-        return out.reshape(*lead, h.shape[-1]), local_shadows
+        return out.reshape(*lead, h.shape[-1]), local_shadows, {self.block_name: entropy_tensor}
 
 
 class ExecutionGraph(nn.Module):
@@ -115,19 +116,32 @@ class ExecutionGraph(nn.Module):
         self.add_module("supernet", supernet)
         self.add_module("node_modules", node_modules)
 
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    def forward(
+        self, x: torch.Tensor
+    ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
         h = self.supernet.trunk(x)
         all_shadows: Dict[str, torch.Tensor] = {}
+        all_signals: Dict[str, torch.Tensor] = {}
         for name in self.topo_names:
             if name == self.entry:
                 continue
             mod = self.node_modules[name]
             if isinstance(mod, (ConditionalSinkhornBlock, InterpretedLiquidLoop)):
-                h, shadows = mod(h)
+                h, shadows, signals = mod(h)
                 all_shadows.update(shadows)
+                all_signals.update(signals)
             else:
                 h = mod(h)
-        return h, all_shadows
+        return h, all_shadows, all_signals
+
+    def block_mutation_thresholds(self) -> Dict[str, float]:
+        """Per conditional node: router entropy threshold for `MetaCompiler.react_to_signals`."""
+        out: Dict[str, float] = {}
+        for n in self.topo_names:
+            m = self.node_modules[n]
+            if isinstance(m, ConditionalSinkhornBlock):
+                out[n] = m.router.mutation_entropy_norm_threshold
+        return out
 
     def node_kind(self, name: str) -> str:
         return self.dag.nodes[name].get("kind", "unknown")
@@ -186,6 +200,7 @@ def build_execution_graph_from_ir(
                 supernet,
                 then_e,
                 else_e,
+                block_name=name,
                 num_iters=router_iters,
                 epsilon=router_eps,
                 mutation_entropy_norm_threshold=mutation_entropy_norm_threshold,

@@ -20,7 +20,7 @@ while (x > 0) {
     sn = LatentSupernet(4, ("e0", "e1"), rank=2)
     g = wire_execution_graph(ir, sn, [], loop_max_unroll=8, loop_num_basis=4)
     x = torch.randn(2, 4, requires_grad=True)
-    y, _ = g(x)
+    y, _, _ = g(x)
     loss = y.sum()
     loss.backward()
     assert x.grad is not None

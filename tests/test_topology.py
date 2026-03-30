@@ -42,7 +42,7 @@ def test_execution_forward_and_autograd():
     ir = _tiny_ir_with_cond()
     g = build_execution_graph_from_ir(ir, sn, [("t", "e")], router_iters=10)
     x = torch.randn(3, dim, requires_grad=True)
-    y, _ = g(x)
+    y, _, _ = g(x)
     assert y.shape == x.shape
     loss = y.pow(2).sum()
     loss.backward()
@@ -56,7 +56,8 @@ def test_conditional_block_routing_changes_output():
     sn.set_masks({"t": 1.0, "e": 1.0})
     blk = ConditionalSinkhornBlock(sn, "t", "e", num_iters=12)
     h = torch.randn(2, dim)
-    y, _ = blk(h)
+    y, _, sig = blk(h)
+    assert "cond" in sig and sig["cond"].shape == ()
     base = sn.trunk(h)
     assert not torch.allclose(y, base)
 

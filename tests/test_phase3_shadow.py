@@ -24,14 +24,15 @@ def test_conditional_shadow_no_grad_through_main_but_local_ok():
     sn.is_shadow[sn._name_to_idx["t"]] = True
     blk = ConditionalSinkhornBlock(sn, "t", "e", num_iters=20, mutation_entropy_norm_threshold=1.01)
     h1 = torch.randn(4, 5, requires_grad=True)
-    out, _ = blk(h1)
+    out, _, _ = blk(h1)
     out.sum().backward()
-    assert sn.adapters["t"].U.grad is None
+    g_ut = sn.adapters["t"].U.grad
+    assert g_ut is None or not g_ut.any()
     assert sn.adapters["e"].U.grad is not None
 
     sn.zero_grad(set_to_none=True)
     h2 = torch.randn(4, 5, requires_grad=True)
-    _, shadows = blk(h2)
+    _, shadows, _ = blk(h2)
     y_t = shadows["t"]
     (y_t.pow(2).mean()).backward()
     assert sn.adapters["t"].U.grad is not None
@@ -45,5 +46,6 @@ def test_execution_graph_forward_returns_shadow_dict():
     sn.is_shadow[sn._name_to_idx["then_ex"]] = True
     g = wire_execution_graph(ir, sn, [("then_ex", "else_ex")], mutation_entropy_norm_threshold=1.01)
     x = torch.randn(2, 5)
-    _, loc = g(x)
+    _, loc, sig = g(x)
     assert "then_ex" in loc and loc["then_ex"].shape[0] == 2
+    assert "cond_0" in sig and sig["cond_0"].shape == ()

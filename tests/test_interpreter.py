@@ -89,7 +89,7 @@ def test_interpreted_loop_zero_iterations_falls_back():
     body: list = []
     m = InterpretedLiquidLoop(4, cond, body, [], {}, num_basis=3, max_unroll=4)
     x = torch.randn(2, 4, requires_grad=True)
-    y, _ = m(x)
+    y, _, _ = m(x)
     assert y.shape == (2, 4)
     y.sum().backward()
     assert x.grad is not None

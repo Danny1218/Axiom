@@ -1,6 +1,7 @@
-"""Phase 10: functional forward (out, shadows) is traceable; torch.compile matches eager."""
+"""Phase 10/11: functional forward + signals; torch.compile matches eager (fullgraph)."""
 
 import torch
+import torch._dynamo.config as dynamo_config
 
 from compiler.flow import wire_execution_graph
 from compiler.ir import ast_to_ir
@@ -33,12 +34,35 @@ while (i > 0) {
     g = wire_execution_graph(ir, sn, [("then_0", "else_0")], loop_max_unroll=8, loop_num_basis=4)
     x = torch.randn(3, 5)
 
-    out_e, sh_e = g(x)
-    compiled = torch.compile(g, backend="aot_eager")
-    out_j, sh_j = compiled(x)
+    dynamo_config.capture_dynamic_output_shape_ops = True
+    out_e, sh_e, sig_e = g(x)
+    # Interpreter while-loop uses Python control flow on tensors; fullgraph requires cond-only IR.
+    compiled = torch.compile(g, backend="aot_eager", fullgraph=False)
+    out_j, sh_j, sig_j = compiled(x)
 
     assert torch.allclose(out_e, out_j, atol=1e-5, rtol=1e-5)
     _assert_shadow_dicts_close(sh_e, sh_j)
+    assert set(sig_e.keys()) == set(sig_j.keys())
+    for k in sig_e:
+        assert torch.allclose(sig_e[k], sig_j[k], atol=1e-5, rtol=1e-5)
+
+
+def test_compile_aot_eager_fullgraph_conditional_only_matches_eager():
+    reset_parser()
+    ir = ast_to_ir(parse_ax("if (1 > 0) { a = 1; } else { a = 2; }"))
+    torch.manual_seed(1)
+    sn = LatentSupernet(5, ("then_0", "else_0", "latent_0"), rank=2)
+    sn.set_masks({"then_0": 1.0, "else_0": 1.0})
+    g = wire_execution_graph(ir, sn, [("then_0", "else_0")])
+    x = torch.randn(2, 5)
+    dynamo_config.capture_dynamic_output_shape_ops = True
+    out_e, sh_e, sig_e = g(x)
+    compiled = torch.compile(g, backend="aot_eager", fullgraph=True)
+    out_j, sh_j, sig_j = compiled(x)
+    assert torch.allclose(out_e, out_j, atol=1e-5, rtol=1e-5)
+    _assert_shadow_dicts_close(sh_e, sh_j)
+    for k in sig_e:
+        assert torch.allclose(sig_e[k], sig_j[k], atol=1e-5, rtol=1e-5)
 
 
 def test_conditional_sinkhorn_returns_tuple_no_mutation():
@@ -48,6 +72,7 @@ def test_conditional_sinkhorn_returns_tuple_no_mutation():
 
     blk = ConditionalSinkhornBlock(sn, "t", "e", num_iters=4)
     h = torch.randn(2, 4)
-    o, shadows = blk(h)
+    o, shadows, sig = blk(h)
     assert o.shape == h.shape
     assert isinstance(shadows, dict)
+    assert isinstance(sig, dict) and "cond" in sig

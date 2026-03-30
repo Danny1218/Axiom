@@ -70,6 +70,7 @@ def load_execution_bundle(path_prefix: str | Path) -> ExecutionGraph:
                 sn,
                 then_e,
                 else_e,
+                block_name=name,
                 num_iters=num_iters,
                 epsilon=epsilon,
                 mutation_entropy_norm_threshold=mut_thr,

@@ -13,10 +13,12 @@ def test_meta_unmasks_on_signal():
     nn.init.zeros_(r.proj.weight)
     nn.init.zeros_(r.proj.bias)
     x = torch.randn(6, 4)
-    r(x)
-    assert r.last_mutation_signal.triggered
+    _, ent = r(x)
+    assert float(ent.item()) >= 0.5
     mc = MetaCompiler(sn)
-    names = mc.react_to_router_signals([r], max_unmasks=1)
+    names = mc.react_to_signals(
+        {"cond_0": ent}, sn, max_unmasks=1, block_thresholds={"cond_0": 0.5}
+    )
     assert names == ["c"]
     assert sn.adapter_mask[2] >= 0.5
     assert sn.is_shadow[2].item() is True
@@ -27,10 +29,13 @@ def test_meta_respects_max_unmasks():
     sn.set_masks({"x": 1.0})
     r1 = SinkhornRouter(3, 2, mutation_entropy_norm_threshold=0.3)
     r2 = SinkhornRouter(3, 2, mutation_entropy_norm_threshold=0.3)
-    for r in (r1, r2):
+    sigs = {}
+    for key, r in (("cond_0", r1), ("cond_1", r2)):
         nn.init.zeros_(r.proj.weight)
         nn.init.zeros_(r.proj.bias)
-        r(torch.randn(4, 3))
+        _, ent = r(torch.randn(4, 3))
+        sigs[key] = ent
     mc = MetaCompiler(sn)
-    out = mc.react_to_router_signals([r1, r2], max_unmasks=1)
+    thr = {"cond_0": 0.3, "cond_1": 0.3}
+    out = mc.react_to_signals(sigs, sn, max_unmasks=1, block_thresholds=thr)
     assert len(out) == 1

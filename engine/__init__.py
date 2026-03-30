@@ -9,7 +9,6 @@ from engine.meta_compiler import MetaCompiler
 from engine.router import SinkhornRouter, sinkhorn_balance
 from engine.loop_executor import InterpretedLiquidLoop
 from engine.ssm import LiquidKANNode
-from engine.signals import MutationSignal
 from engine.supernet import LatentSupernet, TTLoRAAdapter
 from engine.topology import ConditionalSinkhornBlock, ExecutionGraph, build_execution_graph_from_ir
 from engine.trainer import EvolutionaryTrainer
@@ -19,7 +18,6 @@ __all__ = [
     "TTLoRAAdapter",
     "SinkhornRouter",
     "sinkhorn_balance",
-    "MutationSignal",
     "MetaCompiler",
     "ShadowFitnessEvaluator",
     "apply_shadow_verdict",

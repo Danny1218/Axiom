@@ -40,7 +40,7 @@ def test_shadow_local_mse_flows_grad_to_adapter_one_step():
     x = torch.randn(4, 5)
     y = torch.randn(4, 5)
     g.zero_grad(set_to_none=True)
-    out, locs = g(x)
+    out, locs, _ = g(x)
     main = F.mse_loss(out, y)
     assert "then_ex" in locs
     shadow = F.mse_loss(locs["then_ex"], y)
