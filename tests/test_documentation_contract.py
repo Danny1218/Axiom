@@ -104,7 +104,18 @@ def test_glass_box_inspector_entrypoint_exists():
 
 
 def test_datasets_module_public_api(tmp_path: Path):
-    from axiom.datasets import generate_sine_wave, load_titanic, train_val_split
+    import os
+
+    from axiom.datasets import generate_sine_wave, load_finance_mock, load_titanic, train_val_split
+
+    p = load_finance_mock(3, seed=0)
+    try:
+        from axiom.engine.dataloader import load_csv_to_dicts
+
+        fr = load_csv_to_dicts(p)
+        assert len(fr) == 3 and "target_position" in fr[0]
+    finally:
+        os.unlink(p)
 
     rows = generate_sine_wave(n=2, seed=1)
     assert len(rows) == 2
@@ -115,3 +126,13 @@ def test_datasets_module_public_api(tmp_path: Path):
     trows = load_titanic(csv_path=csv)
     assert len(trows) == 1 and trows[0]["Survived"] == 1.0
     assert (_root() / "examples" / "titanic.ax").is_file()
+
+
+def test_examples_portfolio_ax_flagship_ir():
+    reset_parser()
+    ir = ast_to_ir(parse_ax_file(_root() / "examples" / "portfolio.ax"))
+    assert any("OP_NEURAL" in str(s) for s in ir)
+    assert any(
+        isinstance(s, tuple) and s[0] == "OP_ASSIGN" and str(s[1]) == "position"
+        for s in ir
+    )

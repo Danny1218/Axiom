@@ -1,0 +1,12 @@
+// Phase 36 flagship: symbolic risk rails + explicit neural(alpha) on [momentum, volume, base_risk].
+
+def calc_base_risk(vol, dd) {
+  if (vol > 0.5) { return 0.5; }
+  if (dd > 0.2) { return 0.3; } else { return 0.0; }
+}
+
+base_risk = calc_base_risk(volatility, drawdown);
+features = [momentum, volume, base_risk];
+alpha = neural(features);
+raw_pos = 1.0 - base_risk + alpha;
+position = max(0.0, min(1.0, raw_pos));

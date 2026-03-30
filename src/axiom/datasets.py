@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import csv
 import math
+import os
 import random
+import tempfile
 import urllib.request
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -42,6 +45,44 @@ def generate_sine_wave(*, n: int = 1000, seed: int = 42) -> List[Dict[str, float
         x = rng.uniform(0.0, 2.0 * math.pi)
         rows.append({"x": x, "y_pred": 0.0, "target": math.sin(x)})
     return rows
+
+
+def load_finance_mock(num_rows: int = 1000, *, seed: int = 42) -> str:
+    """Write a temporary CSV (caller may delete). Columns match ``examples/portfolio.ax`` ABI names.
+
+    ``target_position`` is a non-linear synthetic label: piecewise ``base`` on volatility / drawdown
+    plus ``0.2 * sin(momentum * volume)``, clamped to ``[0, 1]``.
+    """
+    n = max(1, int(num_rows))
+    rng = random.Random(seed)
+    fd, path = tempfile.mkstemp(prefix="axiom_finance_", suffix=".csv")
+    os.close(fd)
+    fields = ("volatility", "drawdown", "momentum", "volume", "target_position")
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=fields)
+        w.writeheader()
+        for _ in range(n):
+            vol = rng.uniform(0.1, 1.0)
+            dd = rng.uniform(0.0, 0.5)
+            momentum = rng.uniform(-1.0, 1.0)
+            volume = rng.uniform(0.5, 2.0)
+            base = 1.0
+            if vol > 0.5:
+                base -= 0.5
+            if dd > 0.2:
+                base -= 0.3
+            alpha = math.sin(momentum * volume)
+            target = max(0.0, min(1.0, base + 0.2 * alpha))
+            w.writerow(
+                {
+                    "volatility": vol,
+                    "drawdown": dd,
+                    "momentum": momentum,
+                    "volume": volume,
+                    "target_position": target,
+                }
+            )
+    return path
 
 
 def train_val_split(

@@ -64,13 +64,16 @@
 
 **Phase 35 (complete):** **Explicit neuro-symbolic + binary math** — **`max`/`min`** → postfix **`("OP_MATH_BINARY", name)`** (same stack pattern as **`OP_DOT`**), **`_promote_batch_binop`** + **`torch.maximum`/`torch.minimum`**. **`neural(expr)`** → **`("OP_NEURAL", neural_node_<8hex>, input_ir)`** (embedded input IR; output width **1**). **`eval_expr`**: registry lookup via **`nid in reg`** (**`ModuleDict`** / dict); missing module → zeros **`(B,)`**; registered → small MLP **`InterpretedBlock.neural_registry`** / **`InterpretedLiquidLoop.neural_registry`**. **`extract_neural_node_specs`** drives **`nn.ModuleDict`**. **`neural_registry`** threaded through **`exec_stmt` / `run_while_loop` / `run_loop_snapshots`** (no **`dict(ModuleDict)`** — Dynamo-safe). Tests: **`tests/test_vectorized_interpreter.py`**, **`tests/test_ir.py`**, **`tests/test_function_inline.py`**, **`tests/test_meta_compiler.py`**.
 
+**Phase 36 (complete):** **Quant flagship (productization)** — **`axiom.datasets.load_finance_mock`**: temp CSV (**`volatility`**, **`drawdown`**, **`momentum`**, **`volume`**, **`target_position`**) with piecewise base + **`0.2*sin(momentum*volume)`** clamped to **[0,1]**. **`examples/portfolio.ax`**: **`calc_base_risk`** (masked early returns) + **`neural([momentum, volume, base_risk])`** + **`max(0, min(1, 1 - base_risk + alpha))`**. **`examples/train_portfolio.py`**: **`AxiomDataset`**, Adam on **`InterpretedBlock.parameters()`**, MSE vs **`target_position`**; Glass Box step: swap **`neural_registry`** for empty **`ModuleDict`**, report symbolic MSE, restore. Tests: **`tests/test_phase36_finance.py`**, **`tests/test_documentation_contract.py`**.
+
 ## Layout
 
 - `pyproject.toml` — **`axiom-engine`**, script **`axiom` → `axiom.cli:main`**
 - `src/axiom/cli.py` — train / inspect subcommands
-- `src/axiom/datasets.py` — Titanic, sine
+- `src/axiom/datasets.py` — Titanic, sine, finance mock
 - `src/axiom/tools/inspector.py`, `glass_box.py` — Glass Box
-- `examples/titanic.ax`, `examples/sequence.ax` — domain sketches
+- `examples/titanic.ax`, `examples/sequence.ax`, `examples/portfolio.ax` — domain sketches
+- `examples/train_portfolio.py` — Phase 36 train + symbolic ablation
 - `train.ax` — default **`axiom train`** sketch (cwd)
 - `src/axiom/compiler/`, `src/axiom/engine/`, `src/axiom/primitives/`
 - `tests/`
@@ -88,9 +91,10 @@ python -m pytest tests -q
 axiom train train.ax --epochs 10 --out axiom_bundle
 axiom train examples/titanic.ax --dataset titanic --epochs 30 --out axiom_bundle
 axiom train examples/sequence.ax --dataset sine --epochs 30 --dim 32 --out axiom_bundle
+python examples/train_portfolio.py
 axiom inspect
 ```
 
 ## Next
 
-**Phase 36 (ideas):** **`return` inside `while`**; call targets like **`f()[i]`**. **`examples/portfolio.ax`**; Glass Box upgrades (**`--inspect`**). See **`readme.md` § Road ahead**.
+**Phase 37 (ideas):** **`return` inside `while`**; call targets like **`f()[i]`**. Glass Box upgrades (**`--inspect`** / graph of **`OP_NEURAL`**). See **`readme.md` § Road ahead**.
