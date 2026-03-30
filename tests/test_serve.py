@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip("fastapi")
+
 from axiom.compiler.ir import ast_to_ir, extract_abi_widths, extract_global_abi
 from axiom.compiler.parser import parse_ax, reset_parser
 from axiom.compiler.serializer import save_bundle
