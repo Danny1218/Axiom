@@ -7,7 +7,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from engine.fitness import ShadowFitnessEvaluator, Verdict, apply_shadow_verdict
-from engine.loop_executor import InterpretedLiquidLoop
 from engine.meta_compiler import MetaCompiler
 from engine.topology import ExecutionGraph
 
@@ -36,16 +35,10 @@ class EvolutionaryTrainer:
         if compile_graph:
             import torch._dynamo.config as dynamo_config
 
-            # SinkhornRouter uses mask.nonzero (dynamic A); required for compile + aot_eager.
+            # SinkhornRouter uses mask.nonzero (dynamic A); interpreter loops are fixed unroll (Phase 12).
             dynamo_config.capture_dynamic_output_shape_ops = True
-            has_loop = any(
-                isinstance(graph.node_modules[n], InterpretedLiquidLoop)
-                for n in graph.topo_names
-            )
-            # InterpretedLiquidLoop uses Python control flow in the IR interpreter; fullgraph only for cond-only DAGs.
-            use_fullgraph = not has_loop
             self.step_fn: nn.Module = torch.compile(
-                graph, backend="aot_eager", fullgraph=use_fullgraph
+                graph, backend="aot_eager", fullgraph=True
             )
         else:
             self.step_fn = graph

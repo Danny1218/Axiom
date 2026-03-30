@@ -36,8 +36,7 @@ while (i > 0) {
 
     dynamo_config.capture_dynamic_output_shape_ops = True
     out_e, sh_e, sig_e = g(x)
-    # Interpreter while-loop uses Python control flow on tensors; fullgraph requires cond-only IR.
-    compiled = torch.compile(g, backend="aot_eager", fullgraph=False)
+    compiled = torch.compile(g, backend="aot_eager", fullgraph=True)
     out_j, sh_j, sig_j = compiled(x)
 
     assert torch.allclose(out_e, out_j, atol=1e-5, rtol=1e-5)

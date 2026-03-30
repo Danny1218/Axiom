@@ -196,10 +196,9 @@ def run_while_loop(
     parent_active: Optional[torch.Tensor] = None,
 ) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
     """
-    `scope`: rows allowed in this loop (all ones, or `parent_active` for nested loops).
-    Each iteration uses fresh `cond_val`; `entering = scope & (cond_val != 0)` matches
-    scalar semantics without shrinking scope from stale cond (cond is re-evaluated after body).
-    Returns parallel `masks` (same length as `snaps`): per-step `entering` for LiquidKAN masking.
+    Runs exactly ``max_unroll`` iterations (no early ``break``). When the condition is false,
+    the body is a no-op for that row (``torch.where`` in ``exec_stmt``) and masks record False;
+    snapshots still advance so length is always ``max_unroll``.
     """
     if parent_active is None:
         scope = _all_active(B, device)
@@ -210,8 +209,6 @@ def run_while_loop(
     for _ in range(max_unroll):
         cond_val = eval_expr(env, cond_ir, B=B, device=device, dtype=dtype)
         entering = scope & (cond_val != 0)
-        if not entering.any():
-            break
         for st in body_ir:
             exec_stmt(
                 env,
@@ -291,7 +288,12 @@ def run_loop_snapshots(
     device: Optional[torch.device] = None,
     dtype: Optional[torch.dtype] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
-    """Returns ``(seq, seq_mask)``: ``seq`` (B, T, D), ``seq_mask`` (B, T) bool — True = row ran body that step (LiquidKAN integrates)."""
+    """Returns ``(seq, seq_mask)`` with **fixed** ``T = max_unroll`` (or ``T=0`` if ``max_unroll==0``).
+
+    ``seq`` is ``(B, T, D)``, ``seq_mask`` is ``(B, T)`` bool — True = that row executed the body that
+    step. After the loop condition goes false, later steps are no-ops (env frozen) and masks are False;
+    this matches Phase 9 SIMT semantics without a Python ``break`` (TorchDynamo–friendly).
+    """
     if h_batch.dim() == 1:
         h_batch = h_batch.unsqueeze(0)
     if h_batch.dim() != 2:
@@ -309,6 +311,10 @@ def run_loop_snapshots(
             env[name] = h_batch[:, idx]
     for st in prelude_stmts:
         exec_stmt(env, st, B=B, dim=dim, max_unroll=max_unroll, device=dev, dtype=dt, active_mask=None)
+    if max_unroll == 0:
+        z = torch.zeros(B, 0, dim, device=dev, dtype=dt)
+        m = torch.empty(B, 0, dtype=torch.bool, device=dev)
+        return z, m
     snaps, masks = run_while_loop(
         env,
         cond_ir,
@@ -321,10 +327,6 @@ def run_loop_snapshots(
         dtype=dt,
         parent_active=None,
     )
-    if not snaps:
-        z = torch.zeros(B, 0, dim, device=dev, dtype=dt)
-        m = torch.empty(B, 0, dtype=torch.bool, device=dev)
-        return z, m
     mat = torch.stack(snaps, dim=1)
     seq_mask = torch.stack(masks, dim=1)
     if mat.shape[2] < dim:

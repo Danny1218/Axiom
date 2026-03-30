@@ -12,20 +12,12 @@ _F32 = torch.float32
 def _assert_row_matches_per_row_ref(
     vec: torch.Tensor, h_batch: torch.Tensor, cond_ir, body_ir, **kwargs
 ) -> None:
-    """vec: (B, T, D); compare each row to run_loop_snapshots(h_batch[b:b+1], ...)."""
+    """vec: (B, T, D); each row must match an independent run_loop_snapshots (same fixed T)."""
     B = h_batch.shape[0]
     for b in range(B):
         ref, _ref_m = run_loop_snapshots(h_batch[b : b + 1], cond_ir, body_ir, **kwargs)
-        assert ref.shape[0] == 1
-        Tb = ref.shape[1]
-        assert torch.allclose(vec[b, :Tb, :], ref[0, :Tb, :], atol=0, rtol=0)
-        if Tb == 0 and vec.shape[1] > 0:
-            ref0 = vec[b, 0].clone()
-            for t in range(1, vec.shape[1]):
-                assert torch.allclose(vec[b, t], ref0, atol=0, rtol=0)
-        elif Tb < vec.shape[1]:
-            frozen = vec[b, Tb - 1 : Tb, :].expand(vec.shape[1] - Tb, -1)
-            assert torch.allclose(vec[b, Tb:, :], frozen, atol=0, rtol=0)
+        assert ref.shape[0] == 1 and ref.shape[1] == vec.shape[1]
+        assert torch.allclose(vec[b], ref[0], atol=0, rtol=0)
 
 
 def test_run_loop_snapshots_b4_matches_four_independent_rows():
@@ -80,7 +72,7 @@ def test_op_conditional_branch_blend_batch():
 
 
 def test_while_mixed_row_iteration_counts_alignment():
-    """Rows exit at different times; batched T equals max per-row T; trailing frames frozen per row."""
+    """Rows finish the loop at different steps; batched T is fixed max_unroll; trailing frames frozen per row."""
     h = torch.zeros(2, 4)
     h[0, 0] = 1.0
     h[1, 0] = 3.0

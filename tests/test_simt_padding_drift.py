@@ -42,5 +42,5 @@ def test_run_loop_snapshots_mask_shape_matches_timesteps():
     body = [("OP_ASSIGN", "x", [("OP_LOAD", "x"), ("OP_CONST", 1.0), ("OP_SUB",)])]
     seed = make_seed_map(cond, body, 5)
     seq, m = run_loop_snapshots(h, cond, body, dim=5, max_unroll=12, seed_map=seed)
-    assert m.shape == (3, seq.shape[1])
+    assert seq.shape[1] == 12 and m.shape == (3, 12)
     assert m.dtype == torch.bool

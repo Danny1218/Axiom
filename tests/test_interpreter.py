@@ -44,8 +44,10 @@ def test_run_while_countdown_snapshots():
         device=_CPU,
         dtype=_F32,
     )
-    assert len(snaps) == 3 and len(masks) == 3
-    assert snaps[0][0, 0].item() == 2.0 and snaps[-1][0, 0].item() == 0.0
+    assert len(snaps) == 10 and len(masks) == 10
+    assert snaps[0][0, 0].item() == 2.0 and snaps[1][0, 0].item() == 1.0 and snaps[2][0, 0].item() == 0.0
+    for t in range(3, 10):
+        assert snaps[t][0, 0].item() == 0.0 and not masks[t].any()
 
 
 def test_run_loop_snapshots_with_prelude():
@@ -55,8 +57,8 @@ def test_run_loop_snapshots_with_prelude():
     prelude = [("OP_ASSIGN", "i", [("OP_CONST", 3.0)])]
     seed = make_seed_map(cond, body, 5)
     mat, _m = run_loop_snapshots(h, cond, body, dim=5, max_unroll=8, seed_map=seed, prelude_stmts=prelude)
-    assert mat.shape == (1, 3, 5)
-    assert mat[0, 0, 0].item() == 2.0
+    assert mat.shape == (1, 8, 5)
+    assert mat[0, 0, 0].item() == 2.0 and mat[0, 2, 0].item() == 0.0
 
 
 def test_run_loop_snapshots_grad_through_seed():
@@ -82,12 +84,12 @@ def test_prelude_absorption_helpers():
     assert len(_prelude_stmts_before_loop(ir, 1)) == 1
 
 
-def test_interpreted_loop_zero_iterations_falls_back():
+def test_interpreted_loop_max_unroll_zero_falls_back_to_kan_forward():
     from engine.loop_executor import InterpretedLiquidLoop
 
     cond = [("OP_LOAD", "i"), ("OP_CONST", 0.0), ("OP_CMP_GT",)]
     body: list = []
-    m = InterpretedLiquidLoop(4, cond, body, [], {}, num_basis=3, max_unroll=4)
+    m = InterpretedLiquidLoop(4, cond, body, [], {}, num_basis=3, max_unroll=0)
     x = torch.randn(2, 4, requires_grad=True)
     y, _, _ = m(x)
     assert y.shape == (2, 4)
