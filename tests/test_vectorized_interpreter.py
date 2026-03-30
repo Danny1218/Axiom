@@ -98,6 +98,35 @@ def test_literal_vector_times_scalar_interpreted_block():
     assert torch.allclose(out[:, yc : yc + 2], torch.tensor([[2.0, 4.0], [2.0, 4.0]]))
 
 
+def test_vector_times_scalar_batch_gt2():
+    """(B, K) * (B,) with B>2: batch scalars promote to (B, 1) (Phase 32)."""
+    reset_parser()
+    ir = ast_to_ir(parse_ax("x = [1.0, 2.0, 3.0]; y = x * 2.0;"))
+    abi = extract_global_abi(ir, max_vars=16)
+    aw = extract_abi_widths(ir, max_vars=16)
+    block = InterpretedBlock(ir, abi, abi_widths=aw)
+    h = torch.zeros(4, 16)
+    out = block(h)
+    yc = abi["y"]
+    want = torch.tensor([[2.0, 4.0, 6.0]] * 4)
+    assert torch.allclose(out[:, yc : yc + 3], want)
+
+
+def test_sum_mean_dot_on_vector_literal():
+    reset_parser()
+    ir = ast_to_ir(
+        parse_ax("x = [1.0, 2.0, 3.0]; y = sum(x); z = dot(x, [2.0, 2.0, 2.0]); w = mean(x);")
+    )
+    abi = extract_global_abi(ir, max_vars=16)
+    aw = extract_abi_widths(ir, max_vars=16)
+    block = InterpretedBlock(ir, abi, abi_widths=aw)
+    h = torch.zeros(3, 16)
+    out = block(h)
+    assert torch.allclose(out[:, abi["y"]], torch.tensor([6.0, 6.0, 6.0]))
+    assert torch.allclose(out[:, abi["z"]], torch.tensor([12.0, 12.0, 12.0]))
+    assert torch.allclose(out[:, abi["w"]], torch.tensor([2.0, 2.0, 2.0]))
+
+
 def test_loop_snapshots_preserve_vector_column_width():
     """``snapshot_env`` stacks (B,K) state when ``abi_widths`` names a width > 1."""
     reset_parser()

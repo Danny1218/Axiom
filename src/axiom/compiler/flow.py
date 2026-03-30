@@ -2,6 +2,8 @@
 
 User ``def`` / calls are expanded to a flat IR in ``ast_to_ir`` via
 ``expand_function_calls`` before graphs are built (macro inlining, no call stack).
+Built-ins ``sum`` / ``mean`` / ``dot`` lower to ``OP_REDUCE_*`` / ``OP_DOT`` in the compiler
+(see ``ir.RESERVED_REDUCTION_BUILTINS``).
 """
 
 from __future__ import annotations

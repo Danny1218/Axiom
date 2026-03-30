@@ -1,9 +1,10 @@
 """Macro inlining: user functions expand to flat IR and execute on the graph."""
 
+import pytest
 import torch
 
 from axiom.compiler.flow import wire_execution_graph
-from axiom.compiler.ir import ast_to_ir, expand_function_calls, parse_program
+from axiom.compiler.ir import ast_to_ir, expand_function_calls, parse_program, RESERVED_REDUCTION_BUILTINS
 from axiom.compiler.parser import parse_ax, reset_parser
 from axiom.engine.supernet import LatentSupernet
 
@@ -46,6 +47,12 @@ def test_wire_graph_with_inlined_function_runs():
     y, _, _ = g(x)
     xc = g.abi["x"]
     assert torch.allclose(y[:, xc], torch.tensor([3.0, 3.0]))
+
+
+def test_reserved_reduction_names_cannot_be_user_functions():
+    for name in RESERVED_REDUCTION_BUILTINS:
+        with pytest.raises(ValueError, match="reserved"):
+            ast_to_ir(parse_ax(f"def {name}(x) {{ return x; }}"))
 
 
 def test_double_call_two_independent_mangles():

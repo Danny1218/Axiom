@@ -15,6 +15,9 @@ IRList = List[tuple]
 
 _CMP = {"GT": "OP_CMP_GT", "LT": "OP_CMP_LT", "EQ": "OP_CMP_EQ", "NE": "OP_CMP_NE"}
 
+# Built-in reducers: compile to OP_REDUCE_* / OP_DOT (not user ``OP_CALL`` / inlining).
+RESERVED_REDUCTION_BUILTINS = frozenset({"sum", "mean", "dot"})
+
 
 @dataclass(frozen=True)
 class FunctionDef:
@@ -151,12 +154,43 @@ def expand_expr(expr: ExprIR, funcs: Dict[str, FunctionDef], ctr: List[int]) -> 
     out: ExprIR = []
     for tup in expr:
         if isinstance(tup, tuple) and tup and tup[0] == "OP_CALL":
+            name = str(tup[1])
+            if name in RESERVED_REDUCTION_BUILTINS:
+                h, tail = _expand_builtin_reduction_call(tup, funcs, ctr)
+                hoists.extend(h)
+                out.extend(tail)
+                continue
             h, repl = _expand_call_op(tup, funcs, ctr)
             hoists.extend(h)
             out.extend(repl)
         else:
             out.append(tup)
     return hoists, out
+
+
+def _expand_builtin_reduction_call(
+    tup: Tuple[Any, ...], funcs: Dict[str, FunctionDef], ctr: List[int]
+) -> Tuple[IRList, ExprIR]:
+    """Lower ``OP_CALL`` to reducers when name is ``sum`` / ``mean`` / ``dot`` (not user inline)."""
+    name = str(tup[1])
+    arg_irs: Tuple[ExprIR, ...] = tuple(tuple(x) for x in tup[2])
+    if name == "sum":
+        if len(arg_irs) != 1:
+            raise ValueError("sum() expects exactly 1 argument")
+        h, e = expand_expr(list(arg_irs[0]), funcs, ctr)
+        return h, e + [("OP_REDUCE_SUM",)]
+    if name == "mean":
+        if len(arg_irs) != 1:
+            raise ValueError("mean() expects exactly 1 argument")
+        h, e = expand_expr(list(arg_irs[0]), funcs, ctr)
+        return h, e + [("OP_REDUCE_MEAN",)]
+    if name == "dot":
+        if len(arg_irs) != 2:
+            raise ValueError("dot() expects exactly 2 arguments")
+        h0, e0 = expand_expr(list(arg_irs[0]), funcs, ctr)
+        h1, e1 = expand_expr(list(arg_irs[1]), funcs, ctr)
+        return h0 + h1, e0 + e1 + [("OP_DOT",)]
+    raise ValueError(f"unknown built-in {name!r}")
 
 
 def _expand_call_op(
@@ -268,9 +302,16 @@ def _mangle_expr(expr: ExprIR, mp: Dict[str, str]) -> ExprIR:
             out.append(tup)
         elif op == "OP_VEC_PACK":
             out.append(tup)
-        elif op in ("OP_ADD", "OP_SUB", "OP_MUL", "OP_DIV", "OP_INDEX") or (
-            isinstance(op, str) and op.startswith("OP_CMP_")
-        ):
+        elif op in (
+            "OP_ADD",
+            "OP_SUB",
+            "OP_MUL",
+            "OP_DIV",
+            "OP_INDEX",
+            "OP_REDUCE_SUM",
+            "OP_REDUCE_MEAN",
+            "OP_DOT",
+        ) or (isinstance(op, str) and op.startswith("OP_CMP_")):
             out.append(tup)
         else:
             raise ValueError(f"_mangle_expr: unknown {op}")
@@ -296,6 +337,8 @@ def _function_def_from_tree(t: Tree) -> FunctionDef:
         raise ValueError("malformed function_def")
     if not isinstance(inner, Tree) or inner.data != "inner":
         raise ValueError("malformed function_def")
+    if name in RESERVED_REDUCTION_BUILTINS:
+        raise ValueError(f"cannot define function {name!r} — reserved built-in")
     body = _inner(inner, allow_return=True)
     _validate_fn_body(body)
     return FunctionDef(name=name, params=params, body=body)
@@ -466,7 +509,20 @@ def _postfix_expr(t: Tree) -> List[tuple]:
         base, second = ch[0], ch[1]
         if isinstance(second, Tree) and second.data == "call_args":
             fname = _function_name_from_postfix(base)
-            arg_irs = tuple(_expr(c) for c in second.children)
+            args = list(second.children)
+            if fname == "sum":
+                if len(args) != 1:
+                    raise ValueError("sum() expects exactly 1 argument")
+                return _expr(args[0]) + [("OP_REDUCE_SUM",)]
+            if fname == "mean":
+                if len(args) != 1:
+                    raise ValueError("mean() expects exactly 1 argument")
+                return _expr(args[0]) + [("OP_REDUCE_MEAN",)]
+            if fname == "dot":
+                if len(args) != 2:
+                    raise ValueError("dot() expects exactly 2 arguments")
+                return _expr(args[0]) + _expr(args[1]) + [("OP_DOT",)]
+            arg_irs = tuple(_expr(c) for c in args)
             return [("OP_CALL", fname, arg_irs)]
         return _postfix_expr(base) + _expr(second) + [("OP_INDEX",)]
     raise ValueError(f"unknown postfix_expr {t.data}")
@@ -541,6 +597,15 @@ def _infer_expr_output_width(expr: ExprIR, known: Dict[str, int]) -> int:
             stack.pop()
             stack.pop()
             stack.append(1)
+        elif op in ("OP_REDUCE_SUM", "OP_REDUCE_MEAN"):
+            stack.pop()
+            stack.append(1)
+        elif op == "OP_DOT":
+            stack.pop()
+            stack.pop()
+            stack.append(1)
+        elif op == "OP_CALL":
+            raise ValueError("OP_CALL in width inference — expand calls before ABI layout")
         else:
             raise ValueError(f"unknown expr op for width inference: {op}")
     return stack[-1] if stack else 1

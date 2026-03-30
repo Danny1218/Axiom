@@ -52,11 +52,12 @@ def test_compile_interpreted_block_vector_literal_aot_eager():
     abi = extract_global_abi(ir, max_vars=16)
     aw = extract_abi_widths(ir, max_vars=16)
     block = InterpretedBlock(ir, abi, abi_widths=aw)
-    # B=2: PyTorch broadcasts (B,K)*(B,) only for certain B; B>2 can error on this IR path.
-    h = torch.zeros(2, 16, requires_grad=True)
+    h = torch.zeros(4, 16, requires_grad=True)
     dynamo_config.capture_dynamic_output_shape_ops = True
     out_e = block(h)
     out_j = torch.compile(block, backend="aot_eager", fullgraph=True)(h)
     assert torch.allclose(out_e, out_j, atol=1e-5, rtol=1e-5)
     bc = abi["b"]
-    assert torch.allclose(out_j[:, bc : bc + 2], torch.tensor([[2.0, 4.0], [2.0, 4.0]]))
+    assert torch.allclose(
+        out_j[:, bc : bc + 2], torch.tensor([[2.0, 4.0]] * 4)
+    )

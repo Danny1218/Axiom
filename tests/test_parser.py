@@ -107,3 +107,11 @@ def test_parse_ax_program_helper():
     funcs, main = parse_ax_program("def z() { return 1; } k = 1;")
     assert "z" in funcs and funcs["z"].params == ()
     assert len(main) == 1 and main[0][0] == "OP_ASSIGN"
+
+
+def test_parse_builtin_sum_mean_dot_calls():
+    t = parse_ax("x = [1.0, 2.0, 3.0]; y = sum(x); z = dot(x, [2.0, 2.0, 2.0]); w = mean(x);")
+    ir = ast_to_ir(t)
+    assert ("OP_REDUCE_SUM",) in ir[1][2]
+    assert ("OP_DOT",) in ir[2][2]
+    assert ("OP_REDUCE_MEAN",) in ir[3][2]

@@ -121,6 +121,19 @@ def _broadcast_mask(mask_1d: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
     return mask_1d.view(mask_1d.shape[0], *([1] * (t.dim() - 1)))
 
 
+def _promote_batch_binop(a: torch.Tensor, b: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    """If one side is ``(B, K)`` and the other ``(B,)`` (batch-aligned 1D), promote ``(B,)`` → ``(B, 1)``."""
+    if a.dim() == 0 or b.dim() == 0:
+        return a, b
+    if a.shape[0] != b.shape[0]:
+        return a, b
+    if a.dim() == 2 and b.dim() == 1:
+        return a, b.unsqueeze(-1)
+    if b.dim() == 2 and a.dim() == 1:
+        return a.unsqueeze(-1), b
+    return a, b
+
+
 def eval_expr(
     env: Dict[str, torch.Tensor],
     ir: ExprIR,
@@ -161,30 +174,56 @@ def eval_expr(
             stack.append(gathered)
         elif op == "OP_ADD":
             b, a = stack.pop(), stack.pop()
+            a, b = _promote_batch_binop(a, b)
             stack.append(a + b)
         elif op == "OP_SUB":
             b, a = stack.pop(), stack.pop()
+            a, b = _promote_batch_binop(a, b)
             stack.append(a - b)
         elif op == "OP_MUL":
             b, a = stack.pop(), stack.pop()
+            a, b = _promote_batch_binop(a, b)
             stack.append(a * b)
         elif op == "OP_DIV":
             b, a = stack.pop(), stack.pop()
+            a, b = _promote_batch_binop(a, b)
             mask = b.abs() > 1e-12
             safe_b = torch.where(mask, b, o)
             safe_div = a / safe_b
             stack.append(torch.where(mask, safe_div, z))
+        elif op == "OP_REDUCE_SUM":
+            v = stack.pop()
+            if v.dim() <= 1:
+                stack.append(v)
+            else:
+                stack.append(torch.sum(v, dim=-1))
+        elif op == "OP_REDUCE_MEAN":
+            v = stack.pop()
+            if v.dim() <= 1:
+                stack.append(v)
+            else:
+                stack.append(torch.mean(v, dim=-1))
+        elif op == "OP_DOT":
+            b, a = stack.pop(), stack.pop()
+            if a.dim() == 1 and b.dim() == 1:
+                a, b = a.unsqueeze(-1), b.unsqueeze(-1)
+            a, b = _promote_batch_binop(a, b)
+            stack.append(torch.sum(a * b, dim=-1))
         elif op == "OP_CMP_GT":
             b, a = stack.pop(), stack.pop()
+            a, b = _promote_batch_binop(a, b)
             stack.append(torch.where(a > b, o, z))
         elif op == "OP_CMP_LT":
             b, a = stack.pop(), stack.pop()
+            a, b = _promote_batch_binop(a, b)
             stack.append(torch.where(a < b, o, z))
         elif op == "OP_CMP_EQ":
             b, a = stack.pop(), stack.pop()
+            a, b = _promote_batch_binop(a, b)
             stack.append(torch.where(a == b, o, z))
         elif op == "OP_CMP_NE":
             b, a = stack.pop(), stack.pop()
+            a, b = _promote_batch_binop(a, b)
             stack.append(torch.where(a != b, o, z))
         else:
             raise ValueError(f"unknown expr op {op}")

@@ -54,7 +54,9 @@
 
 **Phase 30 (complete):** **User functions (macro inlining)** — Grammar **`def`**, **`return`**, calls **`name(args)`** via **`postfix_expr`**. IR **`OP_CALL`**, **`OP_RETURN`** inside function bodies only. **`parse_program(tree)`** → **`dict[str, FunctionDef]`** + main stmt IR; **`ast_to_ir`** runs **`expand_function_calls`** (per-call **`_inline_{name}_{id}_`** mangling, param bind, body rewrite). MVP: **one tail `return`**, no early return inside **`if`/`while`**. **`parser.parse_ax_program`** wraps parse + split. Tests: **`tests/test_parser.py`**, **`tests/test_function_inline.py`**.
 
-**Phase 31 (complete):** **Vectorized loops + compile parity** — **`snapshot_env`**: optional **`var_widths`** so loop state can be **`(B, K)`** per name (concat on dim 1). **`run_while_loop` / `run_loop_snapshots` / `exec_stmt`**: thread **`abi_widths`**. **`tests/test_vectorized_interpreter.py`** loop + vector; **`tests/test_meta_compiler.py`** **`torch.compile(..., aot_eager, fullgraph=True)`** on **`InterpretedBlock`** with **`a = [1.0, 2.0]; b = a * 2.0;`** (note: PyTorch **`(B,2)*(B,)`** only broadcasts for **`B <= 2`** on this path — broader fix is future **`OP_CONST` → (B,1)** / explicit broadcast in **`eval_expr`**).
+**Phase 31 (complete):** **Vectorized loops + compile parity** — **`snapshot_env`**: optional **`var_widths`** so loop state can be **`(B, K)`** per name (concat on dim 1). **`run_while_loop` / `run_loop_snapshots` / `exec_stmt`**: thread **`abi_widths`**. **`tests/test_vectorized_interpreter.py`** loop + vector; **`tests/test_meta_compiler.py`** **`torch.compile(..., aot_eager, fullgraph=True)`** on vector literal IR.
+
+**Phase 32 (complete):** **Robust batch broadcasting + reduction built-ins** — **`eval_expr`**: **`_promote_batch_binop`** lifts **`(B,)`** to **`(B, 1)`** when the other operand is **`(B, K)`** for **`+ - * /`** and **`OP_CMP_*`**. IR **`OP_REDUCE_SUM`**, **`OP_REDUCE_MEAN`**, **`OP_DOT`**; grammar calls **`sum` / `mean` / `dot`** lower in **`_postfix_expr`** (not **`OP_CALL`**). **`expand_expr`** also lowers legacy **`OP_CALL`** for those names. **`RESERVED_REDUCTION_BUILTINS`**: user cannot **`def`** them. **`_infer_expr_output_width`**: reducers output width **1**. Tests: **`tests/test_vectorized_interpreter.py`** (B=4 × width-3; sum/mean/dot), **`tests/test_ir.py`**, **`tests/test_parser.py`**, **`tests/test_function_inline.py`** (reserved names).
 
 ## Layout
 
@@ -69,7 +71,7 @@
 
 ## IR opcodes
 
-`OP_CONST`, `OP_LOAD`, `OP_ADD`, `OP_SUB`, `OP_MUL`, `OP_DIV`, `OP_NEG`, `OP_CMP_*`, `OP_ASSIGN`, `OP_EXPR_STMT`, `OP_CONDITIONAL`, `OP_LOOP`.
+`OP_CONST`, `OP_LOAD`, `OP_ADD`, `OP_SUB`, `OP_MUL`, `OP_DIV`, `OP_NEG`, `OP_CMP_*`, `OP_VEC_PACK`, `OP_INDEX`, `OP_REDUCE_SUM`, `OP_REDUCE_MEAN`, `OP_DOT`, `OP_CALL` (pre-expand), `OP_RETURN` (function body), `OP_ASSIGN`, `OP_EXPR_STMT`, `OP_CONDITIONAL`, `OP_LOOP`.
 
 ## Run training (PowerShell)
 
@@ -85,4 +87,4 @@ axiom inspect
 
 ## Next
 
-**Phase 32 (ideas):** **`OP_CONST` broadcasting** for **`(B,K)`** rhs consistently for all **`B`**; early **`return`** via masking or restricted control flow; nested non-trivial call targets (**`f()[i]`**). Product fork: **Path A** / **B** / **C** — **`readme.md` § Road ahead**. Engineering: CSV metric; richer Titanic ABI; Dynamo hardening; optional Graphviz WASM on Windows.
+**Phase 33 (ideas):** Masked **early `return`** inside functions; more built-ins (**`max`**, **`min`**, matmul); non-trivial call targets (**`f()[i]`**). Product fork: **Path A** / **B** / **C** — **`readme.md` § Road ahead**. Engineering: CSV metric; richer Titanic ABI; Dynamo hardening; optional Graphviz WASM on Windows.

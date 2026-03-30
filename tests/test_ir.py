@@ -70,3 +70,11 @@ def test_ir_while_emits_op_loop():
     ir = ast_to_ir(parse_ax("while (n > 0) { n = n - 1; }"))
     assert len(ir) == 1 and ir[0][0] == "OP_LOOP"
     assert len(ir[0][2]) >= 1
+
+
+def test_ir_builtin_reduction_opcodes():
+    reset_parser()
+    ir = ast_to_ir(parse_ax("a = sum([1.0, 2.0]); b = mean([1.0, 2.0]); c = dot([1.0, 2.0], [3.0, 4.0]);"))
+    assert ir[0][2][-1] == ("OP_REDUCE_SUM",)
+    assert ir[1][2][-1] == ("OP_REDUCE_MEAN",)
+    assert ir[2][2][-1] == ("OP_DOT",)
