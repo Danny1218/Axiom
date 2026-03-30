@@ -1,29 +1,126 @@
 # Axiom Engine
 
-Axiom is an experimental domain-specific programming language and neural compiler. It bridges deterministic software engineering with probabilistic deep learning by directly compiling high-level logic into a dynamically evolving, Differentiable Neural Architecture Search (DNAS) graph.
+[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/Danny1218/Axiom)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 
-Instead of writing text prompts for massive, static, black-box LLMs, Axiom allows developers to define the explicit logical constraints of a domain (e.g., genetics, physics engines, rule-based systems) and natively compiles that logic into an ultra-sparse neural topology. 
+**A Differentiable Neural Architecture Search (DNAS) compiler.** Write explicit symbolic rules, compile them into a continuous-time neural network, and let the AI evolve to handle the edge cases.
 
-## Core Architecture
+---
 
-The Axiom compiler replaces the standard Python/CUDA deep learning stack with a multi-paradigm execution engine:
+## Why Axiom?
 
-* **Latent Supernet (TT-LoRA):** Axiom bypasses hardware VRAM constraints by utilizing a shared frozen trunk equipped with thousands of unmasked Tensor-Train LoRA adapters. The model evolves its architecture locally without crashing memory limits.
-* **Sinkhorn Topological Routing:** Standard control flow (`if/else`) is compiled into continuous mathematical logic using Sinkhorn-Knopp optimal transport, ensuring perfectly balanced token routing and preventing Expert collapse in the MoE graph.
-* **Runtime Meta-Compilation:** The execution graph monitors its own epistemic uncertainty. When it encounters high-variance anomalies, it synthesizes new Intermediate Representation (IR) bytecode, unmasks latent experts, and trains them in an isolated "Shadow Mode" before integrating them into the core network.
-* **Liquid-KAN State Memory:** Axiom abandons static KV-caches. Sequential logic (loops) are compiled into continuous-depth Liquid Kolmogorov-Arnold Networks, maintaining long-term memory via continuous probability distributions.
+Axiom is a **hybrid symbolic–neural** system: you program in a small language (`.ax` files) that looks like JavaScript; the compiler lowers `if`, `else`, and `while` into **differentiable** PyTorch graphs. Symbolic paths encode what you *know*; **Tensor-Train LoRA (TT-LoRA)** adapters on a shared trunk learn what you *don’t*.
 
-## The Compiler Pipeline
+### Core features
 
-1. **Parser:** Parses `.ax` syntax into a strict Abstract Syntax Tree.
-2. **IR Bridge:** Translates the AST into deterministic IR Bytecode.
-3. **Topology Mapper:** Wires the IR into a directed acyclic graph (NetworkX) of PyTorch modules.
-4. **Execution:** Runs data through the probabilistic graph, self-modifying the topology based on loss and variance.
+| | |
+|--|--|
+| **Hybrid execution** | Hardcoded logic runs as interpreted IR on the latent trunk; TT-LoRA experts learn probabilistic residuals so the net still fits data when symbolic rules are wrong or incomplete. |
+| **Dynamic routing (MoE)** | `if` / `else` compiles to **Sinkhorn**-balanced mixture-of-experts routing. **MetaCompiler** can **unmask** shadow experts when router entropy signals high uncertainty—new capacity appears only when needed. |
+| **Continuous memory** | `while` loops become **Liquid Kolmogorov–Arnold Networks (KANs)** over unrolled timesteps, with **high-dimensional RBF splines**—a differentiable alternative to stacking static RNN cells for sequence-shaped IR. |
+| **The Glass Box** | The stack is **interpretable by design**: launch a **Streamlit** dashboard to see the graph, ABI variables, and routing weights evolve—not a black box. |
 
-## Getting Started
+### What is an `.ax` file?
 
-From the repo root: `pip install -e .` (installs the **`axiom-engine`** package and the **`axiom`** CLI). Train: `axiom train train.ax --epochs 10 --out axiom_bundle`, or built-ins `axiom train examples/titanic.ax --dataset titanic` / `axiom train examples/sequence.ax --dataset sine`. Inference: `axiom train --mode inference --out axiom_bundle`. Glass Box: `axiom inspect`. Optional: `pip install -r requirements.txt` mirrors core deps.
+An **`.ax`** file is source code for Axiom: assignments, comparisons, **`if` / `else`**, and **`while`** with C/JavaScript-like syntax. The parser builds an AST → IR bytecode (`OP_ASSIGN`, `OP_CONDITIONAL`, `OP_LOOP`, …) → an **execution graph** (`ExecutionGraph`) of PyTorch modules. You train that graph like any other model; gradients flow through both symbolic and neural pieces where the IR is differentiable.
+
+---
+
+## Installation
+
+```bash
+git clone https://github.com/Danny1218/Axiom.git
+cd Axiom
+pip install -e .
+```
+
+This installs the **`axiom-engine`** package and the global **`axiom`** CLI. Requires **Python 3.10+** and **PyTorch 2+**.
+
+---
+
+## Quickstart 1 — Tabular crucible (Titanic)
+
+The bundled `examples/titanic.ax` uses a **deliberate sabotage** rule (impossible Fare threshold) so symbolic logic alone is useless—the hybrid stack must learn from data. Your own programs use the same **`if` / `else`** shape (e.g. branching on `Sex`, `Pclass`, etc.).
+
+```javascript
+// examples/titanic.ax (excerpt)
+if (Fare > 100000.0) {
+  survived_prob = 1.0;
+} else {
+  survived_prob = 0.0;
+}
+```
+
+Train on the built-in Titanic dataset (CSV is downloaded if missing), 80/20 split, then **test accuracy** on the holdout set:
+
+```bash
+axiom train examples/titanic.ax --dataset titanic --epochs 30
+```
+
+Optional: `--dim 32`, `--no-meta`, `--out my_bundle`, `--titanic-csv path/to.csv`.
+
+---
+
+## Quickstart 2 — Sequence crucible (sine wave)
+
+`examples/sequence.ax` drives a **Liquid-KAN** loop: a prelude seeds the ABI (including `y_pred = x * 0.0` so `x` is not clobbered), then a **`while`** integrates `step` for 10 iterations—compiled to a fixed-unroll sequence fed to the KAN.
+
+```javascript
+// examples/sequence.ax (excerpt)
+y_pred = x * 0.0;
+step = 0.0;
+while (step < 10.0) {
+  step = step + 1.0;
+}
+```
+
+```bash
+axiom train examples/sequence.ax --dataset sine --epochs 30 --dim 32
+```
+
+`--dim 32` matches a comfortable trunk width for this example; you will see **test MSE** on the synthetic `sin(x)` task printed after training.
+
+---
+
+## The Glass Box visualizer
+
+After training, artifacts are written as **`{prefix}.pt`** + **`{prefix}_topology.json`** (default prefix `axiom_bundle`).
+
+```bash
+axiom inspect
+```
+
+This starts **Streamlit**. In the UI, set the bundle path prefix (same as `--out` without extension), adjust ABI inputs if needed, and run inference. Expand **routing / signals** to watch **Sinkhorn weights** and entropy-style diagnostics shift as different inputs traverse **conditional** blocks—your “aha!” moment for how symbolic branches became continuous routing.
+
+---
+
+## More CLI (cheat sheet)
+
+| Goal | Command |
+|------|--------|
+| Legacy synthetic sequence (no CSV) | `axiom train train.ax --epochs 10 --out axiom_bundle` |
+| Custom CSV | `axiom train my.ax --csv data.csv --target_key label --target_var my_output_abi` |
+| Load saved bundle, one-off inference | `axiom train --mode inference --out axiom_bundle` |
+
+---
+
+## Compiler pipeline (30 seconds)
+
+1. **Parse** `.ax` → AST  
+2. **Lower** → IR (`OP_*` bytecode)  
+3. **Wire** → `ExecutionGraph` (NetworkX + PyTorch)  
+4. **Train** with `EvolutionaryTrainer` / `AxiomDataset`; **inspect** with `AxiomRunner` + Glass Box  
+
+---
 
 ## Philosophy
 
-Current AI scales by brute force. Axiom scales by structural elegance. By giving a model a hardcoded algorithmic skeleton and allowing it to mathematically evolve its own musculature, we can achieve state-of-the-art domain reasoning on local consumer hardware.
+Brute-force scaling hits walls; **structure** scales. Axiom gives you an algorithmic skeleton you can read and audit, and lets **DNAS-style** sparsity and meta-compilation grow the right neural “muscle” where uncertainty demands it—on hardware you already have.
+
+---
+
+## Links
+
+- **Repository:** [github.com/Danny1218/Axiom](https://github.com/Danny1218/Axiom)  
+- **Tests:** `python -m pytest tests -q`  
+- **Project state (maintainers):** see `plan.md` in this repo.

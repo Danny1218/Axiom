@@ -44,6 +44,8 @@
 
 **Phase 25 (complete):** **Standard library & unified CLI** — **`src/axiom/datasets.py`**: **`load_titanic`**, **`generate_sine_wave`**, **`train_val_split`**. **`axiom train`**: **`--dataset titanic|sine`** → **`AxiomDataset`**, **`train_val_split`** (**`--split-frac`**, default 0.8), **`EvolutionaryTrainer`**; metrics: **test_accuracy** (Titanic) / **test_mse** (sine). **`--csv`** + **`--target_key`** + **`--target_var`**. **`--no-meta`**, **`--titanic-csv`**, **`--sine-samples`**, **`--loop-max-unroll`**, **`--mutation-threshold`**. Legacy (no dataset/csv): **`LiquidSequenceLoader`**. Tests: **`tests/test_datasets.py`**, **`tests/test_cli_tabular.py`**.
 
+**Phase 26 (complete):** **Documentation** — **`readme.md`** rewritten: hero + hybrid/KAN/Glass Box narrative, **`.ax`** explainer, install, Titanic + sine quickstarts (real **`titanic.ax`** / **`sequence.ax`** snippets, **`javascript`** / **`bash`** fences), **`axiom inspect`** Glass Box, CLI cheat sheet, pipeline + philosophy.
+
 ## Layout
 
 - `pyproject.toml` — **`axiom-engine`**, script **`axiom` → `axiom.cli:main`**
