@@ -14,7 +14,7 @@ from axiom.compiler.flow import wire_execution_graph
 from axiom.compiler.ir import ast_to_ir
 from axiom.compiler.parser import parse_ax_file
 from axiom.compiler.serializer import save_execution_bundle
-from axiom.datasets import generate_sine_wave, load_football, load_titanic, train_val_split
+from axiom.datasets import generate_sine_wave, load_titanic, train_val_split
 from axiom.engine.dataloader import AxiomDataset, LiquidSequenceLoader, load_csv_to_dicts
 from axiom.engine.inference import AxiomRunner
 from axiom.engine.meta_compiler import MetaCompiler
@@ -116,44 +116,6 @@ def _cmd_train(args: argparse.Namespace) -> None:
         )
         return
 
-    if args.dataset == "football":
-        try:
-            rows = load_football(season=args.football_season)
-        except (OSError, ValueError) as e:
-            raise SystemExit(f"Could not load football data: {e}") from e
-        train_rows, test_rows = train_val_split(rows, frac=args.split_frac, seed=args.seed)
-        loop_unroll = args.loop_max_unroll if args.loop_max_unroll is not None else 8
-        ir, sn, graph = _compile_graph(
-            args.ax_path,
-            args.dim,
-            args.rank,
-            loop_max_unroll=loop_unroll,
-            loop_num_basis=args.loop_num_basis,
-            mutation_entropy_norm_threshold=args.mutation_threshold,
-        )
-        graph = graph.to(device)
-        target_col = _resolve_target_col(graph, "gd_pred")
-        meta = (
-            MetaCompiler(sn)
-            if (args.football_meta and not args.no_meta)
-            else None
-        )
-        _train_tabular_and_eval(
-            graph,
-            ir,
-            train_rows,
-            test_rows,
-            args,
-            device,
-            target_key="target_gd",
-            target_col=target_col,
-            meta=meta,
-            metric="mse",
-            abi_var_for_metric="gd_pred",
-            trainer_lr=min(float(args.lr), 0.0025),
-        )
-        return
-
     if args.dataset == "titanic":
         try:
             rows = load_titanic(csv_path=args.titanic_csv)
@@ -248,7 +210,10 @@ def _train_tabular_and_eval(
     trainer_lr: Optional[float] = None,
 ) -> None:
     abi = graph.abi
-    train_ds = AxiomDataset(train_rows, abi, trunk_dim=args.dim, target_key=target_key)
+    abi_w = getattr(graph, "abi_widths", {}) or {}
+    train_ds = AxiomDataset(
+        train_rows, abi, trunk_dim=args.dim, target_key=target_key, abi_widths=abi_w
+    )
     train_loader = DataLoader(train_ds, batch_size=args.batch, shuffle=True)
     lr = float(args.lr) if trainer_lr is None else float(trainer_lr)
     trainer = EvolutionaryTrainer(
@@ -321,7 +286,7 @@ def main(argv: list[str] | None = None) -> None:
     p_train.add_argument("--seed", type=int, default=0)
     p_train.add_argument(
         "--dataset",
-        choices=["titanic", "sine", "football"],
+        choices=["titanic", "sine"],
         default=None,
         help="Built-in dataset (tabular AxiomDataset + test metric). Omit for legacy LiquidSequenceLoader.",
     )
@@ -347,18 +312,6 @@ def main(argv: list[str] | None = None) -> None:
         help="Path for Titanic CSV (downloaded if missing).",
     )
     p_train.add_argument("--sine-samples", type=int, default=1000, help="Sample count for --dataset sine.")
-    p_train.add_argument(
-        "--football-season",
-        type=str,
-        default="2324",
-        dest="football_season",
-        help="football-data.co.uk season folder (e.g. 2324 for 2023–24 E0.csv).",
-    )
-    p_train.add_argument(
-        "--football-meta",
-        action="store_true",
-        help="For --dataset football: enable MetaCompiler (can be unstable; try --lr 0.002 if loss explodes).",
-    )
     p_train.add_argument(
         "--loop-max-unroll",
         type=int,

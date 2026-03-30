@@ -1,8 +1,6 @@
 """Phase 25+: `axiom train` with --dataset / --csv."""
 
 from pathlib import Path
-from unittest.mock import patch
-
 import pytest
 
 from axiom.cli import main
@@ -37,37 +35,6 @@ def test_cli_train_dataset_sine_smoke(tmp_path: Path):
     )
     assert Path(str(out) + ".pt").is_file()
     assert Path(str(out) + "_topology.json").is_file()
-
-
-def test_cli_train_dataset_football_smoke(tmp_path: Path):
-    csv_text = "B365H,B365D,B365A,FTHG,FTAG\n2.0,3.0,4.0,1,0\n2.2,3.1,3.5,1,1\n"
-
-    def fake_retrieve(url, dest, *a, **kw):
-        Path(dest).write_text(csv_text, encoding="utf-8")
-
-    ax = _root() / "examples" / "football.ax"
-    out = tmp_path / "fb"
-    with patch("axiom.datasets.urllib.request.urlretrieve", fake_retrieve):
-        main(
-            [
-                "train",
-                str(ax),
-                "--dataset",
-                "football",
-                "--epochs",
-                "1",
-                "--dim",
-                "16",
-                "--batch",
-                "2",
-                "--out",
-                str(out),
-                "--seed",
-                "0",
-                "--no-meta",
-            ]
-        )
-    assert Path(str(out) + ".pt").is_file()
 
 
 def test_cli_train_dataset_titanic_smoke(tmp_path: Path):

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 import torch
 import torch.nn as nn
@@ -19,11 +19,12 @@ class InterpretedBlock(nn.Module):
         abi: Dict[str, int],
         *,
         max_unroll: int = 8,
+        abi_widths: Optional[Dict[str, int]] = None,
     ) -> None:
         super().__init__()
         self.ir_stmts = list(ir_stmts)
         self.abi = dict(abi)
-        self.col_to_name = {col: name for name, col in self.abi.items()}
+        self.abi_widths: Dict[str, int] = dict(abi_widths or {})
         self.max_unroll = int(max_unroll)
 
     def forward(self, h: torch.Tensor) -> torch.Tensor:
@@ -39,7 +40,14 @@ class InterpretedBlock(nn.Module):
         for name in names:
             if name in self.abi:
                 col = self.abi[name]
-                env[name] = h[:, col].clone() if col < D else z.clone()
+                w = max(1, int(self.abi_widths.get(name, 1)))
+                if col + w <= D:
+                    if w == 1:
+                        env[name] = h[:, col].clone()
+                    else:
+                        env[name] = h[:, col : col + w].clone()
+                else:
+                    env[name] = z.clone() if w == 1 else torch.zeros(B, w, device=device, dtype=dtype)
             else:
                 env[name] = z.clone()
         for stmt in self.ir_stmts:
@@ -52,11 +60,18 @@ class InterpretedBlock(nn.Module):
                 device=device,
                 dtype=dtype,
             )
-        cols: List[torch.Tensor] = []
-        for i in range(D):
-            name = self.col_to_name.get(i)
-            if name is not None and name in env:
-                cols.append(env[name])
-            else:
-                cols.append(h[:, i])
-        return torch.stack(cols, dim=1)
+        out = h.clone()
+        for name, col in self.abi.items():
+            if name not in env:
+                continue
+            w = max(1, int(self.abi_widths.get(name, 1)))
+            t = env[name]
+            if col + w > D:
+                continue
+            if w == 1 and t.dim() == 1:
+                out[:, col] = t
+            elif t.dim() == 2 and t.shape[1] == w:
+                out[:, col : col + w] = t
+            elif t.dim() == 1 and w == 1:
+                out[:, col] = t
+        return out

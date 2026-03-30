@@ -90,6 +90,7 @@ def execution_topology_to_dict(graph: ExecutionGraph) -> Dict[str, Any]:
         "router_config": router_config,
         "loop_config": loop_config,
         "abi": {k: int(v) for k, v in getattr(graph, "abi", {}).items()},
+        "abi_widths": {k: int(v) for k, v in getattr(graph, "abi_widths", {}).items()},
     }
 
 

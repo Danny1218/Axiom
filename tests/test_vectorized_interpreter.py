@@ -2,6 +2,9 @@
 
 import torch
 
+from axiom.compiler.ir import ast_to_ir, extract_abi_widths, extract_global_abi
+from axiom.compiler.parser import parse_ax, reset_parser
+from axiom.engine.block_executor import InterpretedBlock
 from axiom.engine.interpreter import eval_expr, exec_stmt, make_seed_map, run_loop_snapshots
 
 
@@ -81,3 +84,15 @@ def test_while_mixed_row_iteration_counts_alignment():
     seed = make_seed_map(cond, body, 4)
     vec, _vm = run_loop_snapshots(h, cond, body, dim=4, max_unroll=8, seed_map=seed)
     _assert_row_matches_per_row_ref(vec, h, cond, body, dim=4, max_unroll=8, seed_map=seed)
+
+
+def test_literal_vector_times_scalar_interpreted_block():
+    reset_parser()
+    ir = ast_to_ir(parse_ax("x = [1.0, 2.0]; y = x * 2.0;"))
+    abi = extract_global_abi(ir, max_vars=16)
+    aw = extract_abi_widths(ir, max_vars=16)
+    block = InterpretedBlock(ir, abi, abi_widths=aw)
+    h = torch.zeros(2, 16)
+    out = block(h)
+    yc = abi["y"]
+    assert torch.allclose(out[:, yc : yc + 2], torch.tensor([[2.0, 4.0], [2.0, 4.0]]))

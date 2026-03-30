@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -25,6 +25,7 @@ class InterpretedLiquidLoop(nn.Module):
         *,
         num_basis: int = 8,
         max_unroll: int = 8,
+        abi_widths: Optional[Dict[str, int]] = None,
     ) -> None:
         super().__init__()
         self.dim = dim
@@ -32,6 +33,7 @@ class InterpretedLiquidLoop(nn.Module):
         self.body_ir = body_ir
         self.prelude_stmts = prelude_stmts
         self.seed_map = dict(seed_map)
+        self.abi_widths: Dict[str, int] = dict(abi_widths or {})
         self.max_unroll = max_unroll
         self.kan = LiquidKANNode(dim, num_basis=num_basis, max_unroll=max_unroll)
 
@@ -52,6 +54,7 @@ class InterpretedLiquidLoop(nn.Module):
             device=h.device,
             dtype=h.dtype,
             trunk_dim=flat.shape[-1],
+            abi_widths=self.abi_widths,
         )
         if seq.shape[1] == 0:
             y = self.kan.forward(flat)

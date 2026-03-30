@@ -67,13 +67,14 @@ def _inner(t: Tree) -> IRList:
 
 
 def _expr(t: Tree) -> List[tuple]:
-    # ?comparison/sum/product may collapse; assign/if pass the lowest kept rule.
     if t.data == "comparison":
         return _comparison(t)
     if t.data == "sum":
         return _sum(t)
     if t.data == "product":
         return _product(t)
+    if t.data == "postfix_expr":
+        return _postfix_expr(t)
     if t.data == "atom":
         return _atom(t)
     raise ValueError(f"unknown expr {t.data}")
@@ -90,6 +91,8 @@ def _comparison(t: Tree) -> List[tuple]:
 def _cmp_operand(t: Tree) -> List[tuple]:
     if t.data == "atom":
         return _atom(t)
+    if t.data == "postfix_expr":
+        return _postfix_expr(t)
     return _expr(t)
 
 
@@ -106,19 +109,48 @@ def _sum(t: Tree) -> List[tuple]:
 def _mul_group(t: Tree) -> List[tuple]:
     if t.data == "product":
         return _product(t)
+    if t.data == "postfix_expr":
+        return _postfix_expr(t)
     if t.data == "atom":
         return _atom(t)
-    raise ValueError(f"expected product|atom under sum, got {t.data}")
+    raise ValueError(f"expected product|postfix_expr|atom under sum, got {t.data}")
 
 
 def _product(t: Tree) -> List[tuple]:
-    atoms = t.children[0::2]
+    terms = t.children[0::2]
     ops = t.children[1::2]
-    acc = _atom(atoms[0])
+    acc = _postfix_expr(terms[0])
     for i, op in enumerate(ops):
-        acc += _atom(atoms[i + 1])
+        acc += _postfix_expr(terms[i + 1])
         acc += [("OP_MUL",) if op.type == "MUL" else ("OP_DIV",)]
     return acc
+
+
+def _postfix_expr(t: Tree) -> List[tuple]:
+    if t.data == "atom":
+        return _atom(t)
+    if t.data == "postfix_expr":
+        ch = t.children
+        if len(ch) == 1:
+            c0 = ch[0]
+            if not isinstance(c0, Tree):
+                raise ValueError("postfix_expr expects Tree child")
+            if c0.data == "atom":
+                return _atom(c0)
+            return _postfix_expr(c0)
+        base, idx_tree = ch[0], ch[1]
+        return _postfix_expr(base) + _expr(idx_tree) + [("OP_INDEX",)]
+    raise ValueError(f"unknown postfix_expr {t.data}")
+
+
+def _array_literal(t: Tree) -> List[tuple]:
+    if not t.children:
+        raise ValueError("empty array literal is not allowed")
+    ir: List[tuple] = []
+    for c in t.children:
+        ir += _expr(c)
+    ir.append(("OP_VEC_PACK", len(t.children)))
+    return ir
 
 
 def _atom(t: Tree) -> List[tuple]:
@@ -133,11 +165,13 @@ def _atom(t: Tree) -> List[tuple]:
         if isinstance(x, Tree):
             if x.data == "atom":
                 return _atom(x) + [("OP_NEG",)]
+            if x.data == "array_literal":
+                return _array_literal(x)
             if x.data == "comparison":
                 return _comparison(x)
             if x.data == "expr":
                 return _expr(x.children[0])
-            if x.data in ("sum", "product", "comparison"):
+            if x.data in ("sum", "product", "comparison", "postfix_expr"):
                 return _expr(x)
     raise ValueError(f"bad atom {ch!r}")
 
@@ -153,33 +187,102 @@ Stmt = Tuple[Any, ...]
 ExprIR = List[Tuple[Any, ...]]
 
 
-def extract_global_abi(ir: IRList, *, max_vars: Optional[int] = None) -> Dict[str, int]:
-    """First-seen variable order across the whole program (document order). Maps name -> trunk column."""
+def _infer_expr_output_width(expr: ExprIR, known: Dict[str, int]) -> int:
+    """Infer trailing tensor width (1 = scalar/(B,), K = (B,K)) from stack IR + current name widths."""
+    stack: List[int] = []
+    for tup in expr:
+        if not isinstance(tup, tuple) or not tup:
+            continue
+        op = tup[0]
+        if op == "OP_CONST":
+            stack.append(1)
+        elif op == "OP_LOAD":
+            stack.append(max(1, int(known.get(str(tup[1]), 1))))
+        elif op == "OP_NEG":
+            stack.append(stack.pop())
+        elif op == "OP_VEC_PACK":
+            n = int(tup[1])
+            for _ in range(n):
+                stack.pop()
+            stack.append(n)
+        elif op == "OP_INDEX":
+            stack.pop()
+            stack.pop()
+            stack.append(1)
+        elif op in ("OP_ADD", "OP_SUB", "OP_MUL", "OP_DIV"):
+            b, a = stack.pop(), stack.pop()
+            stack.append(max(a, b))
+        elif isinstance(op, str) and op.startswith("OP_CMP_"):
+            stack.pop()
+            stack.pop()
+            stack.append(1)
+        else:
+            raise ValueError(f"unknown expr op for width inference: {op}")
+    return stack[-1] if stack else 1
+
+
+def _accum_widths_from_stmt(stmt: Stmt, widths: Dict[str, int]) -> None:
+    if not isinstance(stmt, tuple) or not stmt:
+        return
+    op = stmt[0]
+    if op == "OP_ASSIGN":
+        nm = str(stmt[1])
+        rhs_w = _infer_expr_output_width(list(stmt[2]), widths)
+        widths[nm] = max(widths.get(nm, 1), rhs_w)
+    elif op == "OP_CONDITIONAL":
+        snap = dict(widths)
+        wt = dict(widths)
+        for s in stmt[2]:
+            _accum_widths_from_stmt(tuple(s) if isinstance(s, list) else s, wt)
+        we = dict(widths)
+        for s in stmt[3]:
+            _accum_widths_from_stmt(tuple(s) if isinstance(s, list) else s, we)
+        for k in set(wt) | set(we):
+            widths[k] = max(snap.get(k, 1), wt.get(k, 1), we.get(k, 1))
+    elif op == "OP_LOOP":
+        for _ in range(64):
+            before = dict(widths)
+            for s in stmt[2]:
+                _accum_widths_from_stmt(tuple(s) if isinstance(s, list) else s, widths)
+            if widths == before:
+                break
+
+
+def extract_abi_layout(
+    ir: IRList, *, max_vars: Optional[int] = None
+) -> Tuple[Dict[str, int], Dict[str, int]]:
+    """Map each variable name to a **start** trunk column and optional width (default 1).
+
+    Vector assignments (``OP_VEC_PACK``) reserve ``width`` consecutive columns for that name.
+    """
+    widths: Dict[str, int] = {}
+    for instr in ir:
+        _accum_widths_from_stmt(tuple(instr) if isinstance(instr, list) else instr, widths)
+
     order: List[str] = []
     seen: Set[str] = set()
 
-    def add_name(name: str) -> None:
+    def add_name(name: str) -> bool:
         n = str(name)
         if n in seen:
-            return
-        if max_vars is not None and len(order) >= max_vars:
-            return
+            return True
         seen.add(n)
         order.append(n)
+        return True
 
     def walk_expr(expr: ExprIR) -> None:
         for tup in expr:
             if not isinstance(tup, tuple) or not tup:
                 continue
             if tup[0] == "OP_LOAD" and len(tup) > 1:
-                add_name(tup[1])
+                add_name(str(tup[1]))
 
     def walk_stmt(stmt: Stmt) -> None:
         if not isinstance(stmt, tuple) or not stmt:
             return
         op = stmt[0]
         if op == "OP_ASSIGN":
-            add_name(stmt[1])
+            add_name(str(stmt[1]))
             walk_expr(list(stmt[2]))
         elif op == "OP_EXPR_STMT":
             walk_expr(list(stmt[1]))
@@ -196,4 +299,25 @@ def extract_global_abi(ir: IRList, *, max_vars: Optional[int] = None) -> Dict[st
 
     for instr in ir:
         walk_stmt(tuple(instr) if isinstance(instr, list) else instr)
-    return {name: i for i, name in enumerate(order)}
+
+    starts: Dict[str, int] = {}
+    col = 0
+    for name in order:
+        w = max(1, int(widths.get(name, 1)))
+        if max_vars is not None and col + w > max_vars:
+            break
+        starts[name] = col
+        col += w
+    return starts, widths
+
+
+def extract_global_abi(ir: IRList, *, max_vars: Optional[int] = None) -> Dict[str, int]:
+    """Variable name → **start** column (width may be >1; see ``extract_abi_layout``)."""
+    starts, _ = extract_abi_layout(ir, max_vars=max_vars)
+    return starts
+
+
+def extract_abi_widths(ir: IRList, *, max_vars: Optional[int] = None) -> Dict[str, int]:
+    """Per-name trunk column span (1 for scalars)."""
+    starts, widths = extract_abi_layout(ir, max_vars=max_vars)
+    return {n: max(1, int(widths.get(n, 1))) for n in starts}

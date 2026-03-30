@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import networkx as nx
 import torch.nn as nn
 
-from axiom.compiler.ir import extract_global_abi
+from axiom.compiler.ir import extract_abi_widths, extract_global_abi
 from axiom.compiler.serializer import load_state_dict
 from axiom.engine.block_executor import InterpretedBlock
 from axiom.engine.loop_executor import InterpretedLiquidLoop
@@ -53,6 +53,16 @@ def _resolve_global_abi(data: Dict[str, Any], dim: int) -> Dict[str, int]:
     return {}
 
 
+def _resolve_abi_widths(data: Dict[str, Any], dim: int) -> Dict[str, int]:
+    raw = data.get("abi_widths")
+    if isinstance(raw, dict) and raw:
+        return {str(k): int(v) for k, v in raw.items()}
+    if data.get("ir") is not None:
+        ir_prog = _ir_program_from_json(data["ir"])
+        return extract_abi_widths(ir_prog, max_vars=dim)
+    return {}
+
+
 def load_execution_bundle(path_prefix: str | Path) -> ExecutionGraph:
     prefix = Path(path_prefix)
     jpath = Path(str(prefix) + "_topology.json")
@@ -78,6 +88,16 @@ def load_execution_bundle(path_prefix: str | Path) -> ExecutionGraph:
     default_max_unroll = int(lc.get("max_unroll", 8))
 
     global_abi = _resolve_global_abi(data, dim)
+    global_abi_widths = _resolve_abi_widths(data, dim)
+    span = max(
+        (int(global_abi[n]) + max(1, int(global_abi_widths.get(n, 1))) for n in global_abi),
+        default=0,
+    )
+    if span > dim:
+        raise ValueError(
+            f"ABI spans columns 0..{span - 1} but supernet dim is {dim} "
+            "(regenerate bundle with matching --dim or fix script)."
+        )
 
     sn = LatentSupernet(dim, adapter_names, rank=rank)
     G = nx.DiGraph()
@@ -110,6 +130,7 @@ def load_execution_bundle(path_prefix: str | Path) -> ExecutionGraph:
                 else_ir=else_ir_l or None,
                 abi=global_abi,
                 block_max_unroll=default_max_unroll,
+                abi_widths=global_abi_widths,
             )
         elif kind == "loop":
             cond_ir = _ir_from_json(attr["cond_ir"])
@@ -125,13 +146,17 @@ def load_execution_bundle(path_prefix: str | Path) -> ExecutionGraph:
                 global_abi,
                 num_basis=num_basis,
                 max_unroll=max_unroll,
+                abi_widths=global_abi_widths,
             )
         elif kind == "stmt":
             ir_one = attr.get("ir")
             if ir_one is not None:
                 stmt_t = _ir_from_json(ir_one)
                 modules[name] = InterpretedBlock(
-                    [stmt_t], global_abi, max_unroll=default_max_unroll
+                    [stmt_t],
+                    global_abi,
+                    max_unroll=default_max_unroll,
+                    abi_widths=global_abi_widths,
                 )
             else:
                 modules[name] = nn.Identity()
@@ -139,7 +164,7 @@ def load_execution_bundle(path_prefix: str | Path) -> ExecutionGraph:
             raise ValueError(f"unknown node kind {kind!r} for {name!r}")
 
     md = nn.ModuleDict(modules)
-    graph = ExecutionGraph(G, sn, md, topo, abi=global_abi)
+    graph = ExecutionGraph(G, sn, md, topo, abi=global_abi, abi_widths=global_abi_widths)
     sd = load_state_dict(pt_path)
     graph.load_state_dict(sd, strict=True)
     return graph

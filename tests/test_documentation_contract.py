@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 
 from axiom.cli import main
-from axiom.compiler.ir import ast_to_ir, extract_global_abi
-from axiom.compiler.parser import parse_ax_file, reset_parser
+from axiom.compiler.ir import ast_to_ir, extract_abi_widths, extract_global_abi
+from axiom.compiler.parser import parse_ax, parse_ax_file, reset_parser
 
 
 def _root() -> Path:
@@ -41,12 +41,16 @@ def test_examples_sequence_ax_has_loop_no_conditional():
     assert not any(x[0] == "OP_CONDITIONAL" for x in ir)
 
 
-def test_examples_football_ax_has_gd_pred_abi():
+def test_array_literal_and_indexing_ir():
     reset_parser()
-    ir = ast_to_ir(parse_ax_file(_root() / "examples" / "football.ax"))
-    assert sum(1 for x in ir if x[0] == "OP_CONDITIONAL") == 2
-    abi = extract_global_abi(ir, max_vars=32)
-    assert abi.get("gd_pred") is not None and "B365H" in abi
+    ir = ast_to_ir(parse_ax("a = [1.0, 2.0]; b = a[1];"))
+    assert ir[0][0] == "OP_ASSIGN" and ir[0][1] == "a"
+    assert ("OP_VEC_PACK", 2) in ir[0][2]
+    assert ir[1][0] == "OP_ASSIGN" and ir[1][1] == "b"
+    assert ("OP_INDEX",) in ir[1][2]
+    abi = extract_global_abi(ir, max_vars=16)
+    aw = extract_abi_widths(ir, max_vars=16)
+    assert abi["a"] == 0 and abi["b"] == 2 and aw["a"] == 2 and aw["b"] == 1
 
 
 @pytest.mark.parametrize(
@@ -67,7 +71,6 @@ def test_cli_source_wires_documented_train_features():
     src = (_root() / "src" / "axiom" / "cli.py").read_text(encoding="utf-8")
     assert "--dataset" in src
     assert "load_titanic" in src
-    assert "load_football" in src
     assert "generate_sine_wave" in src
     assert "Use either --dataset or --csv" in src
 

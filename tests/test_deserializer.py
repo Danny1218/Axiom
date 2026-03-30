@@ -31,6 +31,7 @@ def test_topology_dict_has_supernet_router_loop_config():
     assert d["loop_config"]["max_unroll"] == 4
     assert d["loop_config"]["num_basis"] == 5
     assert "abi" in d and isinstance(d["abi"], dict)
+    assert "abi_widths" in d and isinstance(d["abi_widths"], dict)
     loop_node = next(n for n in d["nodes"] if n.get("kind") == "loop")
     assert loop_node["loop_max_unroll"] == 4
     assert loop_node["loop_num_basis"] == 5

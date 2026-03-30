@@ -46,6 +46,8 @@ def test_parse_expr_stmt():
 def test_parse_unary_minus():
     t = parse_ax("x = -5;")
     outer = t.children[0].children[1]
+    if outer.data == "postfix_expr" and len(outer.children) == 1:
+        outer = outer.children[0]
     assert outer.data == "atom"
     inner = outer.children[0]
     assert inner.data == "atom" and str(inner.children[0]) == "5"
@@ -79,3 +81,9 @@ def test_parse_while_body_multiple_stmts():
     trees = [c for c in t.children[0].children if hasattr(c, "data")]
     inner = next(x for x in trees if x.data == "inner")
     assert len(inner.children) == 2
+
+
+def test_parse_array_literal_and_index():
+    t = parse_ax("a = [1.0, 2.0]; b = a[1];")
+    kinds = [c.data for c in t.children if hasattr(c, "data")]
+    assert kinds.count("assign_stmt") == 2

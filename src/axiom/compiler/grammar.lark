@@ -1,4 +1,4 @@
-// Axiom — statements, arithmetic, comparisons, if/else, while
+// Axiom — statements, arithmetic, comparisons, if/else, while, array literals, indexing
 // Unsigned NUMBER only: SIGNED_NUMBER would merge `1+2` into `1` and `+2`.
 %import common.CNAME -> NAME
 %import common.WS_INLINE
@@ -47,12 +47,18 @@ DIV: "/"
 
 ?sum: product ((ADD | SUB) product)*
 
-?product: atom ((MUL | DIV) atom)*
+?product: postfix_expr ((MUL | DIV) postfix_expr)*
+
+postfix_expr: atom | postfix_expr "[" expr "]"
+
+array_literal: "[" _array_elems "]"
+_array_elems: expr ("," expr)*
 
 atom: NUMBER
     | "-" atom
     | NAME
     | "(" expr ")"
+    | array_literal
 
 NUMBER: INT | FLOAT
 INT: /[0-9]+/

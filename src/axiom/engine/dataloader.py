@@ -51,9 +51,12 @@ class AxiomDataset(Dataset):
         abi: Dict[str, int],
         trunk_dim: int,
         target_key: str,
+        *,
+        abi_widths: Optional[Dict[str, int]] = None,
     ) -> None:
         self._rows = list(data)
         self.abi = dict(abi)
+        self.abi_widths: Dict[str, int] = dict(abi_widths or {})
         self.trunk_dim = int(trunk_dim)
         self.target_key = str(target_key)
         self.target_col: Optional[int] = self.abi.get(self.target_key)
@@ -65,10 +68,21 @@ class AxiomDataset(Dataset):
         row = self._rows[idx]
         x = torch.zeros(self.trunk_dim, dtype=torch.float32)
         for name, col in self.abi.items():
-            if col < self.trunk_dim and name in row:
-                x[col] = float(row[name])
-        if self.target_col is not None and self.target_col < self.trunk_dim:
-            x[self.target_col] = 0.0
+            if col >= self.trunk_dim or name not in row:
+                continue
+            w = max(1, int(self.abi_widths.get(name, 1)))
+            end = min(col + w, self.trunk_dim)
+            val = row[name]
+            if isinstance(val, (list, tuple)):
+                for i in range(end - col):
+                    x[col + i] = float(val[i]) if i < len(val) else 0.0
+            else:
+                fv = float(val)
+                x[col:end] = fv
+        if self.target_col is not None:
+            tw = max(1, int(self.abi_widths.get(self.target_key, 1)))
+            if self.target_col + tw <= self.trunk_dim:
+                x[self.target_col : self.target_col + tw] = 0.0
         t = float(row[self.target_key])
         y = torch.tensor([t], dtype=torch.float32)
         return x, y

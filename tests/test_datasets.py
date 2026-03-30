@@ -2,11 +2,9 @@
 
 import math
 from pathlib import Path
-from unittest.mock import patch
-
 import pytest
 
-from axiom.datasets import generate_sine_wave, load_football, load_titanic, train_val_split
+from axiom.datasets import generate_sine_wave, load_titanic, train_val_split
 
 
 def test_generate_sine_wave_shape_and_target():
@@ -30,21 +28,6 @@ def test_load_titanic_from_existing_csv(tmp_path: Path):
     rows = load_titanic(csv_path=p)
     assert len(rows) == 2
     assert rows[0]["Survived"] == 0.0 and rows[1]["Survived"] == 1.0
-
-
-def test_load_football_parses_minimal_csv():
-    csv_text = "B365H,B365D,B365A,FTHG,FTAG\n2.0,3.0,4.0,2,1\n1.5,4.0,6.0,0,0\n"
-
-    def fake_retrieve(url, dest, *a, **kw):
-        Path(dest).write_text(csv_text, encoding="utf-8")
-
-    with patch("axiom.datasets.urllib.request.urlretrieve", fake_retrieve):
-        rows = load_football(season="2324")
-    assert len(rows) == 2
-    r0 = rows[0]
-    assert r0["B365H"] == 2.0 and r0["B365D"] == 3.0 and r0["B365A"] == 4.0
-    assert r0["gd_pred"] == 0.0 and r0["target_gd"] == 1.0
-    assert rows[1]["target_gd"] == 0.0
 
 
 def test_load_titanic_empty_raises(tmp_path: Path):

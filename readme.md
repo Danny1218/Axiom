@@ -105,18 +105,6 @@ axiom train examples/sequence.ax --dataset sine --epochs 30 --dim 32
 
 ---
 
-## Quickstart 3 — Premier League goal difference (football-data.co.uk)
-
-`examples/football.ax` turns **Bet365** home/draw/away odds into implied probabilities, builds a capped **expected goal difference**, and writes **`gd_pred`** for the hybrid net to refine toward **actual GD** (home goals − away goals).
-
-```bash
-axiom train examples/football.ax --dataset football --epochs 50 --dim 32
-```
-
-Data is downloaded from [football-data.co.uk](https://www.football-data.co.uk) (`--football-season` default `2324`). Training prints **test MSE** on **`gd_pred`** vs **`target_gd`**. For stability, the CLI caps effective **`lr`** at **0.0025** for this dataset (Sinkhorn + shadow heads can diverge at 0.01). Optional **`--football-meta`** enables MetaCompiler; if loss spikes, lower **`--lr`** further.
-
----
-
 ## The Glass Box visualizer
 
 After training, artifacts are written as **`{prefix}.pt`** + **`{prefix}_topology.json`** (default prefix `axiom_bundle`).
@@ -134,7 +122,6 @@ This starts **Streamlit**. In the UI, set the bundle path prefix (same as `--out
 | Goal | Command |
 |------|--------|
 | Legacy synthetic sequence (no CSV) | `axiom train train.ax --epochs 10 --out axiom_bundle` |
-| Premier League GD (built-in) | `axiom train examples/football.ax --dataset football --dim 32` |
 | Custom CSV | `axiom train my.ax --csv data.csv --target_key label --target_var my_output_abi` |
 | Load saved bundle, one-off inference | `axiom train --mode inference --out axiom_bundle` |
 

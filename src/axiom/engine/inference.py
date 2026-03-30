@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union, cast
 
 import torch
 
@@ -34,6 +34,27 @@ def _legacy_rows_to_tensor(
     return t
 
 
+def _fill_abi_row_slice(
+    row_t: torch.Tensor,
+    col: int,
+    width: int,
+    dim: int,
+    val: object,
+) -> None:
+    w = max(1, int(width))
+    end = min(col + w, dim)
+    if col >= dim or end <= col:
+        return
+    if isinstance(val, (list, tuple)):
+        for i, x in enumerate(val):
+            if col + i >= dim or i >= w:
+                break
+            row_t[col + i] = float(x)
+    else:
+        fv = float(cast(float, val))
+        row_t[col:end] = fv
+
+
 def _abi_rows_to_tensor(
     rows: List[Dict[str, float]],
     abi: Dict[str, int],
@@ -41,14 +62,45 @@ def _abi_rows_to_tensor(
     *,
     device: torch.device,
     dtype: torch.dtype,
+    abi_widths: Optional[Dict[str, int]] = None,
 ) -> torch.Tensor:
+    aw = dict(abi_widths or {})
     B = len(rows)
     t = torch.zeros(B, dim, device=device, dtype=dtype)
     for b, row in enumerate(rows):
         for name, col in abi.items():
-            if col < dim:
-                t[b, col] = float(row.get(name, 0.0))
+            if col >= dim:
+                continue
+            w = max(1, int(aw.get(name, 1)))
+            if name not in row:
+                continue
+            _fill_abi_row_slice(t[b], col, w, dim, row[name])
     return t
+
+
+AbiScalarOrVec = Union[float, List[float]]
+
+
+def _abi_outputs_from_trunk_row(
+    row: torch.Tensor,
+    abi: Dict[str, int],
+    abi_widths: Dict[str, int],
+) -> Dict[str, AbiScalarOrVec]:
+    D = int(row.shape[-1])
+    out: Dict[str, AbiScalarOrVec] = {}
+    for name, col in abi.items():
+        w = max(1, int(abi_widths.get(name, 1)))
+        if col >= D:
+            continue
+        end = min(col + w, D)
+        span = end - col
+        if span <= 0:
+            continue
+        if span == 1:
+            out[name] = float(row[col].item())
+        else:
+            out[name] = [float(row[col + i].item()) for i in range(span)]
+    return out
 
 
 def _inputs_to_tensor(
@@ -58,6 +110,7 @@ def _inputs_to_tensor(
     *,
     device: torch.device,
     dtype: torch.dtype,
+    abi_widths: Optional[Dict[str, int]] = None,
 ) -> torch.Tensor:
     if dim < 1:
         raise ValueError("supernet dim must be positive")
@@ -74,7 +127,9 @@ def _inputs_to_tensor(
         for i, k in enumerate(keys):
             row[0, i] = float(inputs[k])
         return row
-    return _abi_rows_to_tensor([inputs], abi, dim, device=device, dtype=dtype)
+    return _abi_rows_to_tensor(
+        [inputs], abi, dim, device=device, dtype=dtype, abi_widths=abi_widths
+    )
 
 
 def _batch_inputs_to_tensor(
@@ -84,12 +139,15 @@ def _batch_inputs_to_tensor(
     *,
     device: torch.device,
     dtype: torch.dtype,
+    abi_widths: Optional[Dict[str, int]] = None,
 ) -> torch.Tensor:
     if not batch:
         raise ValueError("predict_batch requires a non-empty list")
     if not abi:
         return _legacy_rows_to_tensor(batch, dim, device=device, dtype=dtype)
-    return _abi_rows_to_tensor(batch, abi, dim, device=device, dtype=dtype)
+    return _abi_rows_to_tensor(
+        batch, abi, dim, device=device, dtype=dtype, abi_widths=abi_widths
+    )
 
 
 class AxiomRunner:
@@ -110,7 +168,10 @@ class AxiomRunner:
         self.graph.to(dev)
         self.graph.eval()
         abi = getattr(self.graph, "abi", {}) or {}
-        x = _inputs_to_tensor(inputs, abi, self.graph.supernet.dim, device=dev, dtype=dt)
+        abi_w = getattr(self.graph, "abi_widths", {}) or {}
+        x = _inputs_to_tensor(
+            inputs, abi, self.graph.supernet.dim, device=dev, dtype=dt, abi_widths=abi_w
+        )
         x = x.to(self.device)
         with torch.no_grad():
             out, _, _ = self.graph(x)
@@ -127,7 +188,10 @@ class AxiomRunner:
         self.graph.to(dev)
         self.graph.eval()
         abi = getattr(self.graph, "abi", {}) or {}
-        x = _batch_inputs_to_tensor(inputs, abi, self.graph.supernet.dim, device=dev, dtype=dt)
+        abi_w = getattr(self.graph, "abi_widths", {}) or {}
+        x = _batch_inputs_to_tensor(
+            inputs, abi, self.graph.supernet.dim, device=dev, dtype=dt, abi_widths=abi_w
+        )
         x = x.to(self.device)
         with torch.no_grad():
             out, _, _ = self.graph(x)
@@ -137,23 +201,22 @@ class AxiomRunner:
         self,
         inputs: Dict[str, float],
         device: Union[str, torch.device] = "cpu",
-    ) -> Dict[str, float]:
+    ) -> Dict[str, AbiScalarOrVec]:
         out_tensor = self.predict(inputs, device=device)
         abi = getattr(self.graph, "abi", {}) or {}
-        return {name: float(out_tensor[0, col].item()) for name, col in abi.items()}
+        abi_w = getattr(self.graph, "abi_widths", {}) or {}
+        return _abi_outputs_from_trunk_row(out_tensor[0], abi, abi_w)
 
     def predict_dict_batch(
         self,
         inputs: List[Dict[str, float]],
         device: Union[str, torch.device] = "cpu",
-    ) -> List[Dict[str, float]]:
+    ) -> List[Dict[str, AbiScalarOrVec]]:
         out_batch = self.predict_batch(inputs, device=device)
         abi = getattr(self.graph, "abi", {}) or {}
+        abi_w = getattr(self.graph, "abi_widths", {}) or {}
         B = out_batch.shape[0]
-        return [
-            {name: float(out_batch[b, col].item()) for name, col in abi.items()}
-            for b in range(B)
-        ]
+        return [_abi_outputs_from_trunk_row(out_batch[b], abi, abi_w) for b in range(B)]
 
     def predict_with_signals(
         self,
@@ -166,7 +229,10 @@ class AxiomRunner:
         self.graph.to(dev)
         self.graph.eval()
         abi = getattr(self.graph, "abi", {}) or {}
-        x = _inputs_to_tensor(inputs, abi, self.graph.supernet.dim, device=dev, dtype=dt)
+        abi_w = getattr(self.graph, "abi_widths", {}) or {}
+        x = _inputs_to_tensor(
+            inputs, abi, self.graph.supernet.dim, device=dev, dtype=dt, abi_widths=abi_w
+        )
         x = x.to(self.device)
         with torch.no_grad():
             out, _, signals = self.graph(x)

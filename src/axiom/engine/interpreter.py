@@ -114,6 +114,13 @@ def build_var_order(
     return order[:dim]
 
 
+def _broadcast_mask(mask_1d: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+    """``mask_1d`` (B,) → shape broadcastable with ``t`` (B,) or (B,K)."""
+    if t.dim() == 1:
+        return mask_1d
+    return mask_1d.view(mask_1d.shape[0], *([1] * (t.dim() - 1)))
+
+
 def eval_expr(
     env: Dict[str, torch.Tensor],
     ir: ExprIR,
@@ -133,6 +140,25 @@ def eval_expr(
             stack.append(env.get(str(tup[1]), z))
         elif op == "OP_NEG":
             stack.append(-stack.pop())
+        elif op == "OP_VEC_PACK":
+            n = int(tup[1])
+            if n < 1:
+                raise ValueError("OP_VEC_PACK requires n >= 1")
+            parts = [stack.pop() for _ in range(n)]
+            parts.reverse()
+            stack.append(torch.stack(parts, dim=1))
+        elif op == "OP_INDEX":
+            idx_t = stack.pop()
+            arr = stack.pop()
+            if arr.dim() == 1:
+                arr2 = arr.unsqueeze(1)
+                k = 1
+            else:
+                arr2 = arr
+                k = int(arr2.shape[1])
+            idx = idx_t.to(dtype=torch.int64).clamp(0, max(k - 1, 0))
+            gathered = torch.gather(arr2, 1, idx.unsqueeze(1)).squeeze(1)
+            stack.append(gathered)
         elif op == "OP_ADD":
             b, a = stack.pop(), stack.pop()
             stack.append(a + b)
@@ -181,7 +207,15 @@ def snapshot_env(
     dtype: torch.dtype,
 ) -> torch.Tensor:
     z = _batch_zeros(B, device, dtype)
-    cols = [env.get(k, z) for k in var_order]
+    cols: List[torch.Tensor] = []
+    for k in var_order:
+        t = env.get(k, z)
+        if t.dim() != 1:
+            raise ValueError(
+                f"snapshot_env: variable {k!r} has shape {tuple(t.shape)}; "
+                "only (B,) loop state is supported (no vector temporaries in loop env)."
+            )
+        cols.append(t)
     return torch.stack(cols, dim=1)
 
 
@@ -245,7 +279,9 @@ def exec_stmt(
     if op == "OP_ASSIGN":
         nv = eval_expr(env, stmt[2], B=B, device=device, dtype=dtype)
         k = str(stmt[1])
-        env[k] = torch.where(active_mask, nv, env[k])
+        old = env[k]
+        m = _broadcast_mask(active_mask, nv)
+        env[k] = torch.where(m, nv, old)
     elif op == "OP_EXPR_STMT":
         eval_expr(env, stmt[1], B=B, device=device, dtype=dtype)
     elif op == "OP_CONDITIONAL":
@@ -259,8 +295,14 @@ def exec_stmt(
             exec_stmt(else_env, s, B=B, dim=dim, max_unroll=max_unroll, device=device, dtype=dtype, active_mask=active_mask)
         sel = cond_vec != 0
         for k in env.keys():
-            picked = torch.where(sel, then_env[k], else_env[k])
-            env[k] = torch.where(active_mask, picked, base[k])
+            te, ee = then_env[k], else_env[k]
+            if te.dim() == 1:
+                picked = torch.where(sel, te, ee)
+            else:
+                sm = sel.view(sel.shape[0], *([1] * (te.dim() - 1)))
+                picked = torch.where(sm, te, ee)
+            m = _broadcast_mask(active_mask, picked)
+            env[k] = torch.where(m, picked, base[k])
     elif op == "OP_LOOP":
         inner_order = build_var_order(stmt[1], stmt[2], dim, env_keys=set(env.keys()))
         _, _ = run_while_loop(
@@ -291,6 +333,7 @@ def run_loop_snapshots(
     device: Optional[torch.device] = None,
     dtype: Optional[torch.dtype] = None,
     trunk_dim: Optional[int] = None,
+    abi_widths: Optional[Dict[str, int]] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Returns ``(seq, seq_mask)`` with **fixed** ``T = max_unroll`` (or ``T=0`` if ``max_unroll==0``).
 
@@ -314,9 +357,14 @@ def run_loop_snapshots(
     extra = set(collect_load_names_from_stmts(prelude_stmts))
     var_order = build_var_order(cond_ir, body_ir, dim, seed_names=seed_vals | extra)
     env: Dict[str, torch.Tensor] = {k: _batch_zeros(B, dev, dt) for k in var_order}
+    aw = abi_widths or {}
     for name, idx in seed_map.items():
-        if idx < D_in:
-            env[name] = h_batch[:, idx]
+        w = max(1, int(aw.get(name, 1)))
+        if idx + w <= D_in:
+            if w == 1:
+                env[name] = h_batch[:, idx]
+            else:
+                env[name] = h_batch[:, idx : idx + w].clone()
     for st in prelude_stmts:
         exec_stmt(env, st, B=B, dim=dim, max_unroll=max_unroll, device=dev, dtype=dt, active_mask=None)
     if max_unroll == 0:

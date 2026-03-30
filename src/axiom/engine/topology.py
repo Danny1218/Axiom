@@ -6,7 +6,7 @@ import networkx as nx
 import torch
 import torch.nn as nn
 
-from axiom.compiler.ir import extract_global_abi
+from axiom.compiler.ir import extract_abi_widths, extract_global_abi
 from axiom.engine.block_executor import InterpretedBlock
 from axiom.engine.loop_executor import InterpretedLiquidLoop
 from axiom.engine.router import SinkhornRouter
@@ -56,6 +56,7 @@ class ConditionalSinkhornBlock(nn.Module):
         else_ir: Optional[List[tuple]] = None,
         abi: Optional[Dict[str, int]] = None,
         block_max_unroll: int = 8,
+        abi_widths: Optional[Dict[str, int]] = None,
     ) -> None:
         super().__init__()
         if expert_then not in supernet.adapters or expert_else not in supernet.adapters:
@@ -72,13 +73,14 @@ class ConditionalSinkhornBlock(nn.Module):
             mutation_entropy_norm_threshold=mutation_entropy_norm_threshold,
         )
         abi_d = dict(abi or {})
+        aw = dict(abi_widths or {})
         then_l = list(then_ir) if then_ir else []
         else_l = list(else_ir) if else_ir else []
         self.then_block = (
-            InterpretedBlock(then_l, abi_d, max_unroll=block_max_unroll) if then_l else None
+            InterpretedBlock(then_l, abi_d, max_unroll=block_max_unroll, abi_widths=aw) if then_l else None
         )
         self.else_block = (
-            InterpretedBlock(else_l, abi_d, max_unroll=block_max_unroll) if else_l else None
+            InterpretedBlock(else_l, abi_d, max_unroll=block_max_unroll, abi_widths=aw) if else_l else None
         )
 
     def forward(
@@ -131,6 +133,7 @@ class ExecutionGraph(nn.Module):
         entry: str = "src",
         *,
         abi: Optional[Dict[str, int]] = None,
+        abi_widths: Optional[Dict[str, int]] = None,
     ) -> None:
         super().__init__()
         self.dag = dag
@@ -138,6 +141,7 @@ class ExecutionGraph(nn.Module):
         self.topo_names = topo_names
         self.entry = entry
         self.abi: Dict[str, int] = dict(abi or {})
+        self.abi_widths: Dict[str, int] = dict(abi_widths or {})
         self.add_module("supernet", supernet)
         self.add_module("node_modules", node_modules)
 
@@ -193,6 +197,7 @@ def build_execution_graph_from_ir(
     loop_max_unroll: int = 8,
     loop_num_basis: int = 8,
     global_abi: Optional[Dict[str, int]] = None,
+    global_abi_widths: Optional[Dict[str, int]] = None,
 ) -> ExecutionGraph:
     """
     Map IR to a DAG: OP_CONDITIONAL → ConditionalSinkhornBlock; OP_LOOP → InterpretedLiquidLoop
@@ -207,6 +212,17 @@ def build_execution_graph_from_ir(
         )
     if global_abi is None:
         global_abi = extract_global_abi(ir, max_vars=supernet.dim)
+    if global_abi_widths is None:
+        global_abi_widths = extract_abi_widths(ir, max_vars=supernet.dim)
+    span = max(
+        (int(global_abi[n]) + max(1, int(global_abi_widths.get(n, 1))) for n in global_abi),
+        default=0,
+    )
+    if span > supernet.dim:
+        raise ValueError(
+            f"ABI spans columns 0..{span - 1} but supernet.dim is {supernet.dim} "
+            "(increase --dim or shorten vector bindings)."
+        )
 
     G = nx.DiGraph()
     G.add_node("src", kind="source")
@@ -239,6 +255,7 @@ def build_execution_graph_from_ir(
                 else_ir=else_ir,
                 abi=global_abi,
                 block_max_unroll=loop_max_unroll,
+                abi_widths=global_abi_widths,
             )
             G.add_node(
                 name,
@@ -263,6 +280,7 @@ def build_execution_graph_from_ir(
                 global_abi,
                 num_basis=loop_num_basis,
                 max_unroll=loop_max_unroll,
+                abi_widths=global_abi_widths,
             )
             G.add_node(
                 name,
@@ -279,7 +297,7 @@ def build_execution_graph_from_ir(
         else:
             name = f"stmt_{len(order)}_{op}"
             modules[name] = InterpretedBlock(
-                [instr], global_abi, max_unroll=loop_max_unroll
+                [instr], global_abi, max_unroll=loop_max_unroll, abi_widths=global_abi_widths
             )
             G.add_node(name, kind="stmt", op=op, ir=instr)
             G.add_edge(prev, name)
@@ -290,4 +308,4 @@ def build_execution_graph_from_ir(
     topo = tuple(n for n in nx.topological_sort(G) if n != "src")
     if tuple(order) != topo:
         raise RuntimeError("IR linear chain order mismatch vs topological sort")
-    return ExecutionGraph(G, supernet, md, topo, abi=global_abi)
+    return ExecutionGraph(G, supernet, md, topo, abi=global_abi, abi_widths=global_abi_widths)
