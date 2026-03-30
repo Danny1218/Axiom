@@ -2,6 +2,8 @@
 
 ## Current phase
 
+**Phase 50** — Enterprise Glass-Box UI (**`examples/enterprise_ui.py`**) — Streamlit chat front-end: **`@st.cache_resource`** **`build_trained_policy`**, sidebar metrics + **`st.progress`** from **`scan_text` + `explain`**, block path **`export_report`** → **`examples/live_audit.html`** + **`st.download_button`**, approve path **`chat_with_onyx`** (Onyx POST or mock). **`[gateway]`** extra includes **`requests`** + **`streamlit`**. Run: **`streamlit run examples/enterprise_ui.py --server.fileWatcherType none`**. **`chat_with_onyx(..., verbose=False)`** for silent UIs. Tests: **`tests/test_enterprise_ui.py`**.
+
 **Phase 49** — Onyx API gateway (**`examples/enterprise_policy.ax`**, **`examples/onyx_gateway.py`**) — regex **`scan_text`** → **`has_pii_data` / `mentions_competitor` / `text_toxicity`** → **`InterpretedBlock`** (liquid **`intent_risk`** + nested symbolic **`is_approved`** gates) → **`AxiomModel.explain`** / **`export_report`** on block, optional **`requests.post`** to **`http://localhost:8000/api/chat`** (lazy **`requests`** import; **`pip install -e ".[gateway]"`**). Training uses MSE on **`is_approved`** plus auxiliary MSE on **`intent_risk`** so high-toxicity rows learn **`intent_risk > 0.8`**. Audit HTML **`examples/blocked_audit.html`** (gitignored with **`examples/*.html`**). Tests: **`tests/test_onyx_gateway.py`**.
 
 **Phase 48** — Navier–Stokes singularity hunt (**`examples/navier_stokes.ax`**, **`examples/train_singularity.py`**) — localized vortex-stretching ODE in a differentiable **`while`**, three **`neural(..., "liquid")`** heads, maximize **`kinetic_energy`**; **`InterpretedBlock(..., max_unroll=20)`** required (default 8 would truncate the physics). Default Adam **lr=0.0015** in the trainer (float32-safe through 100 epochs; **lr=0.1** as in the exploratory prompt tends to NaN). Tests: **`tests/test_navier_stokes_singularity.py`**.
@@ -88,6 +90,7 @@
 - `examples/inverse_solver.ax`, `examples/train_solver.py` — Phase 47 inverse non-linear solver (MSE through explicit `.ax` forward)
 - `examples/navier_stokes.ax`, `examples/train_singularity.py` — Phase 48 vortex-stretching loop + kinetic-energy maximization
 - `examples/enterprise_policy.ax`, `examples/onyx_gateway.py` — Phase 49 LLM gateway (signals + policy + optional Onyx POST)
+- `examples/enterprise_ui.py` — Phase 50 Streamlit firewall UI (telemetry sidebar + chat + audit download)
 - `train.ax` — default **`axiom train`** sketch (cwd)
 - `src/axiom/compiler/`, `src/axiom/engine/`, `src/axiom/primitives/`
 - `tests/`
@@ -117,6 +120,7 @@ python examples/train_solver.py
 python examples/train_singularity.py
 pip install -e ".[gateway]"
 python examples/onyx_gateway.py
+streamlit run examples/enterprise_ui.py --server.fileWatcherType none
 axiom inspect
 ```
 
@@ -145,5 +149,7 @@ axiom inspect
 **Phase 48 (complete):** **Singularity hunter (surrogate ODE)** — **`examples/navier_stokes.ax`**: **`random_seed`** → three liquid heads **`v1,v2,v3`**, **20** Euler steps of vortex stretching minus viscous damping, **`kinetic_energy`**. **`examples/train_singularity.py`**: **1000** seeds, **100** epochs, **`-mean(kinetic_energy)`**, **`clip_grad_norm_(..., 5)`**, **`model.explain({"random_seed": 0.5})`**. Tests: **`tests/test_navier_stokes_singularity.py`**.
 
 **Phase 49 (complete):** **Onyx gateway** — **`examples/enterprise_policy.ax`**: **`features`**, liquid **`intent_risk`**, nested **`if`** → **`is_approved`**. **`examples/onyx_gateway.py`**: **`scan_text`** (SSN regex, competitor keywords, demo toxicity), **`build_trained_policy`** (joint **`is_approved`** + **`intent_risk`** MSE), **`chat_with_onyx`** (**`explain`**, **`export_report`** on deny, **`requests.post`** or mock). Tests: **`tests/test_onyx_gateway.py`**.
+
+**Phase 50 (complete):** **Enterprise Streamlit UI** — **`examples/enterprise_ui.py`**: cached policy, sidebar telemetry, **`st.chat_input`**, block → **`live_audit.html`** + download, allow → **`chat_with_onyx(..., verbose=False)`**. **`pyproject.toml`** **`[gateway]`** lists **`streamlit`**. Tests: **`tests/test_enterprise_ui.py`**.
 
 **Later ideas:** **`return` inside `while`**; call targets like **`f()[i]`**. Glass Box upgrades (**`--inspect`** / graph of **`OP_NEURAL`**). See **`readme.md` § Road ahead**.

@@ -117,26 +117,31 @@ def chat_with_onyx(
     onyx_url: str = ONYX_URL,
     post_fn: Callable[[str, str], Any] | None = None,
     text_rng: random.Random | None = None,
+    verbose: bool = True,
 ) -> str | None:
     """
     Policy gate then POST to Onyx. ``post_fn(url, message)`` overrides HTTP for tests.
     Returns assistant text if approved, else None after audit export.
     """
     signals = scan_text(user_prompt, rng=text_rng)
-    print(f"  [signals] {signals}")
+    if verbose:
+        print(f"  [signals] {signals}")
     trace = model.explain(signals)
     approved = float(trace["is_approved"])
-    print(f"  [trace] intent_risk={trace.get('intent_risk')} is_approved={approved}")
+    if verbose:
+        print(f"  [trace] intent_risk={trace.get('intent_risk')} is_approved={approved}")
 
     if approved < 0.5:
-        print(
-            "\n*** AXIOM SECURITY OVERRIDE: Request blocked before reaching LLM. ***\n"
-            f"    Audit written to {audit_path}\n"
-        )
+        if verbose:
+            print(
+                "\n*** AXIOM SECURITY OVERRIDE: Request blocked before reaching LLM. ***\n"
+                f"    Audit written to {audit_path}\n"
+            )
         model.export_report(signals, str(Path(audit_path).resolve()), source_code=source_code)
         return None
 
-    print("\n*** AXIOM APPROVED: Routing to Onyx LLM... ***\n")
+    if verbose:
+        print("\n*** AXIOM APPROVED: Routing to Onyx LLM... ***\n")
 
     if post_fn is not None:
         resp = post_fn(onyx_url, user_prompt)
