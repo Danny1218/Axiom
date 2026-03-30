@@ -48,13 +48,15 @@
 
 **Phase 27 (complete):** **Narrative + doc contracts** — **`readme.md`**: layman bridge (code vs AI extremes, cyborg / self-driving metaphor), “why not scaling laws,” example domains table, **Road ahead** (Paths A/B/C). Tests: **`tests/test_documentation_contract.py`** (readme sections, version string vs **`pyproject.toml`**, **`titanic.ax`** / **`sequence.ax`** IR shapes, CLI **`--help`**, **`cli.py`** wiring strings, dataset mutual exclusion, **`axiom.tools.inspector`**, **`axiom.datasets`** API).
 
+**Phase 28 (complete):** **Sports DNAS (v1.1)** — **`load_football(season)`** in **`axiom.datasets`**: downloads **`E0.csv`** from football-data.co.uk, rows **`B365H/D/A`**, **`gd_pred`**, **`target_gd`** (FTHG−FTAG). **`examples/football.ax`**: implied probs from odds, capped **expected_gd**, **`gd_pred`** for supervision. CLI **`--dataset football`**, **`--football-season`**, **`--football-meta`** (optional MetaCompiler; use with low **`--lr`** if unstable). Tabular trainer **`lr`** for football is **`min(--lr, 0.0025)`** to avoid shadow/main blow-ups at default 0.01. **`axiom-engine` 1.1.0**.
+
 ## Layout
 
 - `pyproject.toml` — **`axiom-engine`**, script **`axiom` → `axiom.cli:main`**
 - `src/axiom/cli.py` — train / inspect subcommands
-- `src/axiom/datasets.py` — built-in Titanic / sine rows
+- `src/axiom/datasets.py` — Titanic, sine, Premier League football
 - `src/axiom/tools/inspector.py`, `glass_box.py` — Glass Box
-- `examples/titanic.ax`, `examples/sequence.ax` — domain sketches
+- `examples/titanic.ax`, `examples/sequence.ax`, `examples/football.ax` — domain sketches
 - `train.ax` — default **`axiom train`** sketch (cwd)
 - `src/axiom/compiler/`, `src/axiom/engine/`, `src/axiom/primitives/`
 - `tests/`
@@ -72,6 +74,7 @@ python -m pytest tests -q
 axiom train train.ax --epochs 10 --out axiom_bundle
 axiom train examples/titanic.ax --dataset titanic --epochs 30 --out axiom_bundle
 axiom train examples/sequence.ax --dataset sine --epochs 30 --dim 32 --out axiom_bundle
+axiom train examples/football.ax --dataset football --epochs 50 --dim 32 --out axiom_bundle
 axiom inspect
 ```
 
