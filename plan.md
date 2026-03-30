@@ -2,7 +2,9 @@
 
 ## Current phase
 
-**Phase 57** — **Semantic-copilot baseline (audit only)** — Frozen CLI surface and package boundaries documented in code comments; **`tests/test_architecture_baseline.py`** locks subcommands, **`pyproject`** optional extras, **`axiom`** public exports, **`serve`** vs **`gateway`** **`create_app`** split, and bundle HTTP routes. **No new features** in this phase.
+**Phase 58** — **Expert backend abstraction (semantic copilot)** — **`src/axiom/experts/`**: **`SemanticExpert`** protocol (**`draft_program`**, **`repair_program`**, **`summarize_trace`**), dataclasses **`ExpertDraftRequest`**, **`ExpertDraftResponse`**, **`ExpertRepairRequest`**, **`ExpertTraceSummaryRequest`**, registry (**`register`**, **`resolve`**, **`DuplicateExpertRegistrationError`**, **`UnknownExpertError`**). No network, no CLI, no compiler changes. Tests: **`tests/test_experts.py`**.
+
+**Phase 57** — **Semantic-copilot baseline (audit only)** — **`tests/test_architecture_baseline.py`** locks layout and public surfaces. **Phase 58** adds **`experts/`** to that layout check.
 
 **Phase 56** — **Packaging & documentation** — Core **`pyproject.toml`** deps minimal; extras **`inspect`**, **`serve`**, **`lock`**, **`export`**, **`gateway`**, **`dev`**. **`readme.md`** pipeline narrative. Tests: **`tests/test_documentation_contract.py`**.
 
@@ -112,11 +114,14 @@
 - `examples/enterprise_ui.py` — Phase 50 Streamlit firewall UI (telemetry sidebar + chat + audit download)
 - `train.ax` — default **`axiom train`** sketch (cwd)
 - `src/axiom/compiler/`, `src/axiom/engine/`, `src/axiom/primitives/`
-- `tests/` — includes **`tests/test_architecture_baseline.py`** (Phase 57 layout / API contracts)
+- `src/axiom/experts/` — Phase 58 external **semantic expert** protocol + registry (not **`OP_NEURAL`**)
+- `tests/` — **`tests/test_architecture_baseline.py`**, **`tests/test_experts.py`**
 
-## Next target (semantic copilot — not started)
+## Next target (semantic copilot — wiring)
 
-**Direction (placeholder only — not implemented):** a **semantic copilot** architecture that combines Axiom’s **symbolic–neural** bundles (**`.axb`**, **`AxiomModel.explain`**, policy **gateway**) with an **external expert backend** (hosted LLM, RAG, or tool APIs). Expected integration layers: orchestration **outside** the core compiler, reusing **`predict` / `explain` / `export_report`** and/or **gateway** downstream forwarding; **no new `axiom` CLI subcommands or default dependencies** are committed until a future phase explicitly adds them.
+**Done (Phase 58):** typed **expert** API + **registry** for pluggable backends (still **no** default HTTP client in-tree).
+
+**Not started:** wire a concrete HTTP expert implementation, copilot **CLI** or **FastAPI** routes, and orchestration that calls **`compile` / `train`** after expert draft/repair—keep using **`AxiomModel`** and existing **gateway** patterns at boundaries.
 
 ## IR opcodes
 

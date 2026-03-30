@@ -23,10 +23,10 @@ def _optional_extra_names(pyproject_text: str) -> set[str]:
     return set(re.findall(r"^([a-z]+)\s*=\s*\[", block, re.MULTILINE))
 
 
-def test_plan_documents_semantic_copilot_placeholder():
+def test_plan_documents_semantic_copilot_roadmap():
     plan = (_root() / "plan.md").read_text(encoding="utf-8")
-    assert "## Next target (semantic copilot — not started)" in plan
-    assert "not implemented" in plan.lower() or "not started" in plan.lower()
+    assert "## Next target (semantic copilot" in plan
+    assert "Phase 58" in plan and "experts" in plan.lower()
     assert "Phase 57" in plan
 
 
@@ -129,7 +129,7 @@ def test_bundle_server_routes(tmp_path: Path):
 
 def test_gateway_app_has_chat_route(tmp_path: Path):
     pytest.importorskip("fastapi")
-    from axiom.api import AxiomModel, load
+    from axiom.api import load
     from axiom.compiler.ir import ast_to_ir, extract_abi_widths, extract_global_abi
     from axiom.compiler.parser import parse_ax, reset_parser
     from axiom.compiler.serializer import save_bundle
@@ -159,6 +159,7 @@ def test_src_axiom_package_layout():
         "gateway",
         "export",
         "security",
+        "experts",
     ):
         assert (base / sub).is_dir(), f"missing {sub}/"
     assert (base / "cli.py").is_file()
