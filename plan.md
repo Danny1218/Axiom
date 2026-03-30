@@ -56,7 +56,9 @@
 
 **Phase 31 (complete):** **Vectorized loops + compile parity** — **`snapshot_env`**: optional **`var_widths`** so loop state can be **`(B, K)`** per name (concat on dim 1). **`run_while_loop` / `run_loop_snapshots` / `exec_stmt`**: thread **`abi_widths`**. **`tests/test_vectorized_interpreter.py`** loop + vector; **`tests/test_meta_compiler.py`** **`torch.compile(..., aot_eager, fullgraph=True)`** on vector literal IR.
 
-**Phase 32 (complete):** **Robust batch broadcasting + reduction built-ins** — **`eval_expr`**: **`_promote_batch_binop`** lifts **`(B,)`** to **`(B, 1)`** when the other operand is **`(B, K)`** for **`+ - * /`** and **`OP_CMP_*`**. IR **`OP_REDUCE_SUM`**, **`OP_REDUCE_MEAN`**, **`OP_DOT`**; grammar calls **`sum` / `mean` / `dot`** lower in **`_postfix_expr`** (not **`OP_CALL`**). **`expand_expr`** also lowers legacy **`OP_CALL`** for those names. **`RESERVED_REDUCTION_BUILTINS`**: user cannot **`def`** them. **`_infer_expr_output_width`**: reducers output width **1**. Tests: **`tests/test_vectorized_interpreter.py`** (B=4 × width-3; sum/mean/dot), **`tests/test_ir.py`**, **`tests/test_parser.py`**, **`tests/test_function_inline.py`** (reserved names).
+**Phase 32 (complete):** **Robust batch broadcasting + reduction built-ins** — **`eval_expr`**: **`_promote_batch_binop`** lifts **`(B,)`** to **`(B, 1)`** when the other operand is **`(B, K)`** for **`+ - * /`** and **`OP_CMP_*`**. IR **`OP_REDUCE_SUM`**, **`OP_REDUCE_MEAN`**, **`OP_DOT`**; grammar calls **`sum` / `mean` / `dot`** lower in **`_postfix_expr`** (not **`OP_CALL`**). **`expand_expr`** also lowers legacy **`OP_CALL`** for those names. **`RESERVED_REDUCTION_BUILTINS`**: user cannot **`def`** them. **`_infer_expr_output_width`**: reducers output width **1**. Tests: **`tests/test_vectorized_interpreter.py`**, **`tests/test_ir.py`**, **`tests/test_parser.py`**, **`tests/test_function_inline.py`**.
+
+**Phase 33 (complete):** **Masked early `return` in user functions** — When a function needs non–tail-only returns, **`_expand_call_op`** uses **`_inline_*__pm` / `__rd` / `__ra`** (path mask, “returned” accumulator, return value accumulator). **`OP_BLEND_ASSIGN`** blends assignments with **`path_mask * (1 - return_done)`**. **`if`/`else`** lowers to **`OP_CONDITIONAL`** branches that scale **`pm`**, restore after each branch, and merge like other SIMT code. **`return`** emits **`ra += contrib * val`**, **`rd += contrib * (1-rd)`**. **Simple** single tail return keeps the previous fast inline. **`return` inside `while`** is rejected (parse + inline). **`while`** with no return in body may coexist with early returns elsewhere. Tests: **`tests/test_early_return.py`**.
 
 ## Layout
 
@@ -71,7 +73,7 @@
 
 ## IR opcodes
 
-`OP_CONST`, `OP_LOAD`, `OP_ADD`, `OP_SUB`, `OP_MUL`, `OP_DIV`, `OP_NEG`, `OP_CMP_*`, `OP_VEC_PACK`, `OP_INDEX`, `OP_REDUCE_SUM`, `OP_REDUCE_MEAN`, `OP_DOT`, `OP_CALL` (pre-expand), `OP_RETURN` (function body), `OP_ASSIGN`, `OP_EXPR_STMT`, `OP_CONDITIONAL`, `OP_LOOP`.
+`OP_CONST`, `OP_LOAD`, `OP_ADD`, `OP_SUB`, `OP_MUL`, `OP_DIV`, `OP_NEG`, `OP_CMP_*`, `OP_VEC_PACK`, `OP_INDEX`, `OP_REDUCE_SUM`, `OP_REDUCE_MEAN`, `OP_DOT`, `OP_CALL` (pre-expand), `OP_RETURN` (function body), `OP_ASSIGN`, `OP_BLEND_ASSIGN` (inlined fn), `OP_EXPR_STMT`, `OP_CONDITIONAL`, `OP_LOOP`.
 
 ## Run training (PowerShell)
 
@@ -87,4 +89,4 @@ axiom inspect
 
 ## Next
 
-**Phase 33 (ideas):** Masked **early `return`** inside functions; more built-ins (**`max`**, **`min`**, matmul); non-trivial call targets (**`f()[i]`**). Product fork: **Path A** / **B** / **C** — **`readme.md` § Road ahead**. Engineering: CSV metric; richer Titanic ABI; Dynamo hardening; optional Graphviz WASM on Windows.
+**Phase 34 (ideas):** **`return` inside `while`** (masked unroll or graph loop fusion); more built-ins (**`max`**, **`min`**); call targets like **`f()[i]`**. Product fork: **Path A** / **B** / **C** — **`readme.md` § Road ahead**. Engineering: CSV metric; richer Titanic ABI; Dynamo hardening; optional Graphviz WASM on Windows.

@@ -34,6 +34,10 @@ def collect_load_names_from_stmts(stmts: List[Stmt]) -> List[str]:
         if op == "OP_ASSIGN":
             found.add(str(stmt[1]))
             walk_expr(stmt[2])
+        elif op == "OP_BLEND_ASSIGN":
+            found.add(str(stmt[1]))
+            walk_expr(list(stmt[2]))
+            walk_expr(list(stmt[3]))
         elif op == "OP_EXPR_STMT":
             walk_expr(stmt[1])
         elif op == "OP_CONDITIONAL":
@@ -67,6 +71,10 @@ def collect_load_names(cond_ir: ExprIR, body_ir: List[Stmt]) -> List[str]:
         if op == "OP_ASSIGN":
             found.add(str(stmt[1]))
             walk_expr(stmt[2])
+        elif op == "OP_BLEND_ASSIGN":
+            found.add(str(stmt[1]))
+            walk_expr(list(stmt[2]))
+            walk_expr(list(stmt[3]))
         elif op == "OP_EXPR_STMT":
             walk_expr(stmt[1])
         elif op == "OP_CONDITIONAL":
@@ -340,6 +348,18 @@ def exec_stmt(
         old = env[k]
         m = _broadcast_mask(active_mask, nv)
         env[k] = torch.where(m, nv, old)
+    elif op == "OP_BLEND_ASSIGN":
+        k = str(stmt[1])
+        path_a = eval_expr(env, list(stmt[2]), B=B, device=device, dtype=dtype).to(dtype=dtype)
+        nv = eval_expr(env, list(stmt[3]), B=B, device=device, dtype=dtype)
+        old = env[k]
+        path_a, nv2 = _promote_batch_binop(path_a, nv)
+        nv = nv2
+        _, old2 = _promote_batch_binop(path_a, old)
+        old = old2
+        parent_m = _broadcast_mask(active_mask, nv)
+        aa = path_a * parent_m
+        env[k] = aa * nv + (1.0 - aa) * old
     elif op == "OP_EXPR_STMT":
         eval_expr(env, stmt[1], B=B, device=device, dtype=dtype)
     elif op == "OP_CONDITIONAL":

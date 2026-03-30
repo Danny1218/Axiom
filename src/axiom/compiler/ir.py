@@ -92,6 +92,10 @@ def _stmt_contains_op_call(stmt: Stmt) -> bool:
     op = stmt[0]
     if op == "OP_ASSIGN":
         return _expr_contains_op_call(list(stmt[2]))
+    if op == "OP_BLEND_ASSIGN":
+        return _expr_contains_op_call(list(stmt[2])) or _expr_contains_op_call(
+            list(stmt[3])
+        )
     if op == "OP_EXPR_STMT":
         return _expr_contains_op_call(list(stmt[1]))
     if op == "OP_CONDITIONAL":
@@ -128,6 +132,10 @@ def expand_stmt(stmt: Stmt, funcs: Dict[str, FunctionDef], ctr: List[int]) -> IR
     if op == "OP_ASSIGN":
         h, rhs = expand_expr(list(stmt[2]), funcs, ctr)
         return h + [("OP_ASSIGN", str(stmt[1]), rhs)]
+    if op == "OP_BLEND_ASSIGN":
+        h1, air = expand_expr(list(stmt[2]), funcs, ctr)
+        h2, vir = expand_expr(list(stmt[3]), funcs, ctr)
+        return h1 + h2 + [("OP_BLEND_ASSIGN", str(stmt[1]), air, vir)]
     if op == "OP_EXPR_STMT":
         h, e = expand_expr(list(stmt[1]), funcs, ctr)
         return h + [("OP_EXPR_STMT", e)]
@@ -193,6 +201,236 @@ def _expand_builtin_reduction_call(
     raise ValueError(f"unknown built-in {name!r}")
 
 
+def _load_e(name: str) -> ExprIR:
+    return [("OP_LOAD", name)]
+
+
+def _truth01_expr(cond_ir: ExprIR) -> ExprIR:
+    return list(cond_ir) + [("OP_CONST", 0.0), ("OP_CMP_NE",)]
+
+
+def _expr_mul_ir(a: ExprIR, b: ExprIR) -> ExprIR:
+    return list(a) + list(b) + [("OP_MUL",)]
+
+
+def _expr_add_ir(a: ExprIR, b: ExprIR) -> ExprIR:
+    return list(a) + list(b) + [("OP_ADD",)]
+
+
+def _one_minus_rd(rd: str) -> ExprIR:
+    return [("OP_CONST", 1.0), ("OP_LOAD", rd), ("OP_SUB",)]
+
+
+def _contrib_expr(pm: str, rd: str) -> ExprIR:
+    return _expr_mul_ir(_load_e(pm), _one_minus_rd(rd))
+
+
+def _zero_expr_for_width(w: int) -> ExprIR:
+    w = max(1, int(w))
+    if w == 1:
+        return [("OP_CONST", 0.0)]
+    ir: ExprIR = []
+    for _ in range(w):
+        ir.append(("OP_CONST", 0.0))
+    ir.append(("OP_VEC_PACK", w))
+    return ir
+
+
+def _max_return_width_stmt(stmt: Stmt, known: Dict[str, int]) -> int:
+    stmt = tuple(stmt) if isinstance(stmt, list) else stmt
+    op = stmt[0]
+    if op == "OP_RETURN":
+        return _infer_expr_output_width(list(stmt[1]), known)
+    if op == "OP_CONDITIONAL":
+        return max(
+            _max_return_width_body(stmt[2], known),
+            _max_return_width_body(stmt[3], known),
+        )
+    if op == "OP_LOOP":
+        return _max_return_width_body(stmt[2], known)
+    return 1
+
+
+def _max_return_width_body(body: IRList, known: Dict[str, int]) -> int:
+    w = 1
+    for st in body:
+        w = max(w, _max_return_width_stmt(tuple(st) if isinstance(st, list) else st, known))
+    return w
+
+
+def _return_inside_any_loop(body: IRList) -> bool:
+    for st in body:
+        if _stmt_loop_contains_return(tuple(st) if isinstance(st, list) else st):
+            return True
+    return False
+
+
+def _stmt_loop_contains_return(stmt: Stmt) -> bool:
+    stmt = tuple(stmt) if isinstance(stmt, list) else stmt
+    op = stmt[0]
+    if op == "OP_LOOP":
+        return any(_stmt_contains_return_deep(s) for s in stmt[2])
+    if op == "OP_CONDITIONAL":
+        return any(_stmt_loop_contains_return(s) for s in stmt[2]) or any(
+            _stmt_loop_contains_return(s) for s in stmt[3]
+        )
+    return False
+
+
+def _body_contains_any_return(body: IRList) -> bool:
+    for st in body:
+        if _stmt_contains_return_deep(tuple(st) if isinstance(st, list) else st):
+            return True
+    return False
+
+
+def _stmt_contains_return_deep(stmt: Stmt) -> bool:
+    stmt = tuple(stmt) if isinstance(stmt, list) else stmt
+    op = stmt[0]
+    if op == "OP_RETURN":
+        return True
+    if op == "OP_CONDITIONAL":
+        return any(_stmt_contains_return_deep(s) for s in stmt[2]) or any(
+            _stmt_contains_return_deep(s) for s in stmt[3]
+        )
+    if op == "OP_LOOP":
+        return any(_stmt_contains_return_deep(s) for s in stmt[2])
+    return False
+
+
+def _function_needs_masked_returns(body: IRList) -> bool:
+    if not body:
+        return False
+    last = tuple(body[-1]) if isinstance(body[-1], list) else body[-1]
+    if last[0] != "OP_RETURN":
+        return True
+    return _returns_before_tail(body[:-1])
+
+
+def _inline_fn_emit_return(
+    stmt: Stmt,
+    prefix: str,
+    pm: str,
+    rd: str,
+    ra: str,
+    mp: Dict[str, str],
+    funcs: Dict[str, FunctionDef],
+    ctr: List[int],
+) -> IRList:
+    ret_ir = _mangle_expr(list(stmt[1]), mp)
+    hret, rv = expand_expr(ret_ir, funcs, ctr)
+    ct = f"{prefix}__ct"
+    out: IRList = list(hret)
+    out.append(("OP_ASSIGN", ct, _contrib_expr(pm, rd)))
+    out.append(
+        (
+            "OP_ASSIGN",
+            ra,
+            _expr_add_ir(_load_e(ra), _expr_mul_ir(_load_e(ct), rv)),
+        )
+    )
+    out.append(
+        (
+            "OP_ASSIGN",
+            rd,
+            _expr_add_ir(_load_e(rd), _expr_mul_ir(_load_e(ct), _one_minus_rd(rd))),
+        )
+    )
+    return out
+
+
+def _inline_fn_emit_blend_assign(
+    stmt: Stmt, pm: str, rd: str, mp: Dict[str, str], funcs: Dict[str, FunctionDef], ctr: List[int]
+) -> IRList:
+    k = str(stmt[1])
+    rhs = _mangle_expr(list(stmt[2]), mp)
+    h, vir = expand_expr(rhs, funcs, ctr)
+    return h + [
+        ("OP_BLEND_ASSIGN", k, _contrib_expr(pm, rd), vir),
+    ]
+
+
+def _inline_fn_emit_conditional(
+    stmt: Stmt,
+    prefix: str,
+    mp: Dict[str, str],
+    pm: str,
+    rd: str,
+    ra: str,
+    save_ctr: List[int],
+    funcs: Dict[str, FunctionDef],
+    ctr: List[int],
+) -> IRList:
+    save_ctr[0] += 1
+    sav = f"{prefix}__savpm_{save_ctr[0]}"
+    cond_ir = _mangle_expr(list(stmt[1]), mp)
+    then_body = [_mangle_stmt(s, mp) for s in stmt[2]]
+    else_body = [_mangle_stmt(s, mp) for s in stmt[3]]
+    then_ir: IRList = [
+        ("OP_ASSIGN", sav, _load_e(pm)),
+        ("OP_ASSIGN", pm, _expr_mul_ir(_load_e(sav), _truth01_expr(cond_ir))),
+    ]
+    then_ir.extend(
+        _inline_function_body_flat(then_body, prefix, mp, pm, rd, ra, save_ctr, funcs, ctr)
+    )
+    then_ir.append(("OP_ASSIGN", pm, _load_e(sav)))
+    else_ir: IRList = [
+        ("OP_ASSIGN", sav, _load_e(pm)),
+        (
+            "OP_ASSIGN",
+            pm,
+            _expr_mul_ir(
+                _load_e(sav),
+                _expr_add_ir(
+                    [("OP_CONST", 1.0)],
+                    _expr_mul_ir([("OP_CONST", -1.0)], _truth01_expr(cond_ir)),
+                ),
+            ),
+        ),
+    ]
+    else_ir.extend(
+        _inline_function_body_flat(else_body, prefix, mp, pm, rd, ra, save_ctr, funcs, ctr)
+    )
+    else_ir.append(("OP_ASSIGN", pm, _load_e(sav)))
+    return [("OP_CONDITIONAL", list(cond_ir), then_ir, else_ir)]
+
+
+def _inline_function_body_flat(
+    body: IRList,
+    prefix: str,
+    mp: Dict[str, str],
+    pm: str,
+    rd: str,
+    ra: str,
+    save_ctr: List[int],
+    funcs: Dict[str, FunctionDef],
+    ctr: List[int],
+) -> IRList:
+    acc: IRList = []
+    for st in body:
+        st = tuple(st) if isinstance(st, list) else st
+        op = st[0]
+        if op == "OP_RETURN":
+            acc.extend(_inline_fn_emit_return(st, prefix, pm, rd, ra, mp, funcs, ctr))
+        elif op == "OP_ASSIGN":
+            acc.extend(_inline_fn_emit_blend_assign(st, pm, rd, mp, funcs, ctr))
+        elif op == "OP_EXPR_STMT":
+            acc.extend(expand_stmt(st, funcs, ctr))
+        elif op == "OP_CONDITIONAL":
+            acc.extend(
+                _inline_fn_emit_conditional(st, prefix, mp, pm, rd, ra, save_ctr, funcs, ctr)
+            )
+        elif op == "OP_LOOP":
+            if any(_stmt_contains_return_deep(s) for s in st[2]):
+                raise ValueError(
+                    "return inside while (user function) is not supported with early return"
+                )
+            acc.extend(expand_stmt(st, funcs, ctr))
+        else:
+            raise ValueError(f"unsupported statement in inlined function: {op}")
+    return acc
+
+
 def _expand_call_op(
     tup: Tuple[Any, ...], funcs: Dict[str, FunctionDef], ctr: List[int]
 ) -> Tuple[IRList, ExprIR]:
@@ -219,6 +457,21 @@ def _expand_call_op(
     for pname, an in zip(fd.params, arg_tmps):
         pre.append(("OP_ASSIGN", mp[pname], [("OP_LOAD", an)]))
     body = fd.body
+    if _function_needs_masked_returns(body):
+        pm, rd, ra = f"{prefix}__pm", f"{prefix}__rd", f"{prefix}__ra"
+        pw = {mp[p]: 1 for p in fd.params}
+        rw = max(1, _max_return_width_body(body, pw))
+        pre.append(("OP_ASSIGN", pm, [("OP_CONST", 1.0)]))
+        pre.append(("OP_ASSIGN", rd, [("OP_CONST", 0.0)]))
+        pre.append(("OP_ASSIGN", ra, _zero_expr_for_width(rw)))
+        mangled = [_mangle_stmt(tuple(s) if isinstance(s, list) else s, mp) for s in body]
+        save_ctr = [0]
+        pre.extend(
+            _inline_function_body_flat(
+                mangled, prefix, mp, pm, rd, ra, save_ctr, funcs, ctr
+            )
+        )
+        return pre, [("OP_LOAD", ra)]
     assert body[-1][0] == "OP_RETURN"
     for st in body[:-1]:
         mst = _mangle_stmt(tuple(st) if isinstance(st, list) else st, mp)
@@ -234,14 +487,19 @@ def _expand_call_op(
 
 def _function_locals(body: IRList, params: Tuple[str, ...]) -> Set[str]:
     names: Set[str] = set(params)
-    for st in body[:-1]:
-        names |= _names_assigned_in_stmt(tuple(st) if isinstance(st, list) else st)
+    for st in body:
+        st = tuple(st) if isinstance(st, list) else st
+        if st[0] == "OP_RETURN":
+            continue
+        names |= _names_assigned_in_stmt(st)
     return names
 
 
 def _names_assigned_in_stmt(stmt: Stmt) -> Set[str]:
     op = stmt[0]
     if op == "OP_ASSIGN":
+        return {str(stmt[1])}
+    if op == "OP_BLEND_ASSIGN":
         return {str(stmt[1])}
     if op == "OP_CONDITIONAL":
         s: Set[str] = set()
@@ -263,6 +521,14 @@ def _mangle_stmt(stmt: Stmt, mp: Dict[str, str]) -> Stmt:
     if op == "OP_ASSIGN":
         k = str(stmt[1])
         return ("OP_ASSIGN", mp.get(k, k), _mangle_expr(list(stmt[2]), mp))
+    if op == "OP_BLEND_ASSIGN":
+        k = str(stmt[1])
+        return (
+            "OP_BLEND_ASSIGN",
+            mp.get(k, k),
+            _mangle_expr(list(stmt[2]), mp),
+            _mangle_expr(list(stmt[3]), mp),
+        )
     if op == "OP_EXPR_STMT":
         return ("OP_EXPR_STMT", _mangle_expr(list(stmt[1]), mp))
     if op == "OP_CONDITIONAL":
@@ -345,10 +611,10 @@ def _function_def_from_tree(t: Tree) -> FunctionDef:
 
 
 def _validate_fn_body(body: IRList) -> None:
-    if not body or body[-1][0] != "OP_RETURN":
-        raise ValueError("function must end with a return statement")
-    if _returns_before_tail(body[:-1]):
-        raise ValueError("MVP: only a single return allowed, at end of function body")
+    if not _body_contains_any_return(body):
+        raise ValueError("function body must contain at least one return statement")
+    if _function_needs_masked_returns(body) and _return_inside_any_loop(body):
+        raise ValueError("return inside while (in user function) is not supported yet")
 
 
 def _returns_before_tail(stmts: IRList) -> bool:
@@ -619,6 +885,10 @@ def _accum_widths_from_stmt(stmt: Stmt, widths: Dict[str, int]) -> None:
         nm = str(stmt[1])
         rhs_w = _infer_expr_output_width(list(stmt[2]), widths)
         widths[nm] = max(widths.get(nm, 1), rhs_w)
+    elif op == "OP_BLEND_ASSIGN":
+        nm = str(stmt[1])
+        rhs_w = _infer_expr_output_width(list(stmt[3]), widths)
+        widths[nm] = max(widths.get(nm, 1), rhs_w)
     elif op == "OP_CONDITIONAL":
         snap = dict(widths)
         wt = dict(widths)
@@ -674,6 +944,10 @@ def extract_abi_layout(
         if op == "OP_ASSIGN":
             add_name(str(stmt[1]))
             walk_expr(list(stmt[2]))
+        elif op == "OP_BLEND_ASSIGN":
+            add_name(str(stmt[1]))
+            walk_expr(list(stmt[2]))
+            walk_expr(list(stmt[3]))
         elif op == "OP_EXPR_STMT":
             walk_expr(list(stmt[1]))
         elif op == "OP_CONDITIONAL":
