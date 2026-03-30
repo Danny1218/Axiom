@@ -1,0 +1,25 @@
+// Localized vortex-stretching surrogate: seed drives distinct liquid topologies per batch row.
+features = [random_seed];
+
+// Initial vorticity triad from the liquid networks
+v1 = neural(features, "liquid");
+v2 = neural(features, "liquid");
+v3 = neural(features, "liquid");
+
+step = 0.0;
+dt = 0.05;
+viscosity = 0.01;
+
+while (step < 20.0) {
+    dv1 = (v2 * v3) - (viscosity * v1);
+    dv2 = (v3 * v1) - (viscosity * v2);
+    dv3 = (v1 * v2) - (viscosity * v3);
+
+    v1 = v1 + (dv1 * dt);
+    v2 = v2 + (dv2 * dt);
+    v3 = v3 + (dv3 * dt);
+
+    step = step + 1.0;
+}
+
+kinetic_energy = (v1 * v1) + (v2 * v2) + (v3 * v3);
