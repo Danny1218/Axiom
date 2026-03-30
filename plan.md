@@ -38,7 +38,7 @@
 
 **Phase 22 (complete):** **High-dimensional KAN splines** — **`_rbf_basis`**: **`sigmoid(fused_norm)`** per channel **`(B, D)`**, RBFs broadcast to **`(B, D, K)`** (no mean-pool). **`coeffs`**: **`(dim, num_basis)`**, init **`randn / sqrt(K)`**; readout **`(phi * coeffs).sum(-1)`** → **`(B, D)`**. **`tests/test_kan_mean_blindness.py`**: **`[1,-1]` vs `[-1,1]`** same mean, distinct **`phi`**; reference helper shows old pooled path collapses; **`LiquidKANNode`** with **`fuse_proj`** copying **`h`** from **`cat([h,0])`** + fixed gate proves full forward separates permutations. Re-saved bundles need retrain (**`coeffs`** shape vs Phase 21).
 
-**Phase 23 (complete):** **Packaging** — Installable **`axiom-engine`** (**`pyproject.toml`**, **`src/axiom/`**): **`compiler/`**, **`engine/`**, **`primitives/`**, **`tools/`**, **`cli.py`**. Imports are **`axiom.*`**. Global CLI: **`axiom train …`**, **`axiom inspect`** (subprocess **`streamlit run`** on packaged **`inspector.py`**). **`pip install -e .`** for dev; **`grammar.lark`** in **`package-data`**. **`tests/`**, **`examples/`** stay at repo root; examples assume editable install.
+**Phase 23 (complete):** **Packaging** — Installable **`axiom-engine`** (**`pyproject.toml`**, **`src/axiom/`**): **`compiler/`**, **`engine/`**, **`primitives/`**, **`tools/`**, **`cli.py`**. Imports are **`axiom.*`**. Global CLI: **`axiom train …`**, **`axiom inspect`** (**`streamlit run`** with **`--server.fileWatcherType none`** to avoid PyTorch / file-watcher noise). **`pip install -e .`** for dev; **`grammar.lark`** in **`package-data`**. **`tests/`**, **`examples/`** stay at repo root; examples assume editable install.
 
 ## Layout
 

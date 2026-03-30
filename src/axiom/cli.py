@@ -79,7 +79,17 @@ def _cmd_inspect(_args: argparse.Namespace) -> int:
     import axiom.tools
 
     inspector = Path(axiom.tools.__file__).resolve().parent / "inspector.py"
-    return subprocess.call([sys.executable, "-m", "streamlit", "run", str(inspector)])
+    return subprocess.call(
+        [
+            sys.executable,
+            "-m",
+            "streamlit",
+            "run",
+            str(inspector),
+            "--server.fileWatcherType",
+            "none",
+        ]
+    )
 
 
 def main(argv: list[str] | None = None) -> None:
