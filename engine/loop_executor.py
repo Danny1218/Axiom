@@ -51,6 +51,7 @@ class InterpretedLiquidLoop(nn.Module):
             prelude_stmts=self.prelude_stmts,
             device=h.device,
             dtype=h.dtype,
+            trunk_dim=flat.shape[-1],
         )
         if seq.shape[1] == 0:
             y = self.kan.forward(flat)

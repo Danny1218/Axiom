@@ -22,6 +22,8 @@
 
 **Phase 14 (complete):** **Global feature ABI** — **`compiler.ir.extract_global_abi(ir, max_vars=dim)`** walks the program in document order; first-seen variable names map to trunk columns **`0..min(n_vars,dim)-1`**. **`ExecutionGraph.abi`**: **`Dict[str, int]`**. All **`InterpretedLiquidLoop`** instances share that map (no per-loop **`make_seed_map`**). **`run_loop_snapshots`** / **`InterpretedLiquidLoop`**: **`seed_map`** is **`name -> column`**. **`execution_topology_to_dict`** writes **`"abi"`**; **`load_execution_bundle`** reads **`abi`** or rebuilds from embedded **`ir`**. **`AxiomRunner`** fills columns from **`graph.abi`**, default **`0.0`** for missing names, ignores unknown keys; empty **`abi`** keeps legacy sorted/broadcast behavior for ancient bundles. Tests: **`tests/test_inference_abi.py`**, **`tests/test_inference_api.py`**, **`tests/test_flow.py`**, **`tests/test_deserializer.py`**.
 
+**Phase 15 (complete):** **Latent channel padding** — **`run_loop_snapshots(..., trunk_dim=...)`** zero-pads the sequence last dim up to the trunk width when the stacked snapshot width is smaller, so **`LiquidKANNode`** always sees **`(B, T, D_trunk)`** even if the IR layout width **`dim`** is narrower (ABI/script-only width vs supernet capacity). **`InterpretedLiquidLoop`** passes **`trunk_dim=flat.shape[-1]`**. **`engine/dataloader.py`**: **`AxiomDataset`** maps **`List[Dict[str, float]]`** into **`(trunk_dim,)`** inputs via **`abi`** and **`target_key`**; default target shape **`(1,)`**, optional **`broadcast_target=True`** fills **`(trunk_dim,)`** for MSE vs full trunk. Tests: **`tests/test_latent_channel_padding.py`**, **`tests/test_real_world_training.py`**, **`tests/test_dataloader_phase5.py`** (dataset unit tests).
+
 ## Layout
 
 - `main.py` — CLI entry
@@ -45,4 +47,4 @@ python -m pytest tests -q
 
 ## Next
 
-Distributed dataloader (see `readme.md`). Bundles without **`abi`** or embedded **`ir`** deserialize with empty ABI (legacy inference layout). Further Dynamo hardening if new IR ops add Python breaks.
+Distributed dataloader (see `readme.md`). Bundles without **`abi`** or embedded **`ir`** deserialize with empty ABI (legacy inference layout). Further Dynamo hardening if new IR ops add Python breaks. Optional: CSV/JSON loaders that build **`AxiomDataset`** rows.

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Dict, List, Optional, Set, Tuple
 
 import torch
+import torch.nn.functional as F
 
 Stmt = Tuple
 ExprIR = List[Tuple]
@@ -289,12 +290,17 @@ def run_loop_snapshots(
     prelude_stmts: Optional[List[Stmt]] = None,
     device: Optional[torch.device] = None,
     dtype: Optional[torch.dtype] = None,
+    trunk_dim: Optional[int] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Returns ``(seq, seq_mask)`` with **fixed** ``T = max_unroll`` (or ``T=0`` if ``max_unroll==0``).
 
     ``seq`` is ``(B, T, D)``, ``seq_mask`` is ``(B, T)`` bool — True = that row executed the body that
     step. After the loop condition goes false, later steps are no-ops (env frozen) and masks are False;
     this matches Phase 9 SIMT semantics without a Python ``break`` (TorchDynamo–friendly).
+
+    If ``trunk_dim`` is set and the stacked feature width is smaller (e.g. ``dim`` only sized to script
+    variables), the sequence is zero-padded on the last axis to ``trunk_dim`` so ``LiquidKANNode`` matches
+    the trunk width (latent channel padding / avoids ABI vs capacity mismatch).
     """
     if h_batch.dim() == 1:
         h_batch = h_batch.unsqueeze(0)
@@ -336,4 +342,6 @@ def run_loop_snapshots(
         mat = torch.cat([mat, pad], dim=2)
     elif mat.shape[2] > dim:
         mat = mat[:, :, :dim]
+    if trunk_dim is not None and mat.shape[2] < trunk_dim:
+        mat = F.pad(mat, (0, trunk_dim - mat.shape[2]))
     return mat, seq_mask

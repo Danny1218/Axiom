@@ -1,4 +1,4 @@
-from engine.dataloader import LiquidSequenceLoader, sequential_to_features
+from engine.dataloader import AxiomDataset, LiquidSequenceLoader, sequential_to_features
 from engine.inference import AxiomRunner
 from engine.fitness import (
     ShadowFitnessEvaluator,
@@ -29,6 +29,7 @@ __all__ = [
     "build_execution_graph_from_ir",
     "InterpretedLiquidLoop",
     "LiquidKANNode",
+    "AxiomDataset",
     "LiquidSequenceLoader",
     "sequential_to_features",
     "EvolutionaryTrainer",
