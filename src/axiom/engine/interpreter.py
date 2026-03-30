@@ -237,6 +237,12 @@ def eval_expr(
                 stack.append(v)
             else:
                 stack.append(torch.mean(v, dim=-1))
+        elif op == "OP_REDUCE_BATCH_MEAN":
+            v = stack.pop()
+            if v.dim() == 0:
+                stack.append(v)
+            else:
+                stack.append(torch.mean(v, dim=0, keepdim=True))
         elif op == "OP_DOT":
             b, a = stack.pop(), stack.pop()
             if a.dim() == 1 and b.dim() == 1:

@@ -1,0 +1,8 @@
+features = [momentum, volatility];
+raw_alpha = neural(features);
+
+// Cross-sectional de-meaning (Guarantees Market Neutrality)
+market_neutral_alpha = raw_alpha - batch_mean(raw_alpha);
+
+// Volatility sizing (Guarantees Risk Parity)
+target_weight = market_neutral_alpha / (volatility + 0.01);

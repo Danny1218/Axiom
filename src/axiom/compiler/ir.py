@@ -16,8 +16,8 @@ IRList = List[tuple]
 
 _CMP = {"GT": "OP_CMP_GT", "LT": "OP_CMP_LT", "EQ": "OP_CMP_EQ", "NE": "OP_CMP_NE"}
 
-# Built-in reducers: compile to OP_REDUCE_* / OP_DOT (not user ``OP_CALL`` / inlining).
-RESERVED_REDUCTION_BUILTINS = frozenset({"sum", "mean", "dot"})
+# Built-in reducers: compile to OP_REDUCE_* / OP_DOT (not user ``OP_CALL`` / inlining). ``batch_mean`` → batch dim.
+RESERVED_REDUCTION_BUILTINS = frozenset({"sum", "mean", "dot", "batch_mean"})
 # Element-wise unary math: compile to ``OP_MATH_UNARY`` (same stack shape as input).
 RESERVED_MATH_BUILTINS = frozenset({"abs", "exp", "log", "sqrt", "sin", "cos"})
 RESERVED_MATH_BINARY = frozenset({"max", "min"})
@@ -228,6 +228,11 @@ def _expand_builtin_reduction_call(
         h0, e0 = expand_expr(list(arg_irs[0]), funcs, ctr)
         h1, e1 = expand_expr(list(arg_irs[1]), funcs, ctr)
         return h0 + h1, e0 + e1 + [("OP_DOT",)]
+    if name == "batch_mean":
+        if len(arg_irs) != 1:
+            raise ValueError("batch_mean() expects exactly 1 argument")
+        h, e = expand_expr(list(arg_irs[0]), funcs, ctr)
+        return h, e + [("OP_REDUCE_BATCH_MEAN",)]
     raise ValueError(f"unknown built-in {name!r}")
 
 
@@ -644,6 +649,7 @@ def _mangle_expr(expr: ExprIR, mp: Dict[str, str]) -> ExprIR:
             "OP_INDEX",
             "OP_REDUCE_SUM",
             "OP_REDUCE_MEAN",
+            "OP_REDUCE_BATCH_MEAN",
             "OP_DOT",
             "OP_MATH_UNARY",
             "OP_MATH_BINARY",
@@ -854,6 +860,10 @@ def _postfix_expr(t: Tree) -> List[tuple]:
                 if len(args) != 1:
                     raise ValueError("mean() expects exactly 1 argument")
                 return _expr(args[0]) + [("OP_REDUCE_MEAN",)]
+            if fname == "batch_mean":
+                if len(args) != 1:
+                    raise ValueError("batch_mean() expects exactly 1 argument")
+                return _expr(args[0]) + [("OP_REDUCE_BATCH_MEAN",)]
             if fname == "dot":
                 if len(args) != 2:
                     raise ValueError("dot() expects exactly 2 arguments")
@@ -949,6 +959,9 @@ def _infer_expr_output_width(expr: ExprIR, known: Dict[str, int]) -> int:
         elif op in ("OP_REDUCE_SUM", "OP_REDUCE_MEAN"):
             stack.pop()
             stack.append(1)
+        elif op == "OP_REDUCE_BATCH_MEAN":
+            w = stack.pop()
+            stack.append(w)
         elif op == "OP_DOT":
             stack.pop()
             stack.pop()

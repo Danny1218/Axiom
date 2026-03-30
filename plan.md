@@ -74,7 +74,7 @@
 - `src/axiom/cli.py` — train / inspect subcommands
 - `src/axiom/datasets.py` — Titanic, sine, finance mock
 - `src/axiom/tools/inspector.py`, `glass_box.py` — Glass Box
-- `examples/titanic.ax`, `examples/sequence.ax`, `examples/portfolio.ax`, `examples/spy_alpha.ax` — domain sketches
+- `examples/titanic.ax`, `examples/sequence.ax`, `examples/portfolio.ax`, `examples/spy_alpha.ax`, `examples/statarb.ax` — domain sketches
 - `examples/train_portfolio.py` — Phase 36 train + symbolic ablation
 - `examples/train_spy.py` — live SPY + Phase 38 backtest (optional: `pip install -e ".[spy]"`)
 - `train.ax` — default **`axiom train`** sketch (cwd)
@@ -83,7 +83,7 @@
 
 ## IR opcodes
 
-`OP_CONST`, `OP_LOAD`, `OP_ADD`, `OP_SUB`, `OP_MUL`, `OP_DIV`, `OP_NEG`, `OP_CMP_*`, `OP_VEC_PACK`, `OP_INDEX`, `OP_REDUCE_SUM`, `OP_REDUCE_MEAN`, `OP_DOT`, `OP_MATH_UNARY`, `OP_MATH_BINARY`, `OP_NEURAL`, `OP_CALL` (pre-expand), `OP_RETURN` (function body), `OP_ASSIGN`, `OP_BLEND_ASSIGN` (inlined fn), `OP_EXPR_STMT`, `OP_CONDITIONAL`, `OP_LOOP`.
+`OP_CONST`, `OP_LOAD`, `OP_ADD`, `OP_SUB`, `OP_MUL`, `OP_DIV`, `OP_NEG`, `OP_CMP_*`, `OP_VEC_PACK`, `OP_INDEX`, `OP_REDUCE_SUM`, `OP_REDUCE_MEAN`, `OP_REDUCE_BATCH_MEAN`, `OP_DOT`, `OP_MATH_UNARY`, `OP_MATH_BINARY`, `OP_NEURAL`, `OP_CALL` (pre-expand), `OP_RETURN` (function body), `OP_ASSIGN`, `OP_BLEND_ASSIGN` (inlined fn), `OP_EXPR_STMT`, `OP_CONDITIONAL`, `OP_LOOP`.
 
 ## Run training (PowerShell)
 
@@ -98,6 +98,7 @@ python examples/train_portfolio.py
 axiom predict --bundle examples/portfolio_trained.axb --input '{"volatility":0.6,"drawdown":0.1,"momentum":-0.8,"volume":1.5}'
 pip install -e ".[spy]"
 python examples/train_spy.py
+python examples/train_statarb.py
 axiom inspect
 ```
 
@@ -110,5 +111,7 @@ axiom inspect
 **Phase 40 (complete):** **Quant toolkit** — **`examples/spy_alpha.ax`**: **`neural([momentum_1d, momentum_5d, volatility, sma_10, sma_50, volatility_20d])`** + same **2.5%** volatility circuit breaker. **`examples/train_spy.py`**: SMA divergence (**10/50**), **20d** vol of returns, **annualized Sharpe** and **equity-curve max drawdown** (strategy vs buy-and-hold) alongside cumulative returns; **custom** **`nn.Sequential(6→32→…→1)`** via **`InterpretedBlock(..., custom_neural_registry={node_id: module})`**, prints neural **node id(s)** before training; **`axiom.load(path, custom_neural_registry=...)`** + **`load_bundle(..., custom_neural_registry=...)`** so **`.axb`** reload matches trained shapes. Tests: **`tests/test_custom_neural_registry.py`**, **`tests/test_deserializer.py`** (custom bundle round-trip), **`tests/test_spy_strategy.py`** updates.
 
 **Phase 41 (complete):** **Explainability** — **`InterpretedBlock.forward(h, return_env=True)`** → **`(out_trunk, env)`**; default **`return_env=False`** unchanged for training. **`AxiomModel.explain(row_dict)`** runs batch-1 forward, strips **`_…`** keys, converts env tensors to **float / list[float]**. **`examples/train_spy.py`**: **`backtest_metrics`** returns **`(metrics, df_oos)`**; **Autopsy** section: worst **`strategy_return`** day, **`model.explain`**, JSON trace. Tests: **`tests/test_explain.py`**.
+
+**Phase 42 (complete):** **Cross-sectional `batch_mean`** — Grammar **`batch_mean(expr)`** → **`OP_REDUCE_BATCH_MEAN`**; **`eval_expr`**: **`torch.mean(v, dim=0, keepdim=True)`** (differentiable w.r.t. batch). **`_infer_expr_output_width`**: preserves feature width (unlike **`mean`** over features). **`examples/statarb.ax`**: **`market_neutral_alpha = raw_alpha - batch_mean(raw_alpha)`**, **`target_weight = …`**. **`examples/train_statarb.py`**: mock **10×50** panel, per-day batch forward, maximize **`-sum(weight * future_return)`**. Tests: **`tests/test_batch_mean.py`**.
 
 **Later ideas:** **`return` inside `while`**; call targets like **`f()[i]`**. Glass Box upgrades (**`--inspect`** / graph of **`OP_NEURAL`**). See **`readme.md` § Road ahead**.

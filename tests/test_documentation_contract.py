@@ -147,6 +147,14 @@ def test_examples_portfolio_ax_flagship_ir():
     )
 
 
+def test_examples_statarb_ax_has_batch_mean():
+    reset_parser()
+    ir = ast_to_ir(parse_ax_file(_root() / "examples" / "statarb.ax"))
+    flat = str(ir)
+    assert "OP_REDUCE_BATCH_MEAN" in flat or "batch_mean" in flat
+    assert "market_neutral_alpha" in flat
+
+
 def test_examples_spy_alpha_ax_circuit_breaker_ir():
     reset_parser()
     ir = ast_to_ir(parse_ax_file(_root() / "examples" / "spy_alpha.ax"))
