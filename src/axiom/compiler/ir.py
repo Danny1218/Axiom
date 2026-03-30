@@ -17,6 +17,9 @@ _CMP = {"GT": "OP_CMP_GT", "LT": "OP_CMP_LT", "EQ": "OP_CMP_EQ", "NE": "OP_CMP_N
 
 # Built-in reducers: compile to OP_REDUCE_* / OP_DOT (not user ``OP_CALL`` / inlining).
 RESERVED_REDUCTION_BUILTINS = frozenset({"sum", "mean", "dot"})
+# Element-wise unary math: compile to ``OP_MATH_UNARY`` (same stack shape as input).
+RESERVED_MATH_BUILTINS = frozenset({"abs", "exp", "log", "sqrt", "sin", "cos"})
+RESERVED_BUILTIN_NAMES = RESERVED_REDUCTION_BUILTINS | RESERVED_MATH_BUILTINS
 
 
 @dataclass(frozen=True)
@@ -168,6 +171,11 @@ def expand_expr(expr: ExprIR, funcs: Dict[str, FunctionDef], ctr: List[int]) -> 
                 hoists.extend(h)
                 out.extend(tail)
                 continue
+            if name in RESERVED_MATH_BUILTINS:
+                h, tail = _expand_math_builtin_call(tup, funcs, ctr)
+                hoists.extend(h)
+                out.extend(tail)
+                continue
             h, repl = _expand_call_op(tup, funcs, ctr)
             hoists.extend(h)
             out.extend(repl)
@@ -199,6 +207,18 @@ def _expand_builtin_reduction_call(
         h1, e1 = expand_expr(list(arg_irs[1]), funcs, ctr)
         return h0 + h1, e0 + e1 + [("OP_DOT",)]
     raise ValueError(f"unknown built-in {name!r}")
+
+
+def _expand_math_builtin_call(
+    tup: Tuple[Any, ...], funcs: Dict[str, FunctionDef], ctr: List[int]
+) -> Tuple[IRList, ExprIR]:
+    """Lower ``OP_CALL`` for ``abs`` / ``exp`` / … to ``("OP_MATH_UNARY", name)``."""
+    name = str(tup[1])
+    arg_irs: Tuple[ExprIR, ...] = tuple(tuple(x) for x in tup[2])
+    if len(arg_irs) != 1:
+        raise ValueError(f"{name}() expects exactly 1 argument")
+    h, e = expand_expr(list(arg_irs[0]), funcs, ctr)
+    return h, e + [("OP_MATH_UNARY", name)]
 
 
 def _load_e(name: str) -> ExprIR:
@@ -577,6 +597,7 @@ def _mangle_expr(expr: ExprIR, mp: Dict[str, str]) -> ExprIR:
             "OP_REDUCE_SUM",
             "OP_REDUCE_MEAN",
             "OP_DOT",
+            "OP_MATH_UNARY",
         ) or (isinstance(op, str) and op.startswith("OP_CMP_")):
             out.append(tup)
         else:
@@ -603,7 +624,7 @@ def _function_def_from_tree(t: Tree) -> FunctionDef:
         raise ValueError("malformed function_def")
     if not isinstance(inner, Tree) or inner.data != "inner":
         raise ValueError("malformed function_def")
-    if name in RESERVED_REDUCTION_BUILTINS:
+    if name in RESERVED_BUILTIN_NAMES:
         raise ValueError(f"cannot define function {name!r} — reserved built-in")
     body = _inner(inner, allow_return=True)
     _validate_fn_body(body)
@@ -788,6 +809,10 @@ def _postfix_expr(t: Tree) -> List[tuple]:
                 if len(args) != 2:
                     raise ValueError("dot() expects exactly 2 arguments")
                 return _expr(args[0]) + _expr(args[1]) + [("OP_DOT",)]
+            if fname in RESERVED_MATH_BUILTINS:
+                if len(args) != 1:
+                    raise ValueError(f"{fname}() expects exactly 1 argument")
+                return _expr(args[0]) + [("OP_MATH_UNARY", fname)]
             arg_irs = tuple(_expr(c) for c in args)
             return [("OP_CALL", fname, arg_irs)]
         return _postfix_expr(base) + _expr(second) + [("OP_INDEX",)]
@@ -870,6 +895,8 @@ def _infer_expr_output_width(expr: ExprIR, known: Dict[str, int]) -> int:
             stack.pop()
             stack.pop()
             stack.append(1)
+        elif op == "OP_MATH_UNARY":
+            stack.append(stack.pop())
         elif op == "OP_CALL":
             raise ValueError("OP_CALL in width inference — expand calls before ABI layout")
         else:

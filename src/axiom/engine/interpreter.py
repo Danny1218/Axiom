@@ -129,6 +129,16 @@ def _broadcast_mask(mask_1d: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
     return mask_1d.view(mask_1d.shape[0], *([1] * (t.dim() - 1)))
 
 
+_TORCH_MATH_UNARY = {
+    "abs": torch.abs,
+    "exp": torch.exp,
+    "log": torch.log,
+    "sqrt": torch.sqrt,
+    "sin": torch.sin,
+    "cos": torch.cos,
+}
+
+
 def _promote_batch_binop(a: torch.Tensor, b: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
     """If one side is ``(B, K)`` and the other ``(B,)`` (batch-aligned 1D), promote ``(B,)`` → ``(B, 1)``."""
     if a.dim() == 0 or b.dim() == 0:
@@ -217,6 +227,11 @@ def eval_expr(
                 a, b = a.unsqueeze(-1), b.unsqueeze(-1)
             a, b = _promote_batch_binop(a, b)
             stack.append(torch.sum(a * b, dim=-1))
+        elif op == "OP_MATH_UNARY":
+            fn = _TORCH_MATH_UNARY.get(str(tup[1]))
+            if fn is None:
+                raise ValueError(f"unknown OP_MATH_UNARY {tup[1]!r}")
+            stack.append(fn(stack.pop()))
         elif op == "OP_CMP_GT":
             b, a = stack.pop(), stack.pop()
             a, b = _promote_batch_binop(a, b)

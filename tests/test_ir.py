@@ -78,3 +78,11 @@ def test_ir_builtin_reduction_opcodes():
     assert ir[0][2][-1] == ("OP_REDUCE_SUM",)
     assert ir[1][2][-1] == ("OP_REDUCE_MEAN",)
     assert ir[2][2][-1] == ("OP_DOT",)
+
+
+def test_ir_math_unary_opcodes():
+    reset_parser()
+    ir = ast_to_ir(parse_ax("u = abs([-1.0]); v = log([1.0]); w = sin([0.0]);"))
+    assert ir[0][2][-1] == ("OP_MATH_UNARY", "abs")
+    assert ir[1][2][-1] == ("OP_MATH_UNARY", "log")
+    assert ir[2][2][-1] == ("OP_MATH_UNARY", "sin")

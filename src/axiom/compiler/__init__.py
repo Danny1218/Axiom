@@ -1,5 +1,6 @@
 from axiom.compiler.flow import wire_execution_graph
 from axiom.compiler.ir import (
+    RESERVED_MATH_BUILTINS,
     RESERVED_REDUCTION_BUILTINS,
     ast_to_ir,
     expand_function_calls,
@@ -16,6 +17,7 @@ __all__ = [
     "ast_to_ir",
     "parse_program",
     "expand_function_calls",
+    "RESERVED_MATH_BUILTINS",
     "RESERVED_REDUCTION_BUILTINS",
     "extract_global_abi",
     "wire_execution_graph",

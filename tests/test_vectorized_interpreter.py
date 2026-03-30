@@ -112,6 +112,46 @@ def test_vector_times_scalar_batch_gt2():
     assert torch.allclose(out[:, yc : yc + 3], want)
 
 
+def test_math_unary_abs_exp_vector_literal_matches_torch():
+    """``abs`` / ``exp`` preserve (B,K); match PyTorch element-wise."""
+    reset_parser()
+    ir = ast_to_ir(parse_ax("x = [-1.0, 2.0]; y = abs(x); z = exp(y);"))
+    abi = extract_global_abi(ir, max_vars=16)
+    aw = extract_abi_widths(ir, max_vars=16)
+    block = InterpretedBlock(ir, abi, abi_widths=aw)
+    h = torch.zeros(2, 16)
+    out = block(h)
+    xc, yc, zc = abi["x"], abi["y"], abi["z"]
+    x_t = torch.tensor([[-1.0, 2.0], [-1.0, 2.0]])
+    want_y = torch.abs(x_t)
+    want_z = torch.exp(want_y)
+    assert torch.allclose(out[:, yc : yc + 2], want_y)
+    assert torch.allclose(out[:, zc : zc + 2], want_z)
+
+
+def test_math_unary_all_preserve_width_and_match_torch():
+    cases = [
+        ("w1", "abs(x)", torch.abs),
+        ("w2", "exp(x)", torch.exp),
+        ("w3", "log(x)", torch.log),
+        ("w4", "sqrt(x)", torch.sqrt),
+        ("w5", "sin(x)", torch.sin),
+        ("w6", "cos(x)", torch.cos),
+    ]
+    for name, rhs, fn in cases:
+        reset_parser()
+        ir = ast_to_ir(parse_ax(f"x = [0.25, 0.5]; {name} = {rhs};"))
+        abi = extract_global_abi(ir, max_vars=32)
+        aw = extract_abi_widths(ir, max_vars=32)
+        block = InterpretedBlock(ir, abi, abi_widths=aw)
+        h = torch.zeros(3, 32)
+        out = block(h)
+        x_t = torch.tensor([[0.25, 0.5]] * 3)
+        col = abi[name]
+        got = out[:, col : col + 2]
+        assert torch.allclose(got, fn(x_t), equal_nan=True)
+
+
 def test_sum_mean_dot_on_vector_literal():
     reset_parser()
     ir = ast_to_ir(

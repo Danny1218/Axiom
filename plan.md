@@ -60,6 +60,8 @@
 
 **Phase 33 (complete):** **Masked early `return` in user functions** — When a function needs non–tail-only returns, **`_expand_call_op`** uses **`_inline_*__pm` / `__rd` / `__ra`** (path mask, “returned” accumulator, return value accumulator). **`OP_BLEND_ASSIGN`** blends assignments with **`path_mask * (1 - return_done)`**. **`if`/`else`** lowers to **`OP_CONDITIONAL`** branches that scale **`pm`**, restore after each branch, and merge like other SIMT code. **`return`** emits **`ra += contrib * val`**, **`rd += contrib * (1-rd)`**. **Simple** single tail return keeps the previous fast inline. **`return` inside `while`** is rejected (parse + inline). **`while`** with no return in body may coexist with early returns elsewhere. Tests: **`tests/test_early_return.py`**.
 
+**Phase 34 (complete):** **Standard math library (unary)** — **`RESERVED_MATH_BUILTINS`**: **`abs`**, **`exp`**, **`log`**, **`sqrt`**, **`sin`**, **`cos`**. Parse + **`expand_expr`** emit **`("OP_MATH_UNARY", name)`**; reserved alongside reducers (**`RESERVED_BUILTIN_NAMES`**). **`_infer_expr_output_width`**: unary math preserves tensor width. **`eval_expr`**: maps names to **`torch.*`**. Tests: **`tests/test_vectorized_interpreter.py`**, **`tests/test_ir.py`**, **`tests/test_function_inline.py`**.
+
 ## Layout
 
 - `pyproject.toml` — **`axiom-engine`**, script **`axiom` → `axiom.cli:main`**
@@ -73,7 +75,7 @@
 
 ## IR opcodes
 
-`OP_CONST`, `OP_LOAD`, `OP_ADD`, `OP_SUB`, `OP_MUL`, `OP_DIV`, `OP_NEG`, `OP_CMP_*`, `OP_VEC_PACK`, `OP_INDEX`, `OP_REDUCE_SUM`, `OP_REDUCE_MEAN`, `OP_DOT`, `OP_CALL` (pre-expand), `OP_RETURN` (function body), `OP_ASSIGN`, `OP_BLEND_ASSIGN` (inlined fn), `OP_EXPR_STMT`, `OP_CONDITIONAL`, `OP_LOOP`.
+`OP_CONST`, `OP_LOAD`, `OP_ADD`, `OP_SUB`, `OP_MUL`, `OP_DIV`, `OP_NEG`, `OP_CMP_*`, `OP_VEC_PACK`, `OP_INDEX`, `OP_REDUCE_SUM`, `OP_REDUCE_MEAN`, `OP_DOT`, `OP_MATH_UNARY`, `OP_CALL` (pre-expand), `OP_RETURN` (function body), `OP_ASSIGN`, `OP_BLEND_ASSIGN` (inlined fn), `OP_EXPR_STMT`, `OP_CONDITIONAL`, `OP_LOOP`.
 
 ## Run training (PowerShell)
 
@@ -89,4 +91,4 @@ axiom inspect
 
 ## Next
 
-**Phase 34 (ideas):** **`return` inside `while`** (masked unroll or graph loop fusion); more built-ins (**`max`**, **`min`**); call targets like **`f()[i]`**. Product fork: **Path A** / **B** / **C** — **`readme.md` § Road ahead**. Engineering: CSV metric; richer Titanic ABI; Dynamo hardening; optional Graphviz WASM on Windows.
+**Phase 35 (ideas):** Element-wise **`max`/`min`** (two-arg); **`return` inside `while`**; call targets like **`f()[i]`**. Product: **`neural(...)`** in DSL; **`examples/portfolio.ax`**; Glass Box upgrades (**`--inspect`**). See **`readme.md` § Road ahead**.
