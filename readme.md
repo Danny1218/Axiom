@@ -7,6 +7,20 @@
 
 ---
 
+## Understanding Axiom (the layman’s bridge)
+
+Modern software sits between two broken extremes:
+
+| **Traditional code** | **Standard AI (deep nets / LLMs)** |
+|----------------------|-------------------------------------|
+| You write strict rules (`if X > 5 then Y`). Reliable and obedient—but the real world is messy; when data doesn’t fit, logic fails hard. | You feed a huge black box millions of examples and hope it infers the rules. Great on messy data—but it can hallucinate; you can’t *force* it to obey physics or policy. |
+
+**Axiom is the hybrid path:** a **symbolic–neural** engine. You write normal-looking rules in an **`.ax`** file (the **symbolic** skeleton). The compiler then **wraps** a fluid, trainable neural graph around that skeleton (the **neural** reflexes)—same program, one differentiable stack.
+
+**Metaphor — self-driving:** Traditional code is a strict lane line: line disappears → crash. Pure AI is a blindfolded learner: crash 10,000 times and hope for intuition. **Axiom** is **GPS + reflexes**: the map is your explicit code (where the car *must* go); the nets learn potholes and edge cases the map never listed.
+
+---
+
 ## Why Axiom?
 
 Axiom is a **hybrid symbolic–neural** system: you program in a small language (`.ax` files) that looks like JavaScript; the compiler lowers `if`, `else`, and `while` into **differentiable** PyTorch graphs. Symbolic paths encode what you *know*; **Tensor-Train LoRA (TT-LoRA)** adapters on a shared trunk learn what you *don’t*.
@@ -19,6 +33,15 @@ Axiom is a **hybrid symbolic–neural** system: you program in a small language 
 | **Dynamic routing (MoE)** | `if` / `else` compiles to **Sinkhorn**-balanced mixture-of-experts routing. **MetaCompiler** can **unmask** shadow experts when router entropy signals high uncertainty—new capacity appears only when needed. |
 | **Continuous memory** | `while` loops become **Liquid Kolmogorov–Arnold Networks (KANs)** over unrolled timesteps, with **high-dimensional RBF splines**—a differentiable alternative to stacking static RNN cells for sequence-shaped IR. |
 | **The Glass Box** | The stack is **interpretable by design**: launch a **Streamlit** dashboard to see the graph, ABI variables, and routing weights evolve—not a black box. |
+
+### Why it’s different from “just scale the Transformer”
+
+Much of the industry optimizes **scaling laws**—bigger GPUs, bigger black boxes. Axiom optimizes **structure** instead:
+
+- **Zero-shot human knowledge:** Encode facts and invariants in code so the model doesn’t waste capacity re-learning basics; nets focus on **residuals** and messy regions.
+- **Glass-box audits:** Because execution sits on top of your IR, **`axiom inspect`** lets you see **which branch** was taken and **how much** neural routing moved the needle—valuable in regulated settings.
+- **Physical growth (DNAS):** The graph can **raise** capacity when uncertain—Sinkhorn entropy feeds **MetaCompiler**, which can **unmask** shadow LoRA experts instead of freezing a single static brain.
+- **Time as continuity:** Loops compile to **Liquid KANs** with **RBF splines** over unrolled time—closer to a continuous dynamical view than a purely discrete tick-tock RNN story (see `examples/sequence.ax`).
 
 ### What is an `.ax` file?
 
@@ -116,6 +139,33 @@ This starts **Streamlit**. In the UI, set the bundle path prefix (same as `--out
 ## Philosophy
 
 Brute-force scaling hits walls; **structure** scales. Axiom gives you an algorithmic skeleton you can read and audit, and lets **DNAS-style** sparsity and meta-compilation grow the right neural “muscle” where uncertainty demands it—on hardware you already have.
+
+---
+
+## Where Axiom shines (example domains)
+
+These are **illustrative**—not shipped products—but they match the design center: **hard constraints in code**, **learning in the gaps**.
+
+| Domain | Symbolic (your rules) | Neural (adapters / KAN) |
+|--------|------------------------|---------------------------|
+| **Trading / risk** | Hard limits (`if loss > threshold then flatten`) | Momentum, microstructure, regime patterns |
+| **Med / biotech** | Physiological impossibilities, contraindications | Subtle biomarker correlations inside guardrails |
+| **Robotics** | Safety envelopes, no-go zones | Smooth motion, efficiency inside constraints |
+| **Games / sims** | Gravity, collision, authored laws | NPCs, weather, adaptive behavior without breaking physics |
+
+---
+
+## Road ahead
+
+Three honest forks after v1.0:
+
+| Path | Idea | Trade-off |
+|------|------|-----------|
+| **A — Killer app** | Stop extending the compiler; ship a **domain vertical** (trading, sports, weather) that proves ROI. | Proves value; less time on core R&D. |
+| **B — Language** | Grow **`.ax`** toward **functions, arrays, classes** (Turing-complete, reusable modules). | Huge compiler/graph-design lift; long horizon. |
+| **C — Community** | **PyPI**, articles, tutorials, issues—grow users and contributors. | Recognition and help; maintainer time on support and docs. |
+
+**Pragmatic default:** drive **Path A** once—pick a dataset you care about, beat or match a baseline, *then* invest in B or C with evidence.
 
 ---
 

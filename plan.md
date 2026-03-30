@@ -46,6 +46,8 @@
 
 **Phase 26 (complete):** **Documentation** — **`readme.md`** rewritten: hero + hybrid/KAN/Glass Box narrative, **`.ax`** explainer, install, Titanic + sine quickstarts (real **`titanic.ax`** / **`sequence.ax`** snippets, **`javascript`** / **`bash`** fences), **`axiom inspect`** Glass Box, CLI cheat sheet, pipeline + philosophy.
 
+**Phase 27 (complete):** **Narrative + doc contracts** — **`readme.md`**: layman bridge (code vs AI extremes, cyborg / self-driving metaphor), “why not scaling laws,” example domains table, **Road ahead** (Paths A/B/C). Tests: **`tests/test_documentation_contract.py`** (readme sections, version string vs **`pyproject.toml`**, **`titanic.ax`** / **`sequence.ax`** IR shapes, CLI **`--help`**, **`cli.py`** wiring strings, dataset mutual exclusion, **`axiom.tools.inspector`**, **`axiom.datasets`** API).
+
 ## Layout
 
 - `pyproject.toml` — **`axiom-engine`**, script **`axiom` → `axiom.cli:main`**
@@ -75,4 +77,4 @@ axiom inspect
 
 ## Next
 
-More built-in **`--dataset`** presets; CSV classification metric flag; richer Titanic ABI. Dynamo hardening for new IR ops. Optional: Graphviz WASM if **`dot`** missing on Windows.
+Product fork: **Path A** (vertical killer app) vs **B** (language: functions/arrays/classes) vs **C** (PyPI + community)—see **`readme.md` § Road ahead**. Engineering: more **`--dataset`** presets; CSV classification metric; richer Titanic ABI; Dynamo hardening; optional Graphviz WASM on Windows.
