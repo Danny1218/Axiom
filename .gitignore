@@ -7,4 +7,6 @@ venv/
 dist/
 build/
 examples/titanic.csv
+axiom_bundle.pt
+axiom_bundle_topology.json
 .axiom_inspector_upload/

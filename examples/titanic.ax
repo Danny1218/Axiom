@@ -1,13 +1,7 @@
-// Titanic survival — symbolic priors; TT-LoRA + Sinkhorn refine residuals.
+// Sabotage experiment: useless symbolic rule (real fares are ~0–500). DNAS + latents must carry signal.
 
-if (Sex > 0.5) {
-  survived_prob = 0.7;
+if (Fare > 100000.0) {
+  survived_prob = 1.0;
 } else {
-  survived_prob = 0.2;
-}
-
-if (Pclass > 2.5) {
-  survived_prob = survived_prob - 0.3;
-} else {
-  survived_prob = survived_prob + 0.1;
+  survived_prob = 0.0;
 }

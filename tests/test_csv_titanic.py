@@ -36,30 +36,35 @@ def test_titanic_ax_abi_has_survived_prob():
     ir = ast_to_ir(parse_ax_file(root / "examples" / "titanic.ax"))
     abi = extract_global_abi(ir, max_vars=32)
     assert "survived_prob" in abi
-    assert "Sex" in abi and "Pclass" in abi
+    assert "Fare" in abi
 
 
 def _build_titanic_like_graph(dim: int = 32):
     reset_parser()
     root = Path(__file__).resolve().parents[1]
     ir = ast_to_ir(parse_ax_file(root / "examples" / "titanic.ax"))
-    pairs = [("then_0", "else_0"), ("then_1", "else_1")]
-    names = [n for p in pairs for n in p] + ["latent_0", "latent_1"]
+    n_cond = sum(1 for x in ir if x[0] == "OP_CONDITIONAL")
+    pairs = [(f"then_{i}", f"else_{i}") for i in range(n_cond)]
+    names = [n for p in pairs for n in p]
+    for j in range(max(0, 4 - len(names))):
+        names.append(f"latent_{j}")
     sn = LatentSupernet(dim, names, rank=2)
-    sn.set_masks({"then_0": 1.0, "else_0": 1.0, "then_1": 1.0, "else_1": 1.0})
+    masks = {f"then_{i}": 1.0 for i in range(n_cond)}
+    masks.update({f"else_{i}": 1.0 for i in range(n_cond)})
+    sn.set_masks(masks)
     return wire_execution_graph(ir, sn, pairs, mutation_entropy_norm_threshold=0.99)
 
 
 def test_titanic_smoke_train_and_accuracy(tmp_path):
     p = tmp_path / "mini.csv"
     p.write_text(
-        "Sex,Pclass,Survived\n"
-        "1,1,1\n"
-        "1,1,1\n"
-        "0,3,0\n"
-        "0,3,0\n"
-        "1,2,1\n"
-        "0,2,0\n",
+        "Fare,Sex,Pclass,Survived\n"
+        "0,1,1,1\n"
+        "0,1,1,1\n"
+        "0,0,3,0\n"
+        "0,0,3,0\n"
+        "0,1,2,1\n"
+        "0,0,2,0\n",
         encoding="utf-8",
     )
     rows = load_csv_to_dicts(p)

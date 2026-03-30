@@ -1,7 +1,17 @@
 """
 Train Axiom on Titanic CSV: compile ``titanic.ax``, EvolutionaryTrainer + AxiomDataset, test accuracy.
 
-Run from repo root: ``python examples/run_titanic.py``
+Run from repo root::
+
+    python examples/run_titanic.py --epochs 50
+
+Sabotage experiment (useless ``Fare > 100000`` rule in ``titanic.ax``): keep **MetaCompiler** on
+(default) so Sinkhorn entropy can unmask shadow experts; bundle is written for the Glass Box::
+
+    python examples/run_titanic.py --epochs 50
+    streamlit run tools/inspector.py   # sidebar: path prefix axiom_bundle (no extension)
+
+Use ``--no-meta`` to disable DNAS unmasking; ``--no-save`` to skip ``axiom_bundle*.pt/json``.
 """
 from __future__ import annotations
 
@@ -21,8 +31,10 @@ if str(_REPO) not in sys.path:
 from compiler.flow import wire_execution_graph
 from compiler.ir import ast_to_ir
 from compiler.parser import parse_ax_file
+from compiler.serializer import save_execution_bundle
 from engine.dataloader import AxiomDataset, load_csv_to_dicts
 from engine.inference import AxiomRunner
+from engine.meta_compiler import MetaCompiler
 from engine.supernet import LatentSupernet
 from engine.trainer import EvolutionaryTrainer
 
@@ -86,6 +98,22 @@ def main() -> None:
     ap.add_argument("--lr", type=float, default=1e-2)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--split", type=float, default=0.8, help="Train fraction")
+    ap.add_argument(
+        "--no-meta",
+        action="store_true",
+        help="Disable MetaCompiler (default: MetaCompiler unmasks shadow experts from router entropy)",
+    )
+    ap.add_argument(
+        "--out",
+        type=Path,
+        default=_REPO / "axiom_bundle",
+        help="Bundle path prefix for save_execution_bundle",
+    )
+    ap.add_argument(
+        "--no-save",
+        action="store_true",
+        help="Do not write bundle after training",
+    )
     args = ap.parse_args()
 
     torch.manual_seed(args.seed)
@@ -104,7 +132,7 @@ def main() -> None:
 
     train_rows, test_rows = train_val_split(rows, frac=args.split, seed=args.seed)
 
-    _, _, graph = build_graph(args.ax, args.dim, args.rank)
+    ir, sn, graph = build_graph(args.ax, args.dim, args.rank)
     graph = graph.to(device)
     abi = graph.abi
     if "survived_prob" not in abi:
@@ -114,9 +142,10 @@ def main() -> None:
     train_ds = AxiomDataset(train_rows, abi, trunk_dim=args.dim, target_key="Survived")
     train_loader = DataLoader(train_ds, batch_size=args.batch, shuffle=True)
 
+    mc = None if args.no_meta else MetaCompiler(sn)
     trainer = EvolutionaryTrainer(graph, lr=args.lr, compile_graph=False, target_col=target_col)
     for ep in range(args.epochs):
-        loss = trainer.train_epoch(train_loader, meta_compiler=None, device=device)
+        loss = trainer.train_epoch(train_loader, meta_compiler=mc, device=device)
         if (ep + 1) % 10 == 0 or ep == 0:
             print(f"epoch {ep + 1}/{args.epochs}  mean_mse={loss:.6f}")
 
@@ -133,6 +162,11 @@ def main() -> None:
             correct += 1
     acc = correct / max(len(test_rows), 1)
     print(f"test_accuracy={acc:.4f}  (n={len(test_rows)})")
+
+    if not args.no_save:
+        prefix = args.out
+        save_execution_bundle(graph.cpu(), prefix, ir=ir)
+        print(f"saved bundle prefix {prefix}  ({prefix}_topology.json + {prefix}.pt)")
 
 
 if __name__ == "__main__":
