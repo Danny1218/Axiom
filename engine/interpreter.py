@@ -194,17 +194,19 @@ def run_while_loop(
     device: torch.device,
     dtype: torch.dtype,
     parent_active: Optional[torch.Tensor] = None,
-) -> List[torch.Tensor]:
+) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
     """
     `scope`: rows allowed in this loop (all ones, or `parent_active` for nested loops).
     Each iteration uses fresh `cond_val`; `entering = scope & (cond_val != 0)` matches
     scalar semantics without shrinking scope from stale cond (cond is re-evaluated after body).
+    Returns parallel `masks` (same length as `snaps`): per-step `entering` for LiquidKAN masking.
     """
     if parent_active is None:
         scope = _all_active(B, device)
     else:
         scope = parent_active.clone()
     snaps: List[torch.Tensor] = []
+    masks: List[torch.Tensor] = []
     for _ in range(max_unroll):
         cond_val = eval_expr(env, cond_ir, B=B, device=device, dtype=dtype)
         entering = scope & (cond_val != 0)
@@ -222,7 +224,8 @@ def run_while_loop(
                 active_mask=entering,
             )
         snaps.append(snapshot_env(env, var_order, B=B, device=device, dtype=dtype))
-    return snaps
+        masks.append(entering.clone())
+    return snaps, masks
 
 
 def exec_stmt(
@@ -260,7 +263,7 @@ def exec_stmt(
             env[k] = torch.where(active_mask, picked, base[k])
     elif op == "OP_LOOP":
         inner_order = build_var_order(stmt[1], stmt[2], dim, env_keys=set(env.keys()))
-        run_while_loop(
+        _, _ = run_while_loop(
             env,
             stmt[1],
             stmt[2],
@@ -287,8 +290,8 @@ def run_loop_snapshots(
     prelude_stmts: Optional[List[Stmt]] = None,
     device: Optional[torch.device] = None,
     dtype: Optional[torch.dtype] = None,
-) -> torch.Tensor:
-    """(B, T, D) tensor; T=0 if the loop body never runs. Differentiable w.r.t. `h_batch`."""
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Returns ``(seq, seq_mask)``: ``seq`` (B, T, D), ``seq_mask`` (B, T) bool — True = row ran body that step (LiquidKAN integrates)."""
     if h_batch.dim() == 1:
         h_batch = h_batch.unsqueeze(0)
     if h_batch.dim() != 2:
@@ -306,7 +309,7 @@ def run_loop_snapshots(
             env[name] = h_batch[:, idx]
     for st in prelude_stmts:
         exec_stmt(env, st, B=B, dim=dim, max_unroll=max_unroll, device=dev, dtype=dt, active_mask=None)
-    snaps = run_while_loop(
+    snaps, masks = run_while_loop(
         env,
         cond_ir,
         body_ir,
@@ -319,11 +322,14 @@ def run_loop_snapshots(
         parent_active=None,
     )
     if not snaps:
-        return torch.zeros(B, 0, dim, device=dev, dtype=dt)
+        z = torch.zeros(B, 0, dim, device=dev, dtype=dt)
+        m = torch.empty(B, 0, dtype=torch.bool, device=dev)
+        return z, m
     mat = torch.stack(snaps, dim=1)
+    seq_mask = torch.stack(masks, dim=1)
     if mat.shape[2] < dim:
         pad = torch.zeros(B, mat.shape[1], dim - mat.shape[2], device=mat.device, dtype=mat.dtype)
         mat = torch.cat([mat, pad], dim=2)
     elif mat.shape[2] > dim:
         mat = mat[:, :, :dim]
-    return mat
+    return mat, seq_mask

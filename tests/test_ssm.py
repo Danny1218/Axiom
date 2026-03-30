@@ -1,3 +1,4 @@
+import pytest
 import torch
 
 from engine.ssm import LiquidKANNode, _hat_basis
@@ -47,3 +48,37 @@ def test_liquid_kan_forward_sequence_tensors_batched():
     assert out.shape == (3, d)
     out.sum().backward()
     assert seq.grad is not None and h0.grad is not None
+
+
+def test_forward_sequence_tensors_mask_all_true_matches_no_mask():
+    torch.manual_seed(3)
+    d = 3
+    node = LiquidKANNode(d, num_basis=3, max_unroll=4)
+    B, T = 2, 3
+    seq = torch.randn(B, T, d)
+    h0 = torch.randn(B, d)
+    m = torch.ones(B, T, dtype=torch.bool)
+    o0 = node.forward_sequence_tensors(seq, h_init=h0)
+    o1 = node.forward_sequence_tensors(seq, h_init=h0, mask=m)
+    assert torch.allclose(o0, o1)
+
+
+def test_forward_sequence_tensors_mask_bad_shape_raises():
+    node = LiquidKANNode(2, num_basis=2, max_unroll=2)
+    seq = torch.zeros(2, 3, 2)
+    with pytest.raises(ValueError, match="mask shape"):
+        node.forward_sequence_tensors(seq, mask=torch.zeros(2, 2, dtype=torch.bool))
+
+
+def test_forward_sequence_tensors_mask_freezes_phantom_steps():
+    """Row 0 mask False at t>=1: output matches integrating only t=0 then holding."""
+    torch.manual_seed(4)
+    d = 2
+    node = LiquidKANNode(d, num_basis=3, max_unroll=5)
+    seq = torch.randn(1, 4, d)
+    h0 = torch.randn(1, d)
+    mask = torch.tensor([[True, False, False, False]])
+    out_masked = node.forward_sequence_tensors(seq, h_init=h0, mask=mask)
+    seq1 = seq[:, :1, :]
+    out_one = node.forward_sequence_tensors(seq1, h_init=h0)
+    assert torch.allclose(out_masked, out_one, atol=1e-6, rtol=1e-5)

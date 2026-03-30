@@ -15,7 +15,7 @@ def _assert_row_matches_per_row_ref(
     """vec: (B, T, D); compare each row to run_loop_snapshots(h_batch[b:b+1], ...)."""
     B = h_batch.shape[0]
     for b in range(B):
-        ref = run_loop_snapshots(h_batch[b : b + 1], cond_ir, body_ir, **kwargs)
+        ref, _ref_m = run_loop_snapshots(h_batch[b : b + 1], cond_ir, body_ir, **kwargs)
         assert ref.shape[0] == 1
         Tb = ref.shape[1]
         assert torch.allclose(vec[b, :Tb, :], ref[0, :Tb, :], atol=0, rtol=0)
@@ -35,7 +35,7 @@ def test_run_loop_snapshots_b4_matches_four_independent_rows():
     seed = make_seed_map(cond, body, 6)
     h = torch.zeros(4, 6)
     h[:, 0] = torch.tensor([5.0, 2.0, 1.0, 1.0])
-    vec = run_loop_snapshots(h, cond, body, dim=6, max_unroll=10, seed_map=seed, prelude_stmts=[])
+    vec, _vm = run_loop_snapshots(h, cond, body, dim=6, max_unroll=10, seed_map=seed, prelude_stmts=[])
     assert vec.shape[0] == 4
     _assert_row_matches_per_row_ref(vec, h, cond, body, dim=6, max_unroll=10, seed_map=seed, prelude_stmts=[])
 
@@ -45,7 +45,7 @@ def test_run_loop_snapshots_batched_grad():
     cond = [("OP_LOAD", "x"), ("OP_CONST", 0.0), ("OP_CMP_GT",)]
     body = [("OP_ASSIGN", "x", [("OP_LOAD", "x"), ("OP_CONST", 0.5), ("OP_MUL",)])]
     seed = make_seed_map(cond, body, 4)
-    mat = run_loop_snapshots(h, cond, body, dim=4, max_unroll=6, seed_map=seed)
+    mat, _m = run_loop_snapshots(h, cond, body, dim=4, max_unroll=6, seed_map=seed)
     mat.sum().backward()
     assert h.grad is not None
     assert torch.count_nonzero(h.grad) > 0
@@ -87,5 +87,5 @@ def test_while_mixed_row_iteration_counts_alignment():
     cond = [("OP_LOAD", "i"), ("OP_CONST", 0.0), ("OP_CMP_GT",)]
     body = [("OP_ASSIGN", "i", [("OP_LOAD", "i"), ("OP_CONST", 1.0), ("OP_SUB",)])]
     seed = make_seed_map(cond, body, 4)
-    vec = run_loop_snapshots(h, cond, body, dim=4, max_unroll=8, seed_map=seed)
+    vec, _vm = run_loop_snapshots(h, cond, body, dim=4, max_unroll=8, seed_map=seed)
     _assert_row_matches_per_row_ref(vec, h, cond, body, dim=4, max_unroll=8, seed_map=seed)

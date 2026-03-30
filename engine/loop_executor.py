@@ -39,7 +39,7 @@ class InterpretedLiquidLoop(nn.Module):
         lead = h.shape[:-1]
         d = h.shape[-1]
         flat = h.reshape(-1, d)
-        seq = run_loop_snapshots(
+        seq, seq_mask = run_loop_snapshots(
             flat,
             self.cond_ir,
             self.body_ir,
@@ -53,5 +53,5 @@ class InterpretedLiquidLoop(nn.Module):
         if seq.shape[1] == 0:
             y = self.kan.forward(flat)
         else:
-            y = self.kan.forward_sequence_tensors(seq, h_init=flat)
+            y = self.kan.forward_sequence_tensors(seq, h_init=flat, mask=seq_mask)
         return y.reshape(*lead, d)

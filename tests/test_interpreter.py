@@ -33,7 +33,7 @@ def test_run_while_countdown_snapshots():
     cond = [("OP_LOAD", "i"), ("OP_CONST", 0.0), ("OP_CMP_GT",)]
     body = [("OP_ASSIGN", "i", [("OP_LOAD", "i"), ("OP_CONST", 1.0), ("OP_SUB",)])]
     var_order = ["i", "_pad0", "_pad1"]
-    snaps = run_while_loop(
+    snaps, masks = run_while_loop(
         env,
         cond,
         body,
@@ -44,7 +44,7 @@ def test_run_while_countdown_snapshots():
         device=_CPU,
         dtype=_F32,
     )
-    assert len(snaps) == 3
+    assert len(snaps) == 3 and len(masks) == 3
     assert snaps[0][0, 0].item() == 2.0 and snaps[-1][0, 0].item() == 0.0
 
 
@@ -54,7 +54,7 @@ def test_run_loop_snapshots_with_prelude():
     body = [("OP_ASSIGN", "i", [("OP_LOAD", "i"), ("OP_CONST", 1.0), ("OP_SUB",)])]
     prelude = [("OP_ASSIGN", "i", [("OP_CONST", 3.0)])]
     seed = make_seed_map(cond, body, 5)
-    mat = run_loop_snapshots(h, cond, body, dim=5, max_unroll=8, seed_map=seed, prelude_stmts=prelude)
+    mat, _m = run_loop_snapshots(h, cond, body, dim=5, max_unroll=8, seed_map=seed, prelude_stmts=prelude)
     assert mat.shape == (1, 3, 5)
     assert mat[0, 0, 0].item() == 2.0
 
@@ -64,7 +64,7 @@ def test_run_loop_snapshots_grad_through_seed():
     cond = [("OP_LOAD", "i"), ("OP_CONST", 0.0), ("OP_CMP_GT",)]
     body = [("OP_ASSIGN", "i", [("OP_LOAD", "i"), ("OP_CONST", 1.0), ("OP_SUB",)])]
     seed = make_seed_map(cond, body, 5)
-    mat = run_loop_snapshots(h, cond, body, dim=5, max_unroll=8, seed_map=seed, prelude_stmts=[])
+    mat, _m = run_loop_snapshots(h, cond, body, dim=5, max_unroll=8, seed_map=seed, prelude_stmts=[])
     mat.sum().backward()
     assert h.grad is not None and h.grad[0, 0].item() != 0.0
 

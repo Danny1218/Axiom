@@ -94,6 +94,7 @@ class LiquidKANNode(nn.Module):
         *,
         taus: Optional[torch.Tensor] = None,
         h_init: Optional[torch.Tensor] = None,
+        mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """Dense sequence (B, T, D) from IR snapshots; returns (B, D). Same recurrence as `forward_sequence`."""
         if seq.dim() == 2:
@@ -103,6 +104,8 @@ class LiquidKANNode(nn.Module):
             raise ValueError("forward_sequence_tensors needs T>=1")
         if D != self.dim:
             raise ValueError(f"state dim {D} != node dim {self.dim}")
+        if mask is not None and mask.shape != (B, T):
+            raise ValueError(f"mask shape {tuple(mask.shape)} != (B, T) = ({B}, {T})")
         if taus is None:
             tau_vec = torch.ones(T, device=seq.device, dtype=seq.dtype)
         else:
@@ -116,6 +119,12 @@ class LiquidKANNode(nn.Module):
         for t in range(T):
             tn = torch.full((B, 1), t / max(T - 1, 1), device=seq.device, dtype=seq.dtype)
             x_t = seq[:, t, :]
-            prop = self._kan_update(h_cur, h0, tn) + 0.1 * x_t
-            h_cur = self._liquid_mix(h_cur, prop, tau_vec[t].reshape(()))
+            h_prev = h_cur
+            prop = self._kan_update(h_prev, h0, tn) + 0.1 * x_t
+            h_next = self._liquid_mix(h_prev, prop, tau_vec[t].reshape(()))
+            if mask is not None:
+                m_t = mask[:, t].unsqueeze(-1)
+                h_cur = torch.where(m_t, h_next, h_prev)
+            else:
+                h_cur = h_next
         return h_cur
