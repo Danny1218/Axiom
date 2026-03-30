@@ -29,6 +29,16 @@ def test_meta_unmask_keeps_same_optimizer():
     assert id(tr.optimizer) == oid_before
 
 
+def test_evolutionary_trainer_target_col_kwarg():
+    reset_parser()
+    ir = ast_to_ir(parse_ax("if (1 > 0) { a = 1; } else { a = 2; }"))
+    sn = LatentSupernet(5, ("then_0", "else_0"), rank=2)
+    sn.set_masks({"then_0": 1.0, "else_0": 1.0})
+    g = wire_execution_graph(ir, sn, [("then_0", "else_0")], mutation_entropy_norm_threshold=0.99)
+    tr = EvolutionaryTrainer(g, target_col=g.abi["a"])
+    assert tr.target_col == g.abi["a"]
+
+
 def test_trainer_compile_graph_runs_one_epoch():
     reset_parser()
     ir = ast_to_ir(parse_ax("if (1 > 0) { a = 1; } else { a = 2; }"))

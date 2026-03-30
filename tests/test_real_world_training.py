@@ -25,10 +25,9 @@ def test_train_epoch_axiom_dataset_assign_script():
         {"a": 1.0, "b": 2.0, "target": 3.0},
         {"a": 4.0, "b": 5.0, "target": 9.0},
     ]
-    ds = AxiomDataset(
-        data, g.abi, trunk_dim=16, target_key="target", broadcast_target=True
-    )
+    ds = AxiomDataset(data, g.abi, trunk_dim=16, target_key="target")
     loader = DataLoader(ds, batch_size=2, shuffle=False)
-    tr = EvolutionaryTrainer(g, lr=1e-2, compile_graph=False)
+    target_col = g.abi["x"]
+    tr = EvolutionaryTrainer(g, lr=1e-2, compile_graph=False, target_col=target_col)
     loss = tr.train_epoch(loader, meta_compiler=None)
     assert loss >= 0.0

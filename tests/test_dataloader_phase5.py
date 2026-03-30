@@ -50,15 +50,3 @@ def test_axiom_dataset_skips_out_of_range_abi_columns():
     )
     x, _ = ds[0]
     assert x.abs().sum().item() == 0.0
-
-
-def test_axiom_dataset_broadcast_target_shape():
-    ds = AxiomDataset(
-        [{"a": 1.0, "target": 5.0}],
-        {"a": 0},
-        trunk_dim=4,
-        target_key="target",
-        broadcast_target=True,
-    )
-    _, y = ds[0]
-    assert y.shape == (4,) and (y == 5.0).all()

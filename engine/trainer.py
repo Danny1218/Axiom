@@ -43,6 +43,10 @@ class EvolutionaryTrainer:
     Train `ExecutionGraph` with Adam. Main MSE plus summed localized MSE on returned shadow dict
     so shadow adapters receive gradients while their contribution to `out` stays detached.
     Shadow fitness uses epoch averages of those localized losses (not a single no_grad pass).
+
+    With ``target_col``, only that trunk column is supervised (``out[:, c:c+1]`` vs batch targets);
+    other channels stay free for latent working memory. Default ``None`` keeps full-vector MSE
+    (e.g. denoising loaders where ``y`` matches ``out`` shape).
     """
 
     def __init__(
@@ -52,10 +56,12 @@ class EvolutionaryTrainer:
         lr: float = 1e-2,
         shadow_fitness_epochs: int = 5,
         compile_graph: bool = False,
+        target_col: Optional[int] = None,
     ) -> None:
         self.graph = graph
         self.lr = float(lr)
         self.shadow_fitness_epochs = int(shadow_fitness_epochs)
+        self.target_col = target_col
         self.criterion = nn.MSELoss()
         self.shadow_evaluators: Dict[str, ShadowFitnessEvaluator] = {}
         self.optimizer = torch.optim.Adam(self.graph.parameters(), lr=self.lr)
@@ -77,14 +83,22 @@ class EvolutionaryTrainer:
         for x, y in loader:
             self.optimizer.zero_grad(set_to_none=True)
             out, locs, signals = self.step_fn(x)
-            loss = self.criterion(out, y)
+            if self.target_col is not None:
+                c = self.target_col
+                loss = self.criterion(out[:, c : c + 1], y.view(-1, 1))
+            else:
+                loss = self.criterion(out, y)
             shadow_loss: Optional[torch.Tensor] = None
             sn = self.graph.supernet
             for name, loc in locs.items():
                 i = sn._name_to_idx.get(name)
                 if i is None or not bool(sn.is_shadow[i].item()):
                     continue
-                m = F.mse_loss(loc, y)
+                if self.target_col is not None:
+                    c = self.target_col
+                    m = F.mse_loss(loc[:, c : c + 1], y.view(-1, 1))
+                else:
+                    m = F.mse_loss(loc, y)
                 shadow_loss = m if shadow_loss is None else shadow_loss + m
                 key = name
                 shadow_sum[key] = shadow_sum.get(key, 0.0) + float(m.detach().item())

@@ -15,14 +15,11 @@ class AxiomDataset(Dataset):
         abi: Dict[str, int],
         trunk_dim: int,
         target_key: str,
-        *,
-        broadcast_target: bool = False,
     ) -> None:
         self._rows = list(data)
         self.abi = dict(abi)
         self.trunk_dim = int(trunk_dim)
         self.target_key = str(target_key)
-        self.broadcast_target = bool(broadcast_target)
 
     def __len__(self) -> int:
         return len(self._rows)
@@ -34,10 +31,7 @@ class AxiomDataset(Dataset):
             if col < self.trunk_dim and name in row:
                 x[col] = float(row[name])
         t = float(row[self.target_key])
-        if self.broadcast_target:
-            y = torch.full((self.trunk_dim,), t, dtype=torch.float32)
-        else:
-            y = torch.tensor([t], dtype=torch.float32)
+        y = torch.tensor([t], dtype=torch.float32)
         return x, y
 
 
