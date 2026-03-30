@@ -1,6 +1,6 @@
 """Phase 17: target column must not appear in model inputs (AxiomDataset blinding)."""
 
-from engine.dataloader import AxiomDataset
+from axiom.engine.dataloader import AxiomDataset
 
 
 def test_axiom_dataset_blinds_target_abi_column():

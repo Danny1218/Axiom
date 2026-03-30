@@ -1,7 +1,7 @@
 import networkx as nx
 
-from compiler.ir import ast_to_ir, ir_to_digraph
-from compiler.parser import parse_ax, reset_parser
+from axiom.compiler.ir import ast_to_ir, ir_to_digraph
+from axiom.compiler.parser import parse_ax, reset_parser
 
 
 def test_ir_assign_add_mul():

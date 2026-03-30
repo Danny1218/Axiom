@@ -2,10 +2,10 @@ from pathlib import Path
 
 import torch
 
-from compiler.flow import wire_execution_graph
-from compiler.ir import ast_to_ir
-from compiler.parser import parse_ax_file, reset_parser
-from engine.supernet import LatentSupernet
+from axiom.compiler.flow import wire_execution_graph
+from axiom.compiler.ir import ast_to_ir
+from axiom.compiler.parser import parse_ax_file, reset_parser
+from axiom.engine.supernet import LatentSupernet
 
 ROOT = Path(__file__).resolve().parents[1]
 

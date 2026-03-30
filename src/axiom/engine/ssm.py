@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from primitives.liquid_tensor import LiquidStateTensor, stack_liquid_states
+from axiom.primitives.liquid_tensor import LiquidStateTensor, stack_liquid_states
 
 
 def _rbf_basis(fused_norm: torch.Tensor, num_basis: int) -> torch.Tensor:

@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from engine.supernet import LatentSupernet
+from axiom.engine.supernet import LatentSupernet
 
 Verdict = Literal["integrate", "prune"]
 

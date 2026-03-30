@@ -1,8 +1,8 @@
 import pytest
 import torch
 
-from engine.ssm import LiquidKANNode, _rbf_basis
-from primitives.liquid_tensor import LiquidStateTensor
+from axiom.engine.ssm import LiquidKANNode, _rbf_basis
+from axiom.primitives.liquid_tensor import LiquidStateTensor
 
 
 def test_rbf_basis_simple():

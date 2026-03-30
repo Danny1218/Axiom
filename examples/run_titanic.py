@@ -1,6 +1,8 @@
 """
 Train Axiom on Titanic CSV: compile ``titanic.ax``, EvolutionaryTrainer + AxiomDataset, test accuracy.
 
+Install the package (once): ``pip install -e .`` from the repo root.
+
 Run from repo root::
 
     python examples/run_titanic.py --epochs 50
@@ -9,7 +11,7 @@ Sabotage experiment (useless ``Fare > 100000`` rule in ``titanic.ax``): keep **M
 (default) so Sinkhorn entropy can unmask shadow experts; bundle is written for the Glass Box::
 
     python examples/run_titanic.py --epochs 50
-    streamlit run tools/inspector.py   # sidebar: path prefix axiom_bundle (no extension)
+    axiom inspect   # Glass Box; sidebar path prefix ``axiom_bundle`` (no extension)
 
 Use ``--no-meta`` to disable DNAS unmasking; ``--no-save`` to skip ``axiom_bundle*.pt/json``.
 """
@@ -17,7 +19,6 @@ from __future__ import annotations
 
 import argparse
 import random
-import sys
 import urllib.request
 from pathlib import Path
 
@@ -25,18 +26,16 @@ import torch
 from torch.utils.data import DataLoader
 
 _REPO = Path(__file__).resolve().parents[1]
-if str(_REPO) not in sys.path:
-    sys.path.insert(0, str(_REPO))
 
-from compiler.flow import wire_execution_graph
-from compiler.ir import ast_to_ir
-from compiler.parser import parse_ax_file
-from compiler.serializer import save_execution_bundle
-from engine.dataloader import AxiomDataset, load_csv_to_dicts
-from engine.inference import AxiomRunner
-from engine.meta_compiler import MetaCompiler
-from engine.supernet import LatentSupernet
-from engine.trainer import EvolutionaryTrainer
+from axiom.compiler.flow import wire_execution_graph
+from axiom.compiler.ir import ast_to_ir
+from axiom.compiler.parser import parse_ax_file
+from axiom.compiler.serializer import save_execution_bundle
+from axiom.engine.dataloader import AxiomDataset, load_csv_to_dicts
+from axiom.engine.inference import AxiomRunner
+from axiom.engine.meta_compiler import MetaCompiler
+from axiom.engine.supernet import LatentSupernet
+from axiom.engine.trainer import EvolutionaryTrainer
 
 TITANIC_URL = (
     "https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv"

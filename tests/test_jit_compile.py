@@ -3,10 +3,10 @@
 import torch
 import torch._dynamo.config as dynamo_config
 
-from compiler.flow import wire_execution_graph
-from compiler.ir import ast_to_ir
-from compiler.parser import parse_ax, reset_parser
-from engine.supernet import LatentSupernet
+from axiom.compiler.flow import wire_execution_graph
+from axiom.compiler.ir import ast_to_ir
+from axiom.compiler.parser import parse_ax, reset_parser
+from axiom.engine.supernet import LatentSupernet
 
 
 def _assert_shadow_dicts_close(a: dict, b: dict, *, atol: float = 1e-5, rtol: float = 1e-5) -> None:
@@ -67,7 +67,7 @@ def test_compile_aot_eager_fullgraph_conditional_only_matches_eager():
 def test_conditional_sinkhorn_returns_tuple_no_mutation():
     sn = LatentSupernet(4, ("t", "e"), rank=2)
     sn.set_masks({"t": 1.0, "e": 1.0})
-    from engine.topology import ConditionalSinkhornBlock
+    from axiom.engine.topology import ConditionalSinkhornBlock
 
     blk = ConditionalSinkhornBlock(sn, "t", "e", num_iters=4)
     h = torch.randn(2, 4)

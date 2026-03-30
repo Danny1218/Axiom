@@ -1,4 +1,4 @@
-import compiler.parser as parser
+import axiom.compiler.parser as parser
 
 
 def pytest_configure() -> None:

@@ -6,12 +6,12 @@ via localized MSE added to the main loss (main path still uses detached shadow d
 import torch
 import torch.nn.functional as F
 
-from compiler.flow import wire_execution_graph
-from compiler.ir import ast_to_ir
-from compiler.parser import parse_ax, reset_parser
-from engine.dataloader import LiquidSequenceLoader
-from engine.supernet import LatentSupernet
-from engine.trainer import EvolutionaryTrainer
+from axiom.compiler.flow import wire_execution_graph
+from axiom.compiler.ir import ast_to_ir
+from axiom.compiler.parser import parse_ax, reset_parser
+from axiom.engine.dataloader import LiquidSequenceLoader
+from axiom.engine.supernet import LatentSupernet
+from axiom.engine.trainer import EvolutionaryTrainer
 
 
 def test_shadow_expert_weights_update_after_train_epoch():

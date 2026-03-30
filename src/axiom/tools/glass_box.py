@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 import graphviz
 import torch
 
-from engine.topology import ConditionalSinkhornBlock, ExecutionGraph
+from axiom.engine.topology import ConditionalSinkhornBlock, ExecutionGraph
 
 
 def execution_graph_to_graphviz(graph: ExecutionGraph) -> graphviz.Digraph:

@@ -2,8 +2,8 @@ import networkx as nx
 import pytest
 import torch
 
-from engine.supernet import LatentSupernet
-from engine.topology import (
+from axiom.engine.supernet import LatentSupernet
+from axiom.engine.topology import (
     ConditionalSinkhornBlock,
     ExecutionGraph,
     build_execution_graph_from_ir,

@@ -1,6 +1,6 @@
 import torch
 
-from engine.router import SinkhornRouter, sinkhorn_balance
+from axiom.engine.router import SinkhornRouter, sinkhorn_balance
 
 
 def test_sinkhorn_balance_row_col_sums():

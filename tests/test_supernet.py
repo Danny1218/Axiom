@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from engine.supernet import LatentSupernet, TTLoRAAdapter
+from axiom.engine.supernet import LatentSupernet, TTLoRAAdapter
 
 
 def test_trunk_frozen():

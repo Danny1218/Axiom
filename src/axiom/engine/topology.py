@@ -6,11 +6,11 @@ import networkx as nx
 import torch
 import torch.nn as nn
 
-from compiler.ir import extract_global_abi
-from engine.block_executor import InterpretedBlock
-from engine.loop_executor import InterpretedLiquidLoop
-from engine.router import SinkhornRouter
-from engine.supernet import LatentSupernet
+from axiom.compiler.ir import extract_global_abi
+from axiom.engine.block_executor import InterpretedBlock
+from axiom.engine.loop_executor import InterpretedLiquidLoop
+from axiom.engine.router import SinkhornRouter
+from axiom.engine.supernet import LatentSupernet
 
 IRList = List[tuple]
 ExpertPair = Tuple[str, str]

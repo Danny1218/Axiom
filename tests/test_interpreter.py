@@ -1,13 +1,13 @@
 import torch
 
-from engine.interpreter import (
+from axiom.engine.interpreter import (
     eval_expr,
     make_seed_map,
     run_loop_snapshots,
     run_while_loop,
     truthy,
 )
-from engine.topology import _absorbed_prelude_indices, _prelude_stmts_before_loop
+from axiom.engine.topology import _absorbed_prelude_indices, _prelude_stmts_before_loop
 
 _CPU = torch.device("cpu")
 _F32 = torch.float32
@@ -85,7 +85,7 @@ def test_prelude_absorption_helpers():
 
 
 def test_interpreted_loop_max_unroll_zero_falls_back_to_kan_forward():
-    from engine.loop_executor import InterpretedLiquidLoop
+    from axiom.engine.loop_executor import InterpretedLiquidLoop
 
     cond = [("OP_LOAD", "i"), ("OP_CONST", 0.0), ("OP_CMP_GT",)]
     body: list = []

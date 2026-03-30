@@ -1,12 +1,12 @@
 import torch
 
-from compiler.flow import wire_execution_graph
-from compiler.ir import ast_to_ir
-from compiler.parser import parse_ax, reset_parser
-from engine.loop_executor import InterpretedLiquidLoop
-from engine.ssm import LiquidKANNode
-from engine.supernet import LatentSupernet
-from engine.topology import build_execution_graph_from_ir
+from axiom.compiler.flow import wire_execution_graph
+from axiom.compiler.ir import ast_to_ir
+from axiom.compiler.parser import parse_ax, reset_parser
+from axiom.engine.loop_executor import InterpretedLiquidLoop
+from axiom.engine.ssm import LiquidKANNode
+from axiom.engine.supernet import LatentSupernet
+from axiom.engine.topology import build_execution_graph_from_ir
 
 
 def test_op_loop_instantiates_interpreted_loop():

@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 
-from engine.meta_compiler import MetaCompiler
-from engine.router import SinkhornRouter
-from engine.supernet import LatentSupernet
+from axiom.engine.meta_compiler import MetaCompiler
+from axiom.engine.router import SinkhornRouter
+from axiom.engine.supernet import LatentSupernet
 
 
 def test_meta_unmasks_on_signal():

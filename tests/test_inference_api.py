@@ -5,16 +5,16 @@ from pathlib import Path
 import pytest
 import torch
 
-import main as axiom_main
-from compiler.deserializer import load_execution_bundle
-from compiler.flow import wire_execution_graph
-from compiler.ir import ast_to_ir
-from compiler.parser import parse_ax, reset_parser
-from compiler.serializer import save_execution_bundle
-from engine.dataloader import LiquidSequenceLoader
-from engine.inference import AxiomRunner, _batch_inputs_to_tensor, _inputs_to_tensor
-from engine.supernet import LatentSupernet
-from engine.trainer import EvolutionaryTrainer
+from axiom.cli import main as cli_main
+from axiom.compiler.deserializer import load_execution_bundle
+from axiom.compiler.flow import wire_execution_graph
+from axiom.compiler.ir import ast_to_ir
+from axiom.compiler.parser import parse_ax, reset_parser
+from axiom.compiler.serializer import save_execution_bundle
+from axiom.engine.dataloader import LiquidSequenceLoader
+from axiom.engine.inference import AxiomRunner, _batch_inputs_to_tensor, _inputs_to_tensor
+from axiom.engine.supernet import LatentSupernet
+from axiom.engine.trainer import EvolutionaryTrainer
 
 
 def test_inputs_to_tensor_broadcast_single_key_legacy_empty_abi():
@@ -152,8 +152,9 @@ def test_main_inference_mode(tmp_path):
     reset_parser()
     ax = Path(__file__).resolve().parents[1] / "train.ax"
     out = tmp_path / "bundle"
-    axiom_main.main(
+    cli_main(
         [
+            "train",
             str(ax),
             "--mode",
             "train",
@@ -169,4 +170,4 @@ def test_main_inference_mode(tmp_path):
             "0",
         ]
     )
-    axiom_main.main(["--mode", "inference", "--out", str(out)])
+    cli_main(["train", "--mode", "inference", "--out", str(out)])

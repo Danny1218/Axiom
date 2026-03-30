@@ -3,13 +3,13 @@ from pathlib import Path
 
 import torch
 
-from compiler.flow import wire_execution_graph
-from compiler.ir import ast_to_ir
-from compiler.parser import parse_ax, reset_parser
-from compiler.serializer import execution_topology_to_dict, load_state_dict, save_execution_bundle
-from engine.dataloader import LiquidSequenceLoader
-from engine.supernet import LatentSupernet
-from engine.trainer import EvolutionaryTrainer
+from axiom.compiler.flow import wire_execution_graph
+from axiom.compiler.ir import ast_to_ir
+from axiom.compiler.parser import parse_ax, reset_parser
+from axiom.compiler.serializer import execution_topology_to_dict, load_state_dict, save_execution_bundle
+from axiom.engine.dataloader import LiquidSequenceLoader
+from axiom.engine.supernet import LatentSupernet
+from axiom.engine.trainer import EvolutionaryTrainer
 
 
 def test_save_and_load_state_dict(tmp_path):

@@ -88,7 +88,7 @@ def collect_load_names(cond_ir: ExprIR, body_ir: List[Stmt]) -> List[str]:
 
 def make_seed_map(cond_ir: ExprIR, body_ir: List[Stmt], dim: int) -> Dict[str, int]:
     """Loop-shaped ABI slice (name -> column) in first-seen order for cond then body; caps at ``dim`` names."""
-    from compiler.ir import extract_global_abi
+    from axiom.compiler.ir import extract_global_abi
 
     return extract_global_abi([("OP_LOOP", list(cond_ir), list(body_ir))], max_vars=dim)
 

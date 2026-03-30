@@ -3,15 +3,15 @@
 import torch
 import torch.nn as nn
 
-from compiler.flow import wire_execution_graph
-from compiler.ir import ast_to_ir
-from compiler.parser import parse_ax, reset_parser
-from compiler.serializer import save_execution_bundle
-from engine.inference import AxiomRunner
-from engine.meta_compiler import MetaCompiler
-from engine.router import SinkhornRouter
-from engine.supernet import LatentSupernet
-from tools.glass_box import (
+from axiom.compiler.flow import wire_execution_graph
+from axiom.compiler.ir import ast_to_ir
+from axiom.compiler.parser import parse_ax, reset_parser
+from axiom.compiler.serializer import save_execution_bundle
+from axiom.engine.inference import AxiomRunner
+from axiom.engine.meta_compiler import MetaCompiler
+from axiom.engine.router import SinkhornRouter
+from axiom.engine.supernet import LatentSupernet
+from axiom.tools.glass_box import (
     execution_graph_to_graphviz,
     routing_trace_entries,
     tensor_preview_dict,
@@ -98,7 +98,7 @@ def test_runner_predict_with_signals_after_bundle_roundtrip(tmp_path):
     g = wire_execution_graph(ir, sn, [("then_0", "else_0")])
     prefix = tmp_path / "gb"
     save_execution_bundle(g, prefix, ir=ir)
-    from compiler.deserializer import load_execution_bundle
+    from axiom.compiler.deserializer import load_execution_bundle
 
     g2 = load_execution_bundle(prefix)
     runner = AxiomRunner(g2)

@@ -5,12 +5,12 @@ from pathlib import Path
 import pytest
 import torch
 
-from compiler.deserializer import _ir_from_json, load_execution_bundle
-from compiler.flow import wire_execution_graph
-from compiler.ir import ast_to_ir
-from compiler.parser import parse_ax, reset_parser
-from compiler.serializer import execution_topology_to_dict, save_execution_bundle
-from engine.supernet import LatentSupernet
+from axiom.compiler.deserializer import _ir_from_json, load_execution_bundle
+from axiom.compiler.flow import wire_execution_graph
+from axiom.compiler.ir import ast_to_ir
+from axiom.compiler.parser import parse_ax, reset_parser
+from axiom.compiler.serializer import execution_topology_to_dict, save_execution_bundle
+from axiom.engine.supernet import LatentSupernet
 
 
 def test_ir_from_json_nested_assign():

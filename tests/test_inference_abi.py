@@ -2,12 +2,12 @@
 
 import torch
 
-from compiler.flow import wire_execution_graph
-from compiler.ir import ast_to_ir, extract_global_abi
-from compiler.parser import parse_ax, reset_parser
-from engine.inference import AxiomRunner, _abi_rows_to_tensor, _batch_inputs_to_tensor
-from engine.loop_executor import InterpretedLiquidLoop
-from engine.supernet import LatentSupernet
+from axiom.compiler.flow import wire_execution_graph
+from axiom.compiler.ir import ast_to_ir, extract_global_abi
+from axiom.compiler.parser import parse_ax, reset_parser
+from axiom.engine.inference import AxiomRunner, _abi_rows_to_tensor, _batch_inputs_to_tensor
+from axiom.engine.loop_executor import InterpretedLiquidLoop
+from axiom.engine.supernet import LatentSupernet
 
 
 def test_extract_global_abi_loop_z_before_a():

@@ -9,12 +9,12 @@ from typing import Any, Dict, List, Optional, Tuple
 import networkx as nx
 import torch.nn as nn
 
-from compiler.ir import extract_global_abi
-from compiler.serializer import load_state_dict
-from engine.block_executor import InterpretedBlock
-from engine.loop_executor import InterpretedLiquidLoop
-from engine.supernet import LatentSupernet
-from engine.topology import ConditionalSinkhornBlock, ExecutionGraph
+from axiom.compiler.ir import extract_global_abi
+from axiom.compiler.serializer import load_state_dict
+from axiom.engine.block_executor import InterpretedBlock
+from axiom.engine.loop_executor import InterpretedLiquidLoop
+from axiom.engine.supernet import LatentSupernet
+from axiom.engine.topology import ConditionalSinkhornBlock, ExecutionGraph
 
 
 def _ir_from_json(obj: Any) -> Any:

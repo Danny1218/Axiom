@@ -3,12 +3,12 @@
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
-from compiler.flow import wire_execution_graph
-from compiler.ir import ast_to_ir
-from compiler.parser import parse_ax, reset_parser
-from engine.dataloader import AxiomDataset
-from engine.supernet import LatentSupernet
-from engine.trainer import EvolutionaryTrainer
+from axiom.compiler.flow import wire_execution_graph
+from axiom.compiler.ir import ast_to_ir
+from axiom.compiler.parser import parse_ax, reset_parser
+from axiom.engine.dataloader import AxiomDataset
+from axiom.engine.supernet import LatentSupernet
+from axiom.engine.trainer import EvolutionaryTrainer
 
 
 def test_train_epoch_axiom_dataset_assign_script():

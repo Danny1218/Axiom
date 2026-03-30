@@ -1,13 +1,13 @@
 import torch
 import torch.nn as nn
 
-from compiler.flow import wire_execution_graph
-from compiler.ir import ast_to_ir
-from compiler.parser import parse_ax, reset_parser
-from engine.dataloader import LiquidSequenceLoader
-from engine.meta_compiler import MetaCompiler
-from engine.supernet import LatentSupernet
-from engine.trainer import EvolutionaryTrainer
+from axiom.compiler.flow import wire_execution_graph
+from axiom.compiler.ir import ast_to_ir
+from axiom.compiler.parser import parse_ax, reset_parser
+from axiom.engine.dataloader import LiquidSequenceLoader
+from axiom.engine.meta_compiler import MetaCompiler
+from axiom.engine.supernet import LatentSupernet
+from axiom.engine.trainer import EvolutionaryTrainer
 
 
 def test_meta_unmask_keeps_same_optimizer():

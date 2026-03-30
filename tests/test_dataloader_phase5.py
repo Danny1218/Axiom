@@ -1,6 +1,6 @@
 import torch
 
-from engine.dataloader import AxiomDataset, LiquidSequenceLoader, sequential_to_features
+from axiom.engine.dataloader import AxiomDataset, LiquidSequenceLoader, sequential_to_features
 
 
 def test_sequential_to_features_shape():

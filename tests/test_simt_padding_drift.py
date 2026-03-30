@@ -2,10 +2,10 @@
 
 import torch
 
-from compiler.flow import wire_execution_graph
-from compiler.ir import ast_to_ir
-from compiler.parser import parse_ax, reset_parser
-from engine.supernet import LatentSupernet
+from axiom.compiler.flow import wire_execution_graph
+from axiom.compiler.ir import ast_to_ir
+from axiom.compiler.parser import parse_ax, reset_parser
+from axiom.engine.supernet import LatentSupernet
 
 
 def test_batched_row0_matches_single_when_copadded_with_longer_row():
@@ -34,7 +34,7 @@ while (x > 0) {
 
 
 def test_run_loop_snapshots_mask_shape_matches_timesteps():
-    from engine.interpreter import make_seed_map, run_loop_snapshots
+    from axiom.engine.interpreter import make_seed_map, run_loop_snapshots
 
     h = torch.zeros(3, 5)
     h[:, 0] = torch.tensor([2.0, 5.0, 1.0])

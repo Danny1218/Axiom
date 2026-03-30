@@ -4,7 +4,7 @@ from typing import Dict, List, Tuple, Union
 
 import torch
 
-from engine.topology import ExecutionGraph
+from axiom.engine.topology import ExecutionGraph
 
 
 def _legacy_rows_to_tensor(

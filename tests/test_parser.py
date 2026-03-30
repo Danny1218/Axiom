@@ -2,7 +2,7 @@ import pytest
 from lark import UnexpectedCharacters, UnexpectedToken
 from lark.tree import Tree
 
-from compiler.parser import parse_ax, parse_ax_file, reset_parser
+from axiom.compiler.parser import parse_ax, parse_ax_file, reset_parser
 
 
 @pytest.fixture(autouse=True)

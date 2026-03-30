@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Sequence, Tuple
 
-from compiler.ir import IRList
-from engine.supernet import LatentSupernet
-from engine.topology import ExecutionGraph, build_execution_graph_from_ir
+from axiom.compiler.ir import IRList
+from axiom.engine.supernet import LatentSupernet
+from axiom.engine.topology import ExecutionGraph, build_execution_graph_from_ir
 
 ExpertPair = Tuple[str, str]
 

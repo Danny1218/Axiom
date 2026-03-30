@@ -2,7 +2,7 @@
 
 import torch
 
-from engine.interpreter import eval_expr
+from axiom.engine.interpreter import eval_expr
 
 _CPU = torch.device("cpu")
 _F32 = torch.float32

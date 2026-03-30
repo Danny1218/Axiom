@@ -5,13 +5,13 @@ from pathlib import Path
 import torch
 from torch.utils.data import DataLoader
 
-from compiler.flow import wire_execution_graph
-from compiler.ir import ast_to_ir, extract_global_abi
-from compiler.parser import parse_ax_file, reset_parser
-from engine.dataloader import AxiomDataset, load_csv_to_dicts
-from engine.inference import AxiomRunner
-from engine.supernet import LatentSupernet
-from engine.trainer import EvolutionaryTrainer
+from axiom.compiler.flow import wire_execution_graph
+from axiom.compiler.ir import ast_to_ir, extract_global_abi
+from axiom.compiler.parser import parse_ax_file, reset_parser
+from axiom.engine.dataloader import AxiomDataset, load_csv_to_dicts
+from axiom.engine.inference import AxiomRunner
+from axiom.engine.supernet import LatentSupernet
+from axiom.engine.trainer import EvolutionaryTrainer
 
 
 def test_cell_encoding_female_male_empty(tmp_path):

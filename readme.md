@@ -22,7 +22,7 @@ The Axiom compiler replaces the standard Python/CUDA deep learning stack with a 
 
 ## Getting Started
 
-*(Instructions for local virtual environment setup, pip install requirements, and basic execution command `python main.py target.ax` to be added upon initial MVP completion).*
+From the repo root: `pip install -e .` (installs the **`axiom-engine`** package and the **`axiom`** CLI). Train: `axiom train train.ax --epochs 10 --out axiom_bundle`. Inference: `axiom train --mode inference --out axiom_bundle`. Glass Box: `axiom inspect`. Optional: `pip install -r requirements.txt` mirrors core deps.
 
 ## Philosophy
 

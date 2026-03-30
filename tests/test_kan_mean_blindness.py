@@ -2,7 +2,7 @@
 
 import torch
 
-from engine.ssm import LiquidKANNode, _rbf_basis
+from axiom.engine.ssm import LiquidKANNode, _rbf_basis
 
 
 def _mean_pooled_rbf_phi(fused_norm: torch.Tensor, num_basis: int) -> torch.Tensor:

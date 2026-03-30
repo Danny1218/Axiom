@@ -3,13 +3,13 @@
 import torch
 import torch.nn as nn
 
-from compiler.flow import wire_execution_graph
-from compiler.ir import ast_to_ir
-from compiler.parser import parse_ax, reset_parser
-from engine.meta_compiler import MetaCompiler
-from engine.supernet import LatentSupernet
-from engine.topology import build_execution_graph_from_ir
-from engine.trainer import EvolutionaryTrainer
+from axiom.compiler.flow import wire_execution_graph
+from axiom.compiler.ir import ast_to_ir
+from axiom.compiler.parser import parse_ax, reset_parser
+from axiom.engine.meta_compiler import MetaCompiler
+from axiom.engine.supernet import LatentSupernet
+from axiom.engine.topology import build_execution_graph_from_ir
+from axiom.engine.trainer import EvolutionaryTrainer
 
 
 def test_execution_graph_three_tuple_and_signal_keys():
@@ -36,7 +36,7 @@ def test_trainer_fullgraph_meta_uses_bubbled_signals():
     for b in g.conditional_blocks():
         nn.init.zeros_(b.router.proj.weight)
         nn.init.zeros_(b.router.proj.bias)
-    from engine.dataloader import LiquidSequenceLoader
+    from axiom.engine.dataloader import LiquidSequenceLoader
 
     seq = torch.randn(48)
     loader = LiquidSequenceLoader(seq, feature_dim=5, batch_size=8, baseline_var=0.02, shuffle=False)
@@ -47,7 +47,7 @@ def test_trainer_fullgraph_meta_uses_bubbled_signals():
 
 
 def test_router_forward_no_last_mutation_attribute():
-    from engine.router import SinkhornRouter
+    from axiom.engine.router import SinkhornRouter
 
     r = SinkhornRouter(3, 2)
     assert not hasattr(r, "last_mutation_signal")

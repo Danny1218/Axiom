@@ -3,10 +3,10 @@
 import torch
 import torch._dynamo.config as dynamo_config
 
-from compiler.flow import wire_execution_graph
-from compiler.ir import ast_to_ir
-from compiler.parser import parse_ax, reset_parser
-from engine.supernet import LatentSupernet
+from axiom.compiler.flow import wire_execution_graph
+from axiom.compiler.ir import ast_to_ir
+from axiom.compiler.parser import parse_ax, reset_parser
+from axiom.engine.supernet import LatentSupernet
 
 
 def test_compile_fullgraph_while_loop_matches_eager():
@@ -72,11 +72,11 @@ while (j > 0) {
     ir = ast_to_ir(parse_ax(ax))
     sn = LatentSupernet(5, ("a", "b"), rank=2)
     g = wire_execution_graph(ir, sn, [], loop_max_unroll=6, loop_num_basis=4)
-    from engine.dataloader import LiquidSequenceLoader
+    from axiom.engine.dataloader import LiquidSequenceLoader
 
     seq = torch.randn(40)
     loader = LiquidSequenceLoader(seq, feature_dim=5, batch_size=8, baseline_var=0.02, shuffle=False)
-    from engine.trainer import EvolutionaryTrainer
+    from axiom.engine.trainer import EvolutionaryTrainer
 
     tr = EvolutionaryTrainer(g, lr=1e-2, compile_graph=True)
     loss = tr.train_epoch(loader, meta_compiler=None)
@@ -84,7 +84,7 @@ while (j > 0) {
 
 
 def test_run_loop_snapshots_fixed_timesteps_equals_max_unroll():
-    from engine.interpreter import make_seed_map, run_loop_snapshots
+    from axiom.engine.interpreter import make_seed_map, run_loop_snapshots
 
     h = torch.zeros(1, 4)
     h[0, 0] = 1.0

@@ -2,19 +2,16 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
-
-_ROOT = Path(__file__).resolve().parents[1]
-if str(_ROOT) not in sys.path:
-    sys.path.insert(0, str(_ROOT))
 
 import streamlit as st
 import torch
 
-from compiler.deserializer import load_execution_bundle
-from engine.inference import AxiomRunner
-from tools.glass_box import execution_graph_to_graphviz, routing_trace_entries, tensor_preview_dict
+from axiom.compiler.deserializer import load_execution_bundle
+from axiom.engine.inference import AxiomRunner
+from axiom.tools.glass_box import execution_graph_to_graphviz, routing_trace_entries, tensor_preview_dict
+
+_UPLOAD_DIR = Path(__file__).resolve().parent / ".axiom_inspector_upload"
 
 
 def _load_graph_from_prefix(prefix: str):
@@ -60,7 +57,7 @@ def main() -> None:
         up_json = st.file_uploader("Topology JSON", type=["json"])
         up_pt = st.file_uploader("Weights .pt", type=["pt", "pth"])
         if st.button("Load uploaded files") and up_json is not None and up_pt is not None:
-            tmp = _ROOT / ".axiom_inspector_upload"
+            tmp = _UPLOAD_DIR
             tmp.mkdir(exist_ok=True)
             (tmp / "upload_topology.json").write_bytes(up_json.getvalue())
             (tmp / "upload.pt").write_bytes(up_pt.getvalue())

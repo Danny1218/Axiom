@@ -6,8 +6,8 @@ from typing import Any, Dict, List, Optional
 
 import torch
 
-from engine.loop_executor import InterpretedLiquidLoop
-from engine.topology import ConditionalSinkhornBlock, ExecutionGraph
+from axiom.engine.loop_executor import InterpretedLiquidLoop
+from axiom.engine.topology import ConditionalSinkhornBlock, ExecutionGraph
 
 
 def _supernet_rank(graph: ExecutionGraph) -> int:

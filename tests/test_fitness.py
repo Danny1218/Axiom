@@ -1,12 +1,12 @@
 import torch
 
-from engine.fitness import (
+from axiom.engine.fitness import (
     ShadowFitnessEvaluator,
     apply_shadow_verdict,
     localized_adapter_loss,
     run_shadow_training_epochs,
 )
-from engine.supernet import LatentSupernet, TTLoRAAdapter
+from axiom.engine.supernet import LatentSupernet, TTLoRAAdapter
 
 
 def test_shadow_fitness_evaluator_verdict():

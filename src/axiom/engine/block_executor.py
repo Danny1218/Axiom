@@ -5,7 +5,7 @@ from typing import Dict, List, Set, Tuple
 import torch
 import torch.nn as nn
 
-from engine.interpreter import collect_load_names_from_stmts, exec_stmt
+from axiom.engine.interpreter import collect_load_names_from_stmts, exec_stmt
 
 Stmt = Tuple
 

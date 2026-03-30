@@ -4,11 +4,11 @@ import pytest
 import torch
 import torch.nn as nn
 
-from compiler.flow import wire_execution_graph
-from compiler.ir import ast_to_ir
-from compiler.parser import parse_ax, reset_parser
-from engine.block_executor import InterpretedBlock
-from engine.supernet import LatentSupernet
+from axiom.compiler.flow import wire_execution_graph
+from axiom.compiler.ir import ast_to_ir
+from axiom.compiler.parser import parse_ax, reset_parser
+from axiom.engine.block_executor import InterpretedBlock
+from axiom.engine.supernet import LatentSupernet
 
 
 def test_symbolic_assign_and_hybrid_conditional():

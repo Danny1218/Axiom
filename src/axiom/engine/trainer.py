@@ -7,9 +7,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from engine.fitness import ShadowFitnessEvaluator, Verdict, apply_shadow_verdict
-from engine.meta_compiler import MetaCompiler
-from engine.topology import ExecutionGraph
+from axiom.engine.fitness import ShadowFitnessEvaluator, Verdict, apply_shadow_verdict
+from axiom.engine.meta_compiler import MetaCompiler
+from axiom.engine.topology import ExecutionGraph
 
 
 def _compile_step_fn(graph: ExecutionGraph) -> nn.Module:

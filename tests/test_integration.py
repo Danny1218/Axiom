@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from compiler.ir import ast_to_ir, ir_to_digraph
-from compiler.parser import parse_ax_file, reset_parser
+from axiom.compiler.ir import ast_to_ir, ir_to_digraph
+from axiom.compiler.parser import parse_ax_file, reset_parser
 
 ROOT = Path(__file__).resolve().parents[1]
 

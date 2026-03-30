@@ -1,6 +1,6 @@
 import torch
 
-from primitives.liquid_tensor import LiquidStateTensor, stack_liquid_states
+from axiom.primitives.liquid_tensor import LiquidStateTensor, stack_liquid_states
 
 
 def test_liquid_tau_positive():

@@ -2,12 +2,12 @@
 
 import torch
 
-from compiler.flow import wire_execution_graph
-from compiler.ir import ast_to_ir, extract_global_abi
-from compiler.parser import parse_ax, reset_parser
-from engine.interpreter import run_loop_snapshots
-from engine.supernet import LatentSupernet
-from engine.topology import build_execution_graph_from_ir
+from axiom.compiler.flow import wire_execution_graph
+from axiom.compiler.ir import ast_to_ir, extract_global_abi
+from axiom.compiler.parser import parse_ax, reset_parser
+from axiom.engine.interpreter import run_loop_snapshots
+from axiom.engine.supernet import LatentSupernet
+from axiom.engine.topology import build_execution_graph_from_ir
 
 
 def test_interpreted_loop_forward_supernet_wider_than_script_vars():

@@ -5,8 +5,8 @@ from typing import Dict, List, Tuple
 import torch
 import torch.nn as nn
 
-from engine.interpreter import run_loop_snapshots
-from engine.ssm import LiquidKANNode
+from axiom.engine.interpreter import run_loop_snapshots
+from axiom.engine.ssm import LiquidKANNode
 
 Stmt = Tuple
 ExprIR = List[Tuple]

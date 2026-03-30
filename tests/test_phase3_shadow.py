@@ -1,10 +1,10 @@
 import torch
 
-from compiler.flow import wire_execution_graph
-from compiler.ir import ast_to_ir
-from compiler.parser import parse_ax, reset_parser
-from engine.supernet import LatentSupernet
-from engine.topology import ConditionalSinkhornBlock
+from axiom.compiler.flow import wire_execution_graph
+from axiom.compiler.ir import ast_to_ir
+from axiom.compiler.parser import parse_ax, reset_parser
+from axiom.engine.supernet import LatentSupernet
+from axiom.engine.topology import ConditionalSinkhornBlock
 
 
 def test_supernet_shadow_delta_detached_from_main_grad():

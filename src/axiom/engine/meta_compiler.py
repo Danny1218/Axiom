@@ -4,7 +4,7 @@ from typing import Dict, List, Optional
 
 import torch
 
-from engine.supernet import LatentSupernet
+from axiom.engine.supernet import LatentSupernet
 
 
 class MetaCompiler:

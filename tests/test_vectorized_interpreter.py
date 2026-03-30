@@ -2,7 +2,7 @@
 
 import torch
 
-from engine.interpreter import eval_expr, exec_stmt, make_seed_map, run_loop_snapshots
+from axiom.engine.interpreter import eval_expr, exec_stmt, make_seed_map, run_loop_snapshots
 
 
 _CPU = torch.device("cpu")

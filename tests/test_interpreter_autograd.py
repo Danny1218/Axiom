@@ -2,10 +2,10 @@
 
 import torch
 
-from compiler.flow import wire_execution_graph
-from compiler.ir import ast_to_ir
-from compiler.parser import parse_ax, reset_parser
-from engine.supernet import LatentSupernet
+from axiom.compiler.flow import wire_execution_graph
+from axiom.compiler.ir import ast_to_ir
+from axiom.compiler.parser import parse_ax, reset_parser
+from axiom.engine.supernet import LatentSupernet
 
 
 def test_execution_graph_grad_through_loop_ir_to_trunk_input():
@@ -28,7 +28,7 @@ while (x > 0) {
 
 
 def test_run_loop_snapshots_matches_float_semantics_countdown():
-    from engine.interpreter import run_loop_snapshots, make_seed_map
+    from axiom.engine.interpreter import run_loop_snapshots, make_seed_map
 
     h = torch.tensor([3.0, 0.0, 0.0, 0.0, 0.0])
     cond = [("OP_LOAD", "i"), ("OP_CONST", 0.0), ("OP_CMP_GT",)]
@@ -41,7 +41,7 @@ def test_run_loop_snapshots_matches_float_semantics_countdown():
 
 
 def test_snapshot_stack_preserves_device_dtype():
-    from engine.interpreter import run_loop_snapshots, make_seed_map
+    from axiom.engine.interpreter import run_loop_snapshots, make_seed_map
 
     h = torch.tensor([2.0, 0.0, 0.0], device="cpu", dtype=torch.float64)
     cond = [("OP_LOAD", "i"), ("OP_CONST", 0.0), ("OP_CMP_GT",)]

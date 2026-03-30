@@ -1,14 +1,15 @@
 from pathlib import Path
 
-import main as axiom_main
+from axiom.cli import main
 
 
 def test_main_smoke(tmp_path):
     root = Path(__file__).resolve().parents[1]
     ax = root / "train.ax"
     out = tmp_path / "bundle"
-    axiom_main.main(
+    main(
         [
+            "train",
             str(ax),
             "--epochs",
             "1",
