@@ -2,6 +2,8 @@
 
 ## Current phase
 
+**Phase 49** — Onyx API gateway (**`examples/enterprise_policy.ax`**, **`examples/onyx_gateway.py`**) — regex **`scan_text`** → **`has_pii_data` / `mentions_competitor` / `text_toxicity`** → **`InterpretedBlock`** (liquid **`intent_risk`** + nested symbolic **`is_approved`** gates) → **`AxiomModel.explain`** / **`export_report`** on block, optional **`requests.post`** to **`http://localhost:8000/api/chat`** (lazy **`requests`** import; **`pip install -e ".[gateway]"`**). Training uses MSE on **`is_approved`** plus auxiliary MSE on **`intent_risk`** so high-toxicity rows learn **`intent_risk > 0.8`**. Audit HTML **`examples/blocked_audit.html`** (gitignored with **`examples/*.html`**). Tests: **`tests/test_onyx_gateway.py`**.
+
 **Phase 48** — Navier–Stokes singularity hunt (**`examples/navier_stokes.ax`**, **`examples/train_singularity.py`**) — localized vortex-stretching ODE in a differentiable **`while`**, three **`neural(..., "liquid")`** heads, maximize **`kinetic_energy`**; **`InterpretedBlock(..., max_unroll=20)`** required (default 8 would truncate the physics). Default Adam **lr=0.0015** in the trainer (float32-safe through 100 epochs; **lr=0.1** as in the exploratory prompt tends to NaN). Tests: **`tests/test_navier_stokes_singularity.py`**.
 
 **Phase 47** — O(1) batched neural inverse solver (**`examples/inverse_solver.ax`**, **`examples/train_solver.py`**) — see plan § Phase 47.
@@ -85,6 +87,7 @@
 - `examples/drug_discovery.ax`, `examples/train_pharma.py` — Phase 46 batched viability + HTML trace (`examples/drug_report.html`, gitignored with `examples/*.html`)
 - `examples/inverse_solver.ax`, `examples/train_solver.py` — Phase 47 inverse non-linear solver (MSE through explicit `.ax` forward)
 - `examples/navier_stokes.ax`, `examples/train_singularity.py` — Phase 48 vortex-stretching loop + kinetic-energy maximization
+- `examples/enterprise_policy.ax`, `examples/onyx_gateway.py` — Phase 49 LLM gateway (signals + policy + optional Onyx POST)
 - `train.ax` — default **`axiom train`** sketch (cwd)
 - `src/axiom/compiler/`, `src/axiom/engine/`, `src/axiom/primitives/`
 - `tests/`
@@ -112,6 +115,8 @@ python examples/train_cartpole.py
 python examples/train_pharma.py
 python examples/train_solver.py
 python examples/train_singularity.py
+pip install -e ".[gateway]"
+python examples/onyx_gateway.py
 axiom inspect
 ```
 
@@ -138,5 +143,7 @@ axiom inspect
 **Phase 47 (complete):** **Neural inverse solver** — **`examples/inverse_solver.ax`**: **`features = [target_y]`**, **`guess_x = neural(features, "liquid")`**, **`computed_y`** = **`x^3 + sin(x)*exp(x/10)`** in IR. **`examples/train_solver.py`**: **5000** samples **x∈[-5,5]**, train **only `target_y`**, MSE(**`computed_y`**, true **y**), **300** epochs **Adam(0.05)**; proof on **`test_y=65.432`** via **`model.explain`**, timed. **`exec_stmt` `OP_ASSIGN`**: squeeze **(B,1)** RHS to **(B,)** when old env slice is **1D**, fixing **`torch.where`** blow-up to **(B,B)** after **`OP_VEC_PACK`** width-1. Tests: **`tests/test_inverse_solver.py`**.
 
 **Phase 48 (complete):** **Singularity hunter (surrogate ODE)** — **`examples/navier_stokes.ax`**: **`random_seed`** → three liquid heads **`v1,v2,v3`**, **20** Euler steps of vortex stretching minus viscous damping, **`kinetic_energy`**. **`examples/train_singularity.py`**: **1000** seeds, **100** epochs, **`-mean(kinetic_energy)`**, **`clip_grad_norm_(..., 5)`**, **`model.explain({"random_seed": 0.5})`**. Tests: **`tests/test_navier_stokes_singularity.py`**.
+
+**Phase 49 (complete):** **Onyx gateway** — **`examples/enterprise_policy.ax`**: **`features`**, liquid **`intent_risk`**, nested **`if`** → **`is_approved`**. **`examples/onyx_gateway.py`**: **`scan_text`** (SSN regex, competitor keywords, demo toxicity), **`build_trained_policy`** (joint **`is_approved`** + **`intent_risk`** MSE), **`chat_with_onyx`** (**`explain`**, **`export_report`** on deny, **`requests.post`** or mock). Tests: **`tests/test_onyx_gateway.py`**.
 
 **Later ideas:** **`return` inside `while`**; call targets like **`f()[i]`**. Glass Box upgrades (**`--inspect`** / graph of **`OP_NEURAL`**). See **`readme.md` § Road ahead**.
