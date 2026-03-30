@@ -2,6 +2,8 @@
 
 ## Current phase
 
+**Phase 54** — **ONNX export (AOT)** — **`src/axiom/export/onnx_export.py`**: **`InterpretedBlock`** **`.axb`** only; **`torch.onnx.export`** on a dense **(B, D)** trunk wrapper; **`onnx.checker`**; **`OnnxExportError`** on empty ABI or exporter failure. CLI **`axiom export-onnx --bundle --output [--opset]`**. Optional **`pip install -e ".[export]"`** (**`onnx`**). Inference-only; no **`explain`** parity. Tests: **`tests/test_onnx_export.py`** (optional **`onnxruntime`** round-trip).
+
 **Phase 53** — **Docker** — **`Dockerfile`** (**`python:3.12-slim`**, **`pip install ".[serve,lock]"`**, **`CMD axiom serve`**, **`HOST=0.0.0.0 PORT=8000`**), **`docker-compose.yml`** (port **8000**, mount **`./bundles`**, env **`AXIOM_BUNDLE_PATH`** / **`AXIOM_API_KEY`** / **`AXIOM_BUNDLE_SECRET`** / **`HOST`** / **`PORT`**), **`bundles/.gitkeep`**, **`README`** Docker section. **`axiom serve`**: reads **`HOST`** and **`PORT`** from the environment when set (else **`--host`** / **`--port`**). Tests: **`tests/test_docker_packaging.py`**, **`tests/test_serve.py`** (env host/port).
 
 **Phase 52** — Genetic lock (**`src/axiom/security/genetic_lock.py`**) — optional AES-256-CTR on serialized **`neural_weights`** only; **`topology` / ABI / IR** stay readable in the **`.axb`**. Lock modes: **`none`** (default), **`device`** (CUDA identity; save requires GPU), **`host`**, **`env-secret`** (**`AXIOM_BUNDLE_SECRET`**). Payload **`lock`**: **`encrypted`**, **`lock_mode`**, **`nonce_hex`**, **`payload_len`**, **`key_fingerprint`**, **`ciphertext_hex`**. **`save_bundle(..., lock_mode=...)`**, **`load_bundle`** decrypts via **`unlock_payload`**. CLI **`axiom lock-bundle --input --output --mode`**. Optional **`pip install -e ".[lock]"`** (**`cryptography`**). Tests: **`tests/test_genetic_lock.py`**.
@@ -80,13 +82,14 @@
 
 **Phase 36 (complete):** **Quant flagship (productization)** — **`axiom.datasets.load_finance_mock`**: temp CSV (**`volatility`**, **`drawdown`**, **`momentum`**, **`volume`**, **`target_position`**) with piecewise base + **`0.2*sin(momentum*volume)`** clamped to **[0,1]**. **`examples/portfolio.ax`**: **`calc_base_risk`** (masked early returns) + **`neural([momentum, volume, base_risk])`** + **`max(0, min(1, 1 - base_risk + alpha))`**. **`examples/train_portfolio.py`**: **`AxiomDataset`**, Adam on **`InterpretedBlock.parameters()`**, MSE vs **`target_position`**; Glass Box step: swap **`neural_registry`** for empty **`ModuleDict`**, report symbolic MSE, restore. Tests: **`tests/test_phase36_finance.py`**, **`tests/test_documentation_contract.py`**.
 
-**Phase 37 (complete):** **`.axb` bundle + predict CLI** — **`save_bundle` / `load_bundle`**: single **`torch.save`** payload **`{version, topology, abi_widths, neural_weights}`**; topology holds **`interpreted_block`** IR (**JSONable**), ABI, **`max_unroll`**. Reload builds **`InterpretedBlock`** then **`neural_registry.load_state_dict`** when weights present. **`examples/train_portfolio.py`** writes **`examples/portfolio_trained.axb`** and checks forward round-trip. **`axiom predict --bundle … --input '{...}'`**: JSON features → trunk via **`_inputs_to_tensor`**, decode with **`_abi_outputs_from_trunk_row`**, print JSON. Tests: **`tests/test_serializer.py`**, **`tests/test_deserializer.py`**, **`tests/test_cli_predict.py`**. **`examples/*.axb`** gitignored.
+**Phase 37 (complete):** **`.axb` bundle + predict CLI** — **`save_bundle` / `load_bundle`**: single **`torch.save`** payload **`{version, topology, abi_widths, neural_weights}`**; topology holds **`interpreted_block`** IR (**JSONable**), ABI, **`max_unroll`**. Reload builds **`InterpretedBlock`** then **`neural_registry.load_state_dict`** when weights present. **`examples/train_portfolio.py`** writes **`examples/portfolio_trained.axb`** and checks forward round-trip. **`axiom predict --bundle … --input '{...}'`**: JSON features → trunk via **`_inputs_to_tensor`**, decode with **`_abi_outputs_from_trunk_row`**, print JSON. Tests: **`tests/test_serializer.py`**, **`tests/test_deserializer.py`**, **`tests/test_cli_predict.py`**. **`examples/*.axb`** / **`examples/*.onnx`** gitignored.
 
 ## Layout
 
 - `pyproject.toml` — **`axiom-engine`**, script **`axiom` → `axiom.cli:main`**
 - `Dockerfile`, `docker-compose.yml`, `.dockerignore` — Phase 53 containerized **`axiom serve`**
-- `src/axiom/cli.py` — train / inspect / predict / **lock-bundle** / **serve** subcommands
+- `src/axiom/export/onnx_export.py` — Phase 54 optional **`.axb` → ONNX** (**InterpretedBlock**)
+- `src/axiom/cli.py` — train / inspect / predict / **lock-bundle** / **export-onnx** / **serve** subcommands
 - `src/axiom/security/genetic_lock.py` — Phase 52 optional **`.axb`** neural encryption
 - `src/axiom/serve.py`, `src/axiom/api_models.py` — Phase 51 FastAPI bundle server
 - `src/axiom/datasets.py` — Titanic, sine, finance mock
@@ -139,6 +142,8 @@ pip install -e ".[lock]"
 $env:AXIOM_BUNDLE_SECRET="dev-secret"
 axiom lock-bundle --input examples/portfolio_trained.axb --output examples/portfolio_locked.axb --mode env-secret
 axiom predict --bundle examples/portfolio_locked.axb --input '{"volatility":0.6,"drawdown":0.1,"momentum":-0.8,"volume":1.5}'
+pip install -e ".[export]"
+axiom export-onnx --bundle examples/portfolio_trained.axb --output examples/portfolio.onnx
 axiom inspect
 ```
 

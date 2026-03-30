@@ -275,6 +275,22 @@ def _cmd_lock_bundle(args: argparse.Namespace) -> None:
     print(f"Locked bundle written to {args.output}")
 
 
+def _cmd_export_onnx(args: argparse.Namespace) -> None:
+    try:
+        from axiom.export.onnx_export import OnnxExportError, export_bundle_to_onnx
+    except ImportError as e:
+        raise SystemExit('ONNX export requires: pip install -e ".[export]"') from e
+    try:
+        export_bundle_to_onnx(
+            Path(args.bundle),
+            Path(args.output),
+            opset_version=int(args.opset),
+        )
+    except OnnxExportError as e:
+        raise SystemExit(str(e)) from e
+    print(f"Wrote ONNX to {args.output}")
+
+
 def _cmd_predict(args: argparse.Namespace) -> None:
     block = load_bundle(args.bundle)
     try:
@@ -444,6 +460,25 @@ def main(argv: list[str] | None = None) -> None:
     )
     p_lock.set_defaults(_handler=_cmd_lock_bundle)
 
+    p_onnx = sub.add_parser(
+        "export-onnx",
+        help="Export an InterpretedBlock .axb to ONNX (dense tensor in/out; inference-only).",
+    )
+    p_onnx.add_argument(
+        "--bundle",
+        type=Path,
+        required=True,
+        help="Path to .axb (InterpretedBlock bundle from save_bundle).",
+    )
+    p_onnx.add_argument("--output", type=Path, required=True, help="Destination .onnx file.")
+    p_onnx.add_argument(
+        "--opset",
+        type=int,
+        default=17,
+        help="ONNX opset version (default: 17).",
+    )
+    p_onnx.set_defaults(_handler=_cmd_export_onnx)
+
     p_serve = sub.add_parser(
         "serve",
         help="Serve one .axb bundle over HTTP (FastAPI: /health, /predict, /explain, /report).",
@@ -479,6 +514,9 @@ def main(argv: list[str] | None = None) -> None:
         handler(args)
         return
     if handler is _cmd_serve:
+        handler(args)
+        return
+    if handler is _cmd_export_onnx:
         handler(args)
         return
     handler(args)

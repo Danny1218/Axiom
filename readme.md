@@ -59,6 +59,8 @@ pip install -e .
 
 This installs the **`axiom-engine`** package and the global **`axiom`** CLI. Requires **Python 3.10+** and **PyTorch 2+**.
 
+Optional ONNX export (InterpretedBlock **`.axb`** only, dense tensor in/out): **`pip install -e ".[export]"`**, then **`axiom export-onnx --bundle model.axb --output model.onnx`**. This is **inference-only** tracing; it does **not** preserve **`explain`** / Glass Box semantics, and some IR graphs may fail to export.
+
 ---
 
 ## Docker (bundle server)
