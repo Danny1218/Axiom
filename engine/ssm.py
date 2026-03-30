@@ -4,24 +4,28 @@ from typing import Optional, Sequence
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from primitives.liquid_tensor import LiquidStateTensor, stack_liquid_states
 
 
-def _hat_basis(u: torch.Tensor, num_basis: int) -> torch.Tensor:
-    """Linear (order-1) B-spline–style hat functions on [0, 1]; u (B, 1) → phi (B, K)."""
+def _rbf_basis(fused_norm: torch.Tensor, num_basis: int) -> torch.Tensor:
+    """Gaussian RBFs on [0, 1] from fused trunk features: fused_norm (B, D) → phi (B, K)."""
+    u = torch.sigmoid(fused_norm.mean(dim=-1, keepdim=True))
     x = u.squeeze(-1).clamp(0.0, 1.0)
     if num_basis < 2:
-        return torch.ones(x.shape[0], 1, device=u.device, dtype=u.dtype)
-    centers = torch.linspace(0.0, 1.0, num_basis, device=u.device, dtype=u.dtype).view(1, -1)
+        return torch.ones(x.shape[0], 1, device=fused_norm.device, dtype=fused_norm.dtype)
+    centers = torch.linspace(0.0, 1.0, num_basis, device=fused_norm.device, dtype=fused_norm.dtype).view(
+        1, -1
+    )
     width = 1.0 / max(num_basis - 1, 1)
-    dist = (x.unsqueeze(-1) - centers).abs()
-    return ((1.0 - dist / width).clamp(min=0.0)).clamp(max=1.0)
+    diff = (x.unsqueeze(-1) - centers) / width
+    return torch.exp(-(diff**2))
 
 
 class LiquidKANNode(nn.Module):
     """
-    Liquid memory + simplified KAN: B-spline-like basis over a scalar gate and normalized time.
+    Liquid memory + KAN: Gaussian RBF basis over a scalar gate; sequence input fused into the basis path.
     `forward(h)` runs a fixed-depth recurrence (compile-time unroll). `forward_sequence` consumes
     a list of `LiquidStateTensor` (per-timestep τ and payload).
     """
@@ -37,17 +41,27 @@ class LiquidKANNode(nn.Module):
         self.dim = dim
         self.num_basis = num_basis
         self.max_unroll = max_unroll
-        self.gate = nn.Linear(dim * 2, 1, bias=True)
+        self.fuse_proj = nn.Linear(dim * 2, dim, bias=False)
+        self.w_gate = nn.Linear(dim * 3, 1, bias=True)
         self.coeffs = nn.Parameter(torch.randn(num_basis, dim) * 0.02)
 
-    def _kan_update(self, h: torch.Tensor, h0: torch.Tensor, t_norm: torch.Tensor) -> torch.Tensor:
-        h2 = h.reshape(h.shape[0], -1)
-        h02 = h0.reshape(h.shape[0], -1)
-        u = self.gate(torch.cat([h2, h02], dim=-1)).unsqueeze(-1)
-        u = torch.sigmoid(u)
-        phi = _hat_basis(u, self.num_basis)
+    def _kan_update(
+        self,
+        h_cur: torch.Tensor,
+        x_t: torch.Tensor,
+        h0: torch.Tensor,
+        t_norm: torch.Tensor,
+    ) -> torch.Tensor:
+        del t_norm  # reserved for future time-conditioning; kept for call-site stability
+        h2 = h_cur.reshape(h_cur.shape[0], -1)
+        x2 = x_t.reshape(h_cur.shape[0], -1)
+        h02 = h0.reshape(h_cur.shape[0], -1)
+        fused = self.fuse_proj(torch.cat([h2, x2], dim=-1))
+        fused_norm = F.layer_norm(fused, (self.dim,))
+        phi = _rbf_basis(fused_norm, self.num_basis)
         out = phi @ self.coeffs
-        return out.reshape(h2.shape[0], -1)
+        gate = torch.sigmoid(self.w_gate(torch.cat([h2, x2, h02], dim=-1)))
+        return (out * gate).reshape(h2.shape[0], -1)
 
     def _liquid_mix(self, h: torch.Tensor, proposal: torch.Tensor, tau: torch.Tensor) -> torch.Tensor:
         h2 = h.reshape(h.shape[0], -1)
@@ -65,9 +79,10 @@ class LiquidKANNode(nn.Module):
         h_cur = h0
         T = max(self.max_unroll, 1)
         tau = torch.tensor(1.0, device=h.device, dtype=h.dtype)
+        x_dummy = torch.zeros_like(h_cur)
         for t in range(T):
             tn = torch.full((h_cur.size(0), 1), t / max(T - 1, 1), device=h.device, dtype=h.dtype)
-            prop = self._kan_update(h_cur, h0, tn)
+            prop = self._kan_update(h_cur, x_dummy, h0, tn)
             h_cur = self._liquid_mix(h_cur, prop, tau)
         return h_cur
 
@@ -84,7 +99,7 @@ class LiquidKANNode(nn.Module):
         for t in range(T):
             tn = torch.full((h_cur.size(0), 1), t / max(T - 1, 1), device=h_cur.device, dtype=h_cur.dtype)
             x_t = vals[t].unsqueeze(0)
-            prop = self._kan_update(h_cur, h0, tn) + 0.1 * x_t
+            prop = self._kan_update(h_cur, x_t, h0, tn)
             h_cur = self._liquid_mix(h_cur, prop, taus[t].reshape(()))
         return h_cur.squeeze(0)
 
@@ -120,7 +135,7 @@ class LiquidKANNode(nn.Module):
             tn = torch.full((B, 1), t / max(T - 1, 1), device=seq.device, dtype=seq.dtype)
             x_t = seq[:, t, :]
             h_prev = h_cur
-            prop = self._kan_update(h_prev, h0, tn) + 0.1 * x_t
+            prop = self._kan_update(h_prev, x_t, h0, tn)
             h_next = self._liquid_mix(h_prev, prop, tau_vec[t].reshape(()))
             if mask is not None:
                 m_t = mask[:, t].unsqueeze(-1)

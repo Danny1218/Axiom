@@ -34,6 +34,8 @@
 
 **Phase 20 (complete):** **Glass Box visualizer** — **`tools/inspector.py`**: Streamlit UI loads a bundle via path prefix or uploaded **`upload_topology.json` + `upload.pt`**, builds ABI **`st.number_input`**s, **`Run inference`** → **`AxiomRunner.predict_with_signals`**, large output metric + routing expander. **`tools/glass_box.py`**: **`execution_graph_to_graphviz`** (conditional yellow, loop blue, stmt green), **`routing_trace_entries`**, **`tensor_preview_dict`**. **`ConditionalSinkhornBlock`** signals add **`{block}_weights`** (detached router **`w`**); **`MetaCompiler.react_to_signals`** skips non-scalar tensors so meta behavior unchanged. **`requirements.txt`**: **`streamlit`**, **`graphviz`**. Run: **`streamlit run tools/inspector.py`** (install [Graphviz](https://graphviz.org/download/) so **`dot`** is on **`PATH`** for **`st.graphviz_chart`**). Tests: **`tests/test_glass_box.py`**.
 
+**Phase 21 (complete):** **Deep Liquid-KAN expressivity** — **`engine/ssm.py`**: **`_hat_basis` → `_rbf_basis`**, Gaussian bumps **`exp(-(diff²))`** on normalized time coordinate (centers on **[0,1]**). **`LiquidKANNode`**: **`fuse_proj`**: **`Linear(2D, D)`** on **`cat(h_cur, x_t)`**, **`F.layer_norm`**, RBF coefficients mix, **`w_gate`**: **`Linear(3D, 1)`** on **`cat(h_cur, x_t, h0)`** → sigmoid scales KAN output. **`forward_sequence` / `forward_sequence_tensors`**: proposal **`_kan_update(h_cur, x_t, h0, tn)`** only (no **`0.1 * x_t`**). **`forward`**: zero dummy **`x_t`**. **`t_norm`** kept in signature for API stability (unused). Tests: **`tests/test_ssm.py`** (RBF, grads on fusion, **`x_t`** sensitivity); **`tests/test_hybrid_execution.py`** symbolic test uses asymmetric branch constants so Sinkhorn blending is not exactly zero at **`b`**.
+
 ## Layout
 
 - `main.py` — CLI entry
@@ -41,7 +43,7 @@
 - `examples/titanic.ax`, `examples/run_titanic.py` — applied Titanic pipeline
 - `train.ax` — default training sketch
 - `compiler/serializer.py`, `compiler/deserializer.py` — bundle save / reload
-- `engine/block_executor.py`, `engine/dataloader.py`, `engine/trainer.py`, `engine/inference.py`, `engine/interpreter.py`, `engine/loop_executor.py`
+- `engine/block_executor.py`, `engine/dataloader.py`, `engine/trainer.py`, `engine/inference.py`, `engine/interpreter.py`, `engine/loop_executor.py`, `engine/ssm.py` (`LiquidKANNode`)
 - `primitives/`, `engine/*`, `tests/`
 
 ## IR opcodes

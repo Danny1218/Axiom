@@ -1,14 +1,20 @@
 import pytest
 import torch
 
-from engine.ssm import LiquidKANNode, _hat_basis
+from engine.ssm import LiquidKANNode, _rbf_basis
 from primitives.liquid_tensor import LiquidStateTensor
 
 
-def test_hat_basis_simple():
-    u = torch.tensor([[0.5]])
-    b = _hat_basis(u, 5)
-    assert b.shape == (1, 5) and (b.sum(dim=-1) > 0).all()
+def test_rbf_basis_simple():
+    fused = torch.zeros(1, 5)
+    b = _rbf_basis(fused, 5)
+    assert b.shape == (1, 5) and torch.isfinite(b).all() and (b > 0).all()
+
+
+def test_rbf_basis_num_basis_one():
+    fused = torch.randn(2, 3)
+    b = _rbf_basis(fused, 1)
+    assert b.shape == (2, 1) and (b == 1).all()
 
 
 def test_liquid_kan_forward_shape_and_grad():
@@ -19,6 +25,7 @@ def test_liquid_kan_forward_shape_and_grad():
     assert y.shape == x.shape
     y.sum().backward()
     assert x.grad is not None and m.coeffs.grad is not None
+    assert m.fuse_proj.weight.grad is not None and m.w_gate.weight.grad is not None
 
 
 def test_liquid_kan_forward_sequence():
@@ -82,3 +89,31 @@ def test_forward_sequence_tensors_mask_freezes_phantom_steps():
     seq1 = seq[:, :1, :]
     out_one = node.forward_sequence_tensors(seq1, h_init=h0)
     assert torch.allclose(out_masked, out_one, atol=1e-6, rtol=1e-5)
+
+
+def test_sequence_input_changes_output_vs_dummy_forward():
+    """x_t is fused into KAN: same h_init with different seq last step should differ from zero-input recurrence."""
+    torch.manual_seed(5)
+    d = 4
+    node = LiquidKANNode(d, num_basis=4, max_unroll=3)
+    B, T = 2, 3
+    h0 = torch.randn(B, d)
+    seq_a = torch.zeros(B, T, d)
+    seq_b = seq_a.clone()
+    seq_b[:, -1, :] = torch.randn(B, d) * 3.0
+    out_a = node.forward_sequence_tensors(seq_a, h_init=h0)
+    out_b = node.forward_sequence_tensors(seq_b, h_init=h0)
+    assert not torch.allclose(out_a, out_b)
+
+
+def test_kan_update_respects_x_t_gradient():
+    torch.manual_seed(6)
+    d = 3
+    node = LiquidKANNode(d, num_basis=3, max_unroll=2)
+    h = torch.randn(2, d, requires_grad=True)
+    x = torch.randn(2, d, requires_grad=True)
+    h0 = torch.randn(2, d, requires_grad=True)
+    tn = torch.zeros(2, 1)
+    prop = node._kan_update(h, x, h0, tn)
+    prop.sum().backward()
+    assert x.grad is not None and x.grad.abs().sum() > 0
