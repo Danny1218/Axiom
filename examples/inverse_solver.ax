@@ -1,0 +1,8 @@
+// We are given the target output 'target_y'
+features = [target_y];
+
+// The Liquid Neural Network guesses the input 'x'
+guess_x = neural(features, "liquid");
+
+// y = x^3 + sin(x) * e^(x/10)  (exact forward, differentiable)
+computed_y = (guess_x * guess_x * guess_x) + (sin(guess_x) * exp(guess_x / 10.0));

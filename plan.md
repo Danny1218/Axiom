@@ -2,7 +2,7 @@
 
 ## Current phase
 
-**Phase 46** — Pharma / drug-discovery demo (**`examples/drug_discovery.ax`**, **`examples/train_pharma.py`**) — see plan § Phase 46.
+**Phase 47** — O(1) batched neural inverse solver (**`examples/inverse_solver.ax`**, **`examples/train_solver.py`**) — see plan § Phase 47.
 
 **Phase 1–5:** Parser/IR, supernet + topology + Sinkhorn + shadow meta + Liquid KAN / `OP_LOOP`, dataloader, evolutionary trainer, serializer, CLI (now **`axiom train`**).
 
@@ -81,6 +81,7 @@
 - `examples/train_spy.py` — live SPY + Phase 38 backtest (optional: `pip install -e ".[spy]"`)
 - `examples/train_cartpole.py` — Phase 45 REINFORCE on CartPole-v1 (optional: `pip install -e ".[cartpole]"`)
 - `examples/drug_discovery.ax`, `examples/train_pharma.py` — Phase 46 batched viability + HTML trace (`examples/drug_report.html`, gitignored with `examples/*.html`)
+- `examples/inverse_solver.ax`, `examples/train_solver.py` — Phase 47 inverse non-linear solver (MSE through explicit `.ax` forward)
 - `train.ax` — default **`axiom train`** sketch (cwd)
 - `src/axiom/compiler/`, `src/axiom/engine/`, `src/axiom/primitives/`
 - `tests/`
@@ -106,6 +107,7 @@ python examples/train_statarb.py
 pip install -e ".[cartpole]"
 python examples/train_cartpole.py
 python examples/train_pharma.py
+python examples/train_solver.py
 axiom inspect
 ```
 
@@ -128,5 +130,7 @@ axiom inspect
 **Phase 45 (complete):** **Neuro-symbolic RL (CartPole)** — **`examples/cartpole.ax`**: four state features, **`neural(features, "liquid")`**, symbolic **pole_angle** safety rails (**±0.15** rad → fixed logits **±5**), **`prob_right`** via **`exp`**. **`examples/train_cartpole.py`**: pure PyTorch **REINFORCE** (**`Bernoulli`**, **γ=0.99**, normalized returns), **`_inputs_to_tensor`** + **`InterpretedBlock`** forward, **Adam lr=0.01**, up to **1000** episodes, **`save_bundle`** on **500** reward; **`axiom.load`** + **`render_mode="human"`** demo (graceful skip without display). Extra: **`pyproject.toml`** **`[cartpole]`** → **`gymnasium`**. Tests: **`tests/test_cartpole_agent.py`**.
 
 **Phase 46 (complete):** **Drug-discovery sandbox** — **`examples/drug_discovery.ax`**: three **`neural(..., "liquid")`** heads (**`carbon_angle`**, **`molecular_weight`**, **`drug_polarity`**), hinge-style penalties (**`physics_penalty`**, **`weight_penalty`**) via nested **`if`**, **`binding_affinity`**, **`viability_score`**. **`examples/train_pharma.py`**: **100** mock cells, **`_batch_inputs_to_tensor`**, **200** epochs **Adam(lr=0.5)**, minimize **`-mean(viability_score)`**; autopsy + **`AxiomModel.export_report`** → **`examples/drug_report.html`**. **`OP_CONDITIONAL`** evaluates both branches and **`torch.where`**-merges, so gradients flow (differentiable selection). Tests: **`tests/test_pharma_discovery.py`**.
+
+**Phase 47 (complete):** **Neural inverse solver** — **`examples/inverse_solver.ax`**: **`features = [target_y]`**, **`guess_x = neural(features, "liquid")`**, **`computed_y`** = **`x^3 + sin(x)*exp(x/10)`** in IR. **`examples/train_solver.py`**: **5000** samples **x∈[-5,5]**, train **only `target_y`**, MSE(**`computed_y`**, true **y**), **300** epochs **Adam(0.05)**; proof on **`test_y=65.432`** via **`model.explain`**, timed. **`exec_stmt` `OP_ASSIGN`**: squeeze **(B,1)** RHS to **(B,)** when old env slice is **1D**, fixing **`torch.where`** blow-up to **(B,B)** after **`OP_VEC_PACK`** width-1. Tests: **`tests/test_inverse_solver.py`**.
 
 **Later ideas:** **`return` inside `while`**; call targets like **`f()[i]`**. Glass Box upgrades (**`--inspect`** / graph of **`OP_NEURAL`**). See **`readme.md` § Road ahead**.

@@ -425,6 +425,13 @@ def exec_stmt(
         )
         k = str(stmt[1])
         old = env[k]
+        if (
+            old.dim() == 1
+            and nv.dim() == 2
+            and nv.shape[0] == old.shape[0]
+            and nv.shape[1] == 1
+        ):
+            nv = nv.squeeze(-1)
         m = _broadcast_mask(active_mask, nv)
         env[k] = torch.where(m, nv, old)
     elif op == "OP_BLEND_ASSIGN":
