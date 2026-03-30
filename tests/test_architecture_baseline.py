@@ -27,6 +27,7 @@ def test_plan_documents_semantic_copilot_roadmap():
     plan = (_root() / "plan.md").read_text(encoding="utf-8")
     assert "## Next target (semantic copilot" in plan
     assert "Phase 58" in plan and "experts" in plan.lower()
+    assert "Phase 60" in plan and "copilot" in plan.lower()
     assert "Phase 57" in plan
 
 
@@ -160,6 +161,7 @@ def test_src_axiom_package_layout():
         "export",
         "security",
         "experts",
+        "copilot",
     ):
         assert (base / sub).is_dir(), f"missing {sub}/"
     assert (base / "cli.py").is_file()

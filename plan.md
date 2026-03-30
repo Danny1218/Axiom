@@ -2,7 +2,9 @@
 
 ## Current phase
 
-**Phase 59** — **Onyx / Qwen expert HTTP adapter** — **`src/axiom/experts/onyx_qwen.py`**: **`OnyxQwenBackend`** (OpenAI-style **`POST …/v1/chat/completions`**), **`draft_program` / `repair_program` / `summarize_trace`**, deterministic prompts, fenced **`.ax`** extraction with plain-text fallback, **`OnyxQwenTimeoutError`**, **`OnyxQwenHTTPError`**, **`OnyxQwenParseError`**, **`OnyxQwenTransportError`**. Optional **`pip install -e ".[copilot]"`** (**`requests`**). Not imported from **`axiom`** root. Tests: **`tests/test_onyx_qwen_backend.py`**.
+**Phase 60** — **Copilot compile / validate / evaluate harness** — **`src/axiom/copilot/`**: **`ProgramCandidate`**, **`ProgramValidationReport`**, **`ProgramEvaluationReport`**, **`ProgramMetric`**, **`ProgramFailure`**; **`validate_program`**, **`evaluate_program`** with modes **`compile_only`**, **`predict_rows`**, and explicit **`train_tabular`** “not implemented” failure. In-memory **`.ax`** → parse / IR / **`InterpretedBlock`**; optional batched **`AxiomModel.predict`** + caller **`score_fn(predictions, expected) -> dict[str, float]`**; structured failures (no raw crashes). Tests: **`tests/test_copilot_evaluator.py`**.
+
+**Phase 59** — **Onyx / Qwen expert HTTP adapter** — **`src/axiom/experts/onyx_qwen.py`**, **`[copilot]`** extra (**`requests`**). Tests: **`tests/test_onyx_qwen_backend.py`**.
 
 **Phase 58** — **Expert backend abstraction** — **`SemanticExpert`**, registry, dataclasses. Tests: **`tests/test_experts.py`**.
 
@@ -117,13 +119,14 @@
 - `train.ax` — default **`axiom train`** sketch (cwd)
 - `src/axiom/compiler/`, `src/axiom/engine/`, `src/axiom/primitives/`
 - `src/axiom/experts/` — Phase 58 protocol + registry; Phase 59 **`onyx_qwen.py`** (optional **`[copilot]`**)
-- `tests/` — **`tests/test_architecture_baseline.py`**, **`tests/test_experts.py`**, **`tests/test_onyx_qwen_backend.py`**
+- `src/axiom/copilot/` — Phase 60 validate / evaluate harness for semantic search & expert repair loops
+- `tests/` — **`tests/test_architecture_baseline.py`**, **`tests/test_experts.py`**, **`tests/test_onyx_qwen_backend.py`**, **`tests/test_copilot_evaluator.py`**
 
 ## Next target (semantic copilot — wiring)
 
-**Done:** typed **expert** API (**Phase 58**) + **Onyx/Qwen HTTP adapter** (**Phase 59**, **`[copilot]`**).
+**Done:** typed **expert** API (**Phase 58**) + **Onyx/Qwen HTTP adapter** (**Phase 59**) + **in-memory evaluate harness** (**Phase 60**).
 
-**Not started:** copilot **CLI** or **FastAPI** routes, and orchestration that runs **`compile` / `train`** after expert draft/repair—keep using **`AxiomModel`** and existing **gateway** patterns at boundaries.
+**Not started:** copilot **CLI** or **FastAPI** routes, **`train_tabular`** inside the harness (use **`axiom train`** / **`EvolutionaryTrainer`**), and end-to-end orchestration after expert draft/repair.
 
 ## IR opcodes
 
