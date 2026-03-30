@@ -32,11 +32,81 @@ def test_readme_documents_python_api():
 def test_readme_documents_onnx_export_optional():
     text = (_root() / "readme.md").read_text(encoding="utf-8")
     assert "export-onnx" in text and "ONNX" in text and "[export]" in text
+    assert "## ONNX export" in text
 
 
 def test_readme_documents_gateway_optional():
     text = (_root() / "readme.md").read_text(encoding="utf-8")
     assert "gateway-serve" in text and "axiom.gateway" in text and "[gateway]" in text
+    assert "## Policy gateway" in text
+
+
+def test_readme_from_compile_to_production_story():
+    text = (_root() / "readme.md").read_text(encoding="utf-8")
+    assert "## From compile to production" in text
+    assert "compile" in text.lower() and "bundle" in text.lower() and "serve" in text.lower()
+    assert "lock" in text.lower() or "Locked bundles" in text
+    assert "export" in text.lower()
+
+
+def test_readme_documents_axiom_serve_section():
+    text = (_root() / "readme.md").read_text(encoding="utf-8")
+    assert "## `axiom serve`" in text
+    assert "pip install -e \".[serve]\"" in text or 'pip install -e ".[serve]"' in text
+    assert "AXIOM_BUNDLE_PATH" in text
+
+
+def test_readme_documents_locked_bundles_section():
+    text = (_root() / "readme.md").read_text(encoding="utf-8")
+    assert "## Locked bundles" in text
+    assert "lock-bundle" in text and "[lock]" in text
+
+
+def test_readme_documents_docker_deployment_section():
+    text = (_root() / "readme.md").read_text(encoding="utf-8")
+    assert "## Docker deployment" in text
+    assert "docker compose" in text.lower() or "docker-compose" in text
+    assert "Dockerfile" in text
+
+
+def _parse_project_dependencies(pyproject_text: str) -> list[str]:
+    lines = pyproject_text.splitlines()
+    deps: list[str] = []
+    in_deps = False
+    for line in lines:
+        s = line.strip()
+        if s.startswith("dependencies = ["):
+            in_deps = True
+            continue
+        if in_deps:
+            if s.startswith("]"):
+                break
+            if s.startswith('"'):
+                deps.append(s.strip('",'))
+    return deps
+
+
+def test_pyproject_core_dependencies_minimal():
+    text = (_root() / "pyproject.toml").read_text(encoding="utf-8")
+    deps = _parse_project_dependencies(text)
+    joined = " ".join(deps)
+    assert "torch" in joined and "lark" in joined and "networkx" in joined
+    assert "pytest" not in joined
+    assert "streamlit" not in joined
+    assert "graphviz" not in joined
+
+
+def test_pyproject_optional_extras_documented():
+    text = (_root() / "pyproject.toml").read_text(encoding="utf-8")
+    assert "inspect = [" in text
+    assert "dev = [" in text
+    assert "serve = [" in text and "lock = [" in text and "export = [" in text
+
+
+def test_readme_documents_dev_extra_and_inspect():
+    text = (_root() / "readme.md").read_text(encoding="utf-8")
+    assert 'pip install -e ".[dev]"' in text or "pip install -e \".[dev]\"" in text
+    assert "[inspect]" in text
 
 
 def test_readme_version_matches_pyproject():
@@ -102,6 +172,7 @@ def test_cli_source_wires_documented_train_features():
     assert "lock-bundle" in src and "lock_bundle_file" in src
     assert "export-onnx" in src and "export_bundle_to_onnx" in src
     assert "gateway-serve" in src and "create_gateway_app" in src
+    assert "Glass Box requires" in src and ".[inspect]" in src
 
 
 def test_cli_rejects_dataset_and_csv_together():

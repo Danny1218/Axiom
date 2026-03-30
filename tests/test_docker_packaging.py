@@ -35,7 +35,7 @@ def test_dockerignore_excludes_heavy_or_local_artifacts():
 
 def test_readme_documents_docker_build_run_compose_curl():
     text = (_root() / "readme.md").read_text(encoding="utf-8")
-    assert "## Docker (bundle server)" in text
+    assert "## Docker deployment" in text
     assert "docker build" in text
     assert "docker run" in text
     assert "docker compose" in text

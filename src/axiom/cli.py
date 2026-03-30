@@ -371,6 +371,11 @@ def _cmd_gateway_serve(args: argparse.Namespace) -> None:
 
 
 def _cmd_inspect(_args: argparse.Namespace) -> int:
+    try:
+        import streamlit  # noqa: F401
+    except ImportError:
+        raise SystemExit('Glass Box requires: pip install -e ".[inspect]"') from None
+
     import axiom.tools
 
     inspector = Path(axiom.tools.__file__).resolve().parent / "inspector.py"

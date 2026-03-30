@@ -57,17 +57,85 @@ cd Axiom
 pip install -e .
 ```
 
-This installs the **`axiom-engine`** package and the global **`axiom`** CLI. Requires **Python 3.10+** and **PyTorch 2+**.
+This installs the **`axiom-engine`** package and the global **`axiom`** CLI. Requires **Python 3.10+** and **PyTorch 2+**. Core dependencies are **torch**, **lark**, and **networkx** only.
 
-Optional ONNX export (InterpretedBlock **`.axb`** only, dense tensor in/out): **`pip install -e ".[export]"`**, then **`axiom export-onnx --bundle model.axb --output model.onnx`**. This is **inference-only** tracing; it does **not** preserve **`explain`** / Glass Box semantics, and some IR graphs may fail to export.
+Optional extras:
 
-**Policy gateway (optional):** **`pip install -e ".[gateway]"`** — **`axiom.gateway`** scans text (or accepts pre-extracted signals), runs **`AxiomModel.explain`**, blocks or forwards to a configurable downstream URL, and can emit Glass Box HTML on deny via **`export_report`** / **`render_html_report`**. HTTP: **`axiom gateway-serve --bundle policy.axb --downstream-url https://...`** → **`POST /gateway/chat`** (`message`, optional `signals`). Examples **`examples/onyx_gateway.py`** and **`examples/enterprise_ui.py`** use the same **`default_scan_text`** helper from **`axiom.gateway.core`**.
+| Extra | Purpose |
+|-------|---------|
+| **`[inspect]`** | Glass Box (`axiom inspect`): Streamlit + `graphviz` bindings |
+| **`[serve]`** | HTTP bundle API (`axiom serve`): FastAPI + uvicorn |
+| **`[lock]`** | Genetic lock on **`.axb`** neural weights (`axiom lock-bundle`) |
+| **`[export]`** | ONNX export (`axiom export-onnx`) |
+| **`[gateway]`** | Policy gateway HTTP + examples (`requests`, Streamlit, overlaps `[serve]` on FastAPI) |
+| **`[dev]`** | Run the test suite (`pytest` + Glass Box deps for `inspect` / `glass_box` tests) |
+
+Run tests locally:
+
+```powershell
+pip install -e ".[dev]"
+python -m pytest tests -q
+```
 
 ---
 
-## Docker (bundle server)
+## From compile to production
 
-Production-style image for **`axiom serve`**: one **`.axb`**, FastAPI on **`HOST`** / **`PORT`**. The image installs **`[serve]`** and **`[lock]`**. Optional env: **`AXIOM_API_KEY`** (Bearer / **`X-API-Key`** on **`/predict`**, **`/explain`**, **`/report`**), **`AXIOM_BUNDLE_SECRET`** (unlock **`env-secret`** locked bundles). No bundle is baked in—set **`AXIOM_BUNDLE_PATH`** at runtime.
+1. **Compile & train** — **`axiom train`** on an **`.ax`** file; you get a **`.axb`** bundle (serialized `InterpretedBlock` + weights).  
+2. **Bundle** — The **`.axb`** is the portable artifact; load it with **`axiom.load`** or **`axiom predict`**.  
+3. **Serve** — Optional **`pip install -e ".[serve]"`**, then **`axiom serve`** exposes **`/health`**, **`/predict`**, **`/explain`**, **`/report`** over HTTP.  
+4. **Secure** — Optional **`pip install -e ".[lock]"`**, then **`axiom lock-bundle`** encrypts neural weights; **`AXIOM_BUNDLE_SECRET`** / device unlock at load time.  
+5. **Export** — Optional **`pip install -e ".[export]"`**, then **`axiom export-onnx`** for inference-only ONNX (no **`explain`** parity).  
+6. **Policy gateway** — Optional **`pip install -e ".[gateway]"`**, then **`axiom gateway-serve`** for **`POST /gateway/chat`** (scan + explain + allow/deny + optional downstream forward).
+
+---
+
+## `axiom serve`
+
+Serves **one** `.axb` at startup via FastAPI: **`GET /health`**, **`POST /predict`**, **`POST /explain`**, **`POST /report`** (JSON **`inputs`**; report can return inline HTML). Install **`pip install -e ".[serve]"`**.
+
+Optional **`AXIOM_API_KEY`**: mutating routes accept **`Authorization: Bearer …`** or **`X-API-Key`**; **`GET /health`** is unauthenticated. **`AXIOM_BUNDLE_PATH`** selects the bundle if **`--bundle`** is omitted.
+
+**Examples:**
+
+```powershell
+pip install -e ".[serve]"
+axiom serve --bundle examples/portfolio_trained.axb --host 127.0.0.1 --port 8000
+```
+
+```powershell
+$env:AXIOM_BUNDLE_PATH = "examples/portfolio_trained.axb"
+$env:AXIOM_API_KEY = "secret"
+axiom serve --host 0.0.0.0 --port 8000
+```
+
+```bash
+curl -s http://127.0.0.1:8000/health
+curl -s -X POST http://127.0.0.1:8000/predict -H "Content-Type: application/json" -d "{\"inputs\": {\"volatility\": 0.6}}"
+```
+
+---
+
+## Locked bundles
+
+**Genetic lock** (`src/axiom/security/genetic_lock.py`) optionally encrypts **serialized neural weights** inside the **`.axb`** with AES-256-CTR; **topology / ABI / IR** stay readable. Modes include **`device`** (CUDA identity), **`host`**, and **`env-secret`** ( **`AXIOM_BUNDLE_SECRET`** ). Install **`pip install -e ".[lock]"`**.
+
+**Examples:**
+
+```powershell
+pip install -e ".[lock]"
+$env:AXIOM_BUNDLE_SECRET = "dev-secret"
+axiom lock-bundle --input examples/portfolio_trained.axb --output examples/portfolio_locked.axb --mode env-secret
+axiom predict --bundle examples/portfolio_locked.axb --input '{"volatility":0.6,"drawdown":0.1,"momentum":-0.8,"volume":1.5}'
+```
+
+In Docker, set **`AXIOM_BUNDLE_SECRET`** if the mounted bundle is **`env-secret`** locked (see **Docker deployment**).
+
+---
+
+## Docker deployment
+
+Production-style image for **`axiom serve`**: one **`.axb`**, FastAPI on **`HOST`** / **`PORT`**. The **`Dockerfile`** installs **`pip install ".[serve,lock]"`**. Optional env: **`AXIOM_API_KEY`** (Bearer / **`X-API-Key`** on **`/predict`**, **`/explain`**, **`/report`**), **`AXIOM_BUNDLE_SECRET`** (unlock **`env-secret`** locked bundles). No bundle is baked in—set **`AXIOM_BUNDLE_PATH`** at runtime.
 
 ### Build
 
@@ -90,7 +158,7 @@ docker run --rm -p 8000:8000 \
   axiom-engine:latest
 ```
 
-**PowerShell** (repo root; uses a trained **`examples/portfolio_trained.axb`** if you ran **`python examples/train_portfolio.py`**):
+**PowerShell** (repo root; uses **`examples/portfolio_trained.axb`** after **`python examples/train_portfolio.py`**):
 
 ```powershell
 docker run --rm -p 8000:8000 `
@@ -132,6 +200,33 @@ curl -s -X POST http://localhost:8000/predict \
   -H "Content-Type: application/json" \
   -d '{"inputs": {}}'
 ```
+
+---
+
+## ONNX export
+
+InterpretedBlock **`.axb`** only: dense tensor in/out via **`torch.onnx.export`**; **inference-only**—it does **not** preserve **`explain`** / Glass Box semantics, and some IR graphs may fail to export.
+
+```powershell
+pip install -e ".[export]"
+axiom export-onnx --bundle examples/portfolio_trained.axb --output examples/portfolio.onnx --opset 17
+```
+
+Optional round-trip tests use **`onnxruntime`** (not installed by **`[export]`**).
+
+---
+
+## Policy gateway
+
+**`pip install -e ".[gateway]"`** pulls **`requests`**, Streamlit (for **`examples/enterprise_ui.py`**), FastAPI, and uvicorn. **`axiom.gateway`** scans text (or accepts pre-extracted signals), runs **`AxiomModel.explain`**, blocks or forwards to a downstream URL, and can emit Glass Box HTML on deny via **`export_report`** / **`render_html_report`**.
+
+**HTTP server:**
+
+```powershell
+axiom gateway-serve --bundle policy.axb --downstream-url http://127.0.0.1:8000/api/chat --policy-source examples/enterprise_policy.ax --host 127.0.0.1 --port 8010
+```
+
+**`POST /gateway/chat`** accepts JSON **`message`** and optional **`signals`**. Examples **`examples/onyx_gateway.py`** and **`examples/enterprise_ui.py`** use **`default_scan_text`** from **`axiom.gateway.core`**.
 
 ---
 
@@ -227,7 +322,8 @@ For any **`.axb`**, **`model.explain({"feature": ...})`** returns a JSON-friendl
 
 After training, artifacts are written as **`{prefix}.pt`** + **`{prefix}_topology.json`** (default prefix `axiom_bundle`).
 
-```bash
+```powershell
+pip install -e ".[inspect]"
 axiom inspect
 ```
 
@@ -242,6 +338,10 @@ This starts **Streamlit**. In the UI, set the bundle path prefix (same as `--out
 | Legacy synthetic sequence (no CSV) | `axiom train train.ax --epochs 10 --out axiom_bundle` |
 | Custom CSV | `axiom train my.ax --csv data.csv --target_key label --target_var my_output_abi` |
 | Load saved bundle, one-off inference | `axiom train --mode inference --out axiom_bundle` |
+| HTTP bundle API (needs **`[serve]`**) | `axiom serve --bundle model.axb` |
+| Lock weights (needs **`[lock]`**) | `axiom lock-bundle --input in.axb --output out.axb --mode env-secret` |
+| ONNX (needs **`[export]`**) | `axiom export-onnx --bundle model.axb --output model.onnx` |
+| Policy gateway (needs **`[gateway]`**) | `axiom gateway-serve --bundle policy.axb --downstream-url https://…` |
 
 ---
 
@@ -250,7 +350,8 @@ This starts **Streamlit**. In the UI, set the bundle path prefix (same as `--out
 1. **Parse** `.ax` → AST  
 2. **Lower** → IR (`OP_*` bytecode)  
 3. **Wire** → `ExecutionGraph` (NetworkX + PyTorch)  
-4. **Train** with `EvolutionaryTrainer` / `AxiomDataset`; **inspect** with `AxiomRunner` + Glass Box  
+4. **Train** → save **`.axb`**; **serve** / **lock** / **export** / **gateway** as optional deployment steps (see **From compile to production**)  
+5. **Inspect** with **`axiom inspect`** (`[inspect]`) or **`AxiomRunner`** + Glass Box  
 
 ---
 
@@ -290,5 +391,5 @@ Three honest forks after v1.0:
 ## Links
 
 - **Repository:** [github.com/Danny1218/Axiom](https://github.com/Danny1218/Axiom)  
-- **Tests:** `python -m pytest tests -q`  
+- **Tests:** `pip install -e ".[dev]"` then `python -m pytest tests -q`  
 - **Project state (maintainers):** see `plan.md` in this repo.

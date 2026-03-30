@@ -2,7 +2,9 @@
 
 ## Current phase
 
-**Phase 55** — **Gateway server** — **`src/axiom/gateway/core.py`** (**`default_scan_text`**, **`resolve_signals`**, **`policy_explain`**, **`is_approved`**, **`build_block_audit`**, **`forward_to_downstream`**), **`src/axiom/gateway/server.py`** (**`create_gateway_app`**, **`POST /gateway/chat`**, **`create_app`** / env **`AXIOM_GATEWAY_*`**). CLI **`axiom gateway-serve --bundle --downstream-url ...`**. Optional **`pip install -e ".[gateway]"`** (adds **`fastapi`** + **`uvicorn`**). Examples **`onyx_gateway.py`** / **`enterprise_ui.py`** import **`default_scan_text`** from **`axiom.gateway.core`**. Tests: **`tests/test_gateway_server.py`**.
+**Phase 56** — **Packaging & documentation** — Core **`pyproject.toml`** deps: **`torch`**, **`lark`**, **`networkx`** only. Optional extras: **`[inspect]`** (Glass Box), **`[serve]`**, **`[lock]`**, **`[export]`**, **`[gateway]`**, **`[dev]`** (**`pytest`** + inspect deps for tests). **`axiom inspect`** errors with **`pip install -e ".[inspect]"`** if Streamlit missing. **`readme.md`**: narrative **compile → bundle → serve → secure → optionally export**; sections **`axiom serve`**, **Locked bundles**, **Docker deployment**, **ONNX export**, **Policy gateway**. Tests: **`tests/test_documentation_contract.py`** (readme + **`pyproject`** + CLI).
+
+**Phase 55** — **Gateway server** — **`src/axiom/gateway/core.py`**, **`src/axiom/gateway/server.py`**. CLI **`axiom gateway-serve`**. Optional **`pip install -e ".[gateway]"`**. Examples **`onyx_gateway.py`** / **`enterprise_ui.py`**. Tests: **`tests/test_gateway_server.py`**.
 
 **Phase 54** — **ONNX export (AOT)** — **`src/axiom/export/onnx_export.py`**: **`InterpretedBlock`** **`.axb`** only; **`torch.onnx.export`** on a dense **(B, D)** trunk wrapper; **`onnx.checker`**; **`OnnxExportError`** on empty ABI or exporter failure. CLI **`axiom export-onnx --bundle --output [--opset]`**. Optional **`pip install -e ".[export]"`** (**`onnx`**). Inference-only; no **`explain`** parity. Tests: **`tests/test_onnx_export.py`** (optional **`onnxruntime`** round-trip).
 
@@ -88,7 +90,7 @@
 
 ## Layout
 
-- `pyproject.toml` — **`axiom-engine`**, script **`axiom` → `axiom.cli:main`**
+- `pyproject.toml` — **`axiom-engine`**, script **`axiom` → `axiom.cli:main`**, core deps minimal; extras **`inspect`**, **`serve`**, **`lock`**, **`export`**, **`gateway`**, **`dev`**
 - `Dockerfile`, `docker-compose.yml`, `.dockerignore` — Phase 53 containerized **`axiom serve`**
 - `src/axiom/export/onnx_export.py` — Phase 54 optional **`.axb` → ONNX** (**InterpretedBlock**)
 - `src/axiom/gateway/core.py`, `src/axiom/gateway/server.py` — Phase 55 policy gateway + HTTP **`/gateway/chat`**
@@ -118,7 +120,7 @@
 
 ```powershell
 cd "...\Axiom"
-pip install -e .
+pip install -e ".[dev]"
 python -m pytest tests -q
 axiom train train.ax --epochs 10 --out axiom_bundle
 axiom train examples/titanic.ax --dataset titanic --epochs 30 --out axiom_bundle
