@@ -397,6 +397,32 @@ def _cmd_inspect(_args: argparse.Namespace) -> int:
     )
 
 
+def _cmd_copilot_studio(_args: argparse.Namespace) -> int:
+    try:
+        import streamlit  # noqa: F401
+    except ImportError:
+        raise SystemExit('Copilot Studio requires Streamlit: pip install -e ".[inspect]"') from None
+    try:
+        import requests  # noqa: F401
+    except ImportError:
+        raise SystemExit('Copilot Studio requires requests: pip install -e ".[copilot]"') from None
+
+    import axiom.tools
+
+    studio = Path(axiom.tools.__file__).resolve().parent / "copilot_studio.py"
+    return subprocess.call(
+        [
+            sys.executable,
+            "-m",
+            "streamlit",
+            "run",
+            str(studio),
+            "--server.fileWatcherType",
+            "none",
+        ]
+    )
+
+
 _COPILOT_INSTALL = 'pip install -e ".[copilot]"'
 
 
@@ -615,7 +641,7 @@ def _add_copilot_backend_args(p: argparse.ArgumentParser) -> None:
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(
         prog="axiom",
-        description="Axiom neural compiler CLI (train, predict, copilot-draft, copilot-search, lock-bundle, export-onnx, inspect, serve, gateway-serve).",
+        description="Axiom neural compiler CLI (train, predict, copilot-draft, copilot-search, copilot-studio, lock-bundle, export-onnx, inspect, serve, gateway-serve).",
     )
     sub = ap.add_subparsers(dest="cmd", required=True)
 
@@ -681,6 +707,12 @@ def main(argv: list[str] | None = None) -> None:
 
     p_inspect = sub.add_parser("inspect", help="Launch Glass Box Streamlit visualizer.")
     p_inspect.set_defaults(_handler=_cmd_inspect)
+
+    p_copilot_studio = sub.add_parser(
+        "copilot-studio",
+        help='Copilot Studio: Streamlit UI for draft/search (needs pip install -e ".[inspect,copilot]").',
+    )
+    p_copilot_studio.set_defaults(_handler=_cmd_copilot_studio)
 
     p_predict = sub.add_parser(
         "predict",
@@ -847,6 +879,8 @@ def main(argv: list[str] | None = None) -> None:
     args = ap.parse_args(argv)
     handler = args._handler
     if handler is _cmd_inspect:
+        raise SystemExit(handler(args))
+    if handler is _cmd_copilot_studio:
         raise SystemExit(handler(args))
     if handler is _cmd_predict:
         handler(args)

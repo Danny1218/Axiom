@@ -63,7 +63,7 @@ Optional extras:
 
 | Extra | Purpose |
 |-------|---------|
-| **`[inspect]`** | Glass Box (`axiom inspect`): Streamlit + `graphviz` bindings |
+| **`[inspect]`** | Glass Box (`axiom inspect`) + Copilot Studio (`axiom copilot-studio`): Streamlit + `graphviz` bindings |
 | **`[serve]`** | HTTP bundle API (`axiom serve`): FastAPI + uvicorn |
 | **`[lock]`** | Genetic lock on **`.axb`** neural weights (`axiom lock-bundle`) |
 | **`[export]`** | ONNX export (`axiom export-onnx`) |
@@ -97,6 +97,8 @@ python -m pytest tests -q
 Install **`[copilot]`** so `requests` is available. Pass **`--expert-url`** (API base, e.g. `https://your-host/v1/`), **`--expert-model`**, and optionally **`--expert-api-key`** or set **`AXIOM_EXPERT_API_KEY`**. Iteration logs and “wrote file” lines go to **stderr**; the generated **`.ax`** source is printed to **stdout** so you can redirect it.
 
 **Reproducible runs:** **`axiom copilot-search --artifact-dir path/to/run/`** writes a fixed bundle — **`best.ax`**, **`iterations.json`** (per-iteration source, metrics, failure summaries, expert **`metadata`**), **`search_report.json`** (run header + **`failures_metrics_summary`**) — only when that flag is set (no silent writes).
+
+**Copilot Studio (optional UI):** install **`[inspect]`** and **`[copilot]`** (`pip install -e ".[inspect,copilot]"`), then run **`axiom copilot-studio`**. It opens a separate Streamlit app from Glass Box (`axiom inspect`): enter expert URL / model / API key, goal, optional context, iteration limit, then use **Draft once** or **Run search** — nothing calls the network until you click. You get tables for iteration summaries, expandable eval/metrics/failure JSON, and download buttons for **`draft.ax`**, **`best.ax`**, and **`copilot_report.json`**.
 
 **Draft** (goal → single program):
 

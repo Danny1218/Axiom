@@ -46,6 +46,7 @@ def test_readme_documents_copilot_cli():
     assert "copilot-draft" in text and "copilot-search" in text and "[copilot]" in text
     assert "Semantic copilot" in text and "inputs" in text and "expected" in text
     assert "artifact-dir" in text and "iterations.json" in text and "search_report.json" in text
+    assert "copilot-studio" in text and "Copilot Studio" in text
 
 
 def test_readme_from_compile_to_production_story():
@@ -161,6 +162,7 @@ def test_array_literal_and_indexing_ir():
         ["gateway-serve", "--help"],
         ["copilot-draft", "--help"],
         ["copilot-search", "--help"],
+        ["copilot-studio", "--help"],
     ],
 )
 def test_cli_subcommands_help_exits_ok(argv: list):
@@ -185,6 +187,7 @@ def test_cli_source_wires_documented_train_features():
     assert "Glass Box requires" in src and ".[inspect]" in src
     assert "copilot-draft" in src and "copilot-search" in src and "_make_copilot_expert" in src
     assert "artifact-dir" in src
+    assert "copilot-studio" in src and "copilot_studio.py" in src
 
 
 def test_cli_rejects_dataset_and_csv_together():
