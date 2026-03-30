@@ -2,6 +2,8 @@
 
 ## Current phase
 
+**Phase 53** — **Docker** — **`Dockerfile`** (**`python:3.12-slim`**, **`pip install ".[serve,lock]"`**, **`CMD axiom serve`**, **`HOST=0.0.0.0 PORT=8000`**), **`docker-compose.yml`** (port **8000**, mount **`./bundles`**, env **`AXIOM_BUNDLE_PATH`** / **`AXIOM_API_KEY`** / **`AXIOM_BUNDLE_SECRET`** / **`HOST`** / **`PORT`**), **`bundles/.gitkeep`**, **`README`** Docker section. **`axiom serve`**: reads **`HOST`** and **`PORT`** from the environment when set (else **`--host`** / **`--port`**). Tests: **`tests/test_docker_packaging.py`**, **`tests/test_serve.py`** (env host/port).
+
 **Phase 52** — Genetic lock (**`src/axiom/security/genetic_lock.py`**) — optional AES-256-CTR on serialized **`neural_weights`** only; **`topology` / ABI / IR** stay readable in the **`.axb`**. Lock modes: **`none`** (default), **`device`** (CUDA identity; save requires GPU), **`host`**, **`env-secret`** (**`AXIOM_BUNDLE_SECRET`**). Payload **`lock`**: **`encrypted`**, **`lock_mode`**, **`nonce_hex`**, **`payload_len`**, **`key_fingerprint`**, **`ciphertext_hex`**. **`save_bundle(..., lock_mode=...)`**, **`load_bundle`** decrypts via **`unlock_payload`**. CLI **`axiom lock-bundle --input --output --mode`**. Optional **`pip install -e ".[lock]"`** (**`cryptography`**). Tests: **`tests/test_genetic_lock.py`**.
 
 **Phase 51** — Bundle HTTP API (**`axiom serve`**, **`src/axiom/serve.py`**, **`src/axiom/api_models.py`**) — FastAPI + uvicorn (optional **`pip install -e ".[serve]"`**): load one **`.axb`** at startup (**`--bundle`** or **`AXIOM_BUNDLE_PATH`**), **`GET /health`**, **`POST /predict`**, **`POST /explain`**, **`POST /report`** (JSON **`inputs`**; report optional **`output_path`** else inline **`html`**). Optional **`AXIOM_API_KEY`** → **`Authorization: Bearer`** or **`X-API-Key`** on mutating routes (health unauthenticated). **`html_exporter.render_html_report`** for inline HTML. Tests: **`tests/test_serve.py`**.
@@ -83,6 +85,7 @@
 ## Layout
 
 - `pyproject.toml` — **`axiom-engine`**, script **`axiom` → `axiom.cli:main`**
+- `Dockerfile`, `docker-compose.yml`, `.dockerignore` — Phase 53 containerized **`axiom serve`**
 - `src/axiom/cli.py` — train / inspect / predict / **lock-bundle** / **serve** subcommands
 - `src/axiom/security/genetic_lock.py` — Phase 52 optional **`.axb`** neural encryption
 - `src/axiom/serve.py`, `src/axiom/api_models.py` — Phase 51 FastAPI bundle server
@@ -129,6 +132,8 @@ python examples/onyx_gateway.py
 streamlit run examples/enterprise_ui.py --server.fileWatcherType none
 pip install -e ".[serve]"
 axiom serve --bundle examples/portfolio_trained.axb --host 127.0.0.1 --port 8000
+docker build -t axiom-engine:latest .
+# Place model.axb in bundles/ then: docker compose up
 # `examples/*.axb` is gitignored — run `python examples/train_portfolio.py` first if the file is missing.
 pip install -e ".[lock]"
 $env:AXIOM_BUNDLE_SECRET="dev-secret"

@@ -61,6 +61,57 @@ This installs the **`axiom-engine`** package and the global **`axiom`** CLI. Req
 
 ---
 
+## Docker (bundle server)
+
+Production-style image for **`axiom serve`**: one **`.axb`**, FastAPI on **`HOST`** / **`PORT`**. The image installs **`[serve]`** and **`[lock]`**. Optional env: **`AXIOM_API_KEY`** (Bearer / **`X-API-Key`** on **`/predict`**, **`/explain`**, **`/report`**), **`AXIOM_BUNDLE_SECRET`** (unlock **`env-secret`** locked bundles). No bundle is baked in—set **`AXIOM_BUNDLE_PATH`** at runtime.
+
+### Build
+
+```bash
+docker build -t axiom-engine:latest .
+```
+
+### Run
+
+```bash
+docker run --rm -p 8000:8000 \
+  -e AXIOM_BUNDLE_PATH=/bundle/model.axb \
+  -e HOST=0.0.0.0 \
+  -e PORT=8000 \
+  -v /absolute/path/to/model.axb:/bundle/model.axb:ro \
+  axiom-engine:latest
+```
+
+Add optional **`AXIOM_API_KEY`** / **`AXIOM_BUNDLE_SECRET`** with **`-e`** as needed.
+
+### Compose
+
+Create **`bundles/`**, place **`model.axb`** there (or change **`AXIOM_BUNDLE_PATH`** in **`docker-compose.yml`**), then:
+
+```bash
+docker compose up --build
+```
+
+### Example `curl`
+
+```bash
+curl -s http://localhost:8000/health
+curl -s -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"inputs": {}}'
+```
+
+When **`AXIOM_API_KEY`** is set (e.g. **`change-me-in-production`** in **`docker-compose.yml`**):
+
+```bash
+curl -s -X POST http://localhost:8000/predict \
+  -H "Authorization: Bearer change-me-in-production" \
+  -H "Content-Type: application/json" \
+  -d '{"inputs": {}}'
+```
+
+---
+
 ## Quickstart — Native Python API (Jupyter / scripts)
 
 Load a trained **`.axb`** bundle and run inference with ordinary Python dicts—no manual trunk layout. Batches are a **list of dicts**; **pandas** `DataFrame` rows work too (optional: install `pandas` separately).

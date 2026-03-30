@@ -139,3 +139,38 @@ def test_cli_serve_help_exits_ok():
     with pytest.raises(SystemExit) as exc:
         main(["serve", "--help"])
     assert exc.value.code == 0
+
+
+def test_cli_serve_uses_host_port_env(sample_axb: Path, monkeypatch: pytest.MonkeyPatch):
+    """Container / compose set HOST and PORT; must override CLI defaults."""
+    pytest.importorskip("uvicorn")
+    monkeypatch.setenv("AXIOM_BUNDLE_PATH", str(sample_axb))
+    monkeypatch.setenv("HOST", "0.0.0.0")
+    monkeypatch.setenv("PORT", "9123")
+    ran: list[tuple[str, int]] = []
+
+    def fake_run(app, host, port, log_level="info"):
+        ran.append((host, int(port)))
+
+    monkeypatch.setattr("uvicorn.run", fake_run)
+    from axiom.cli import main
+
+    main(["serve"])
+    assert ran == [("0.0.0.0", 9123)]
+
+
+def test_cli_serve_falls_back_to_args_when_env_unset(sample_axb: Path, monkeypatch: pytest.MonkeyPatch):
+    pytest.importorskip("uvicorn")
+    monkeypatch.setenv("AXIOM_BUNDLE_PATH", str(sample_axb))
+    monkeypatch.delenv("HOST", raising=False)
+    monkeypatch.delenv("PORT", raising=False)
+    ran: list[tuple[str, int]] = []
+
+    def fake_run(app, host, port, log_level="info"):
+        ran.append((host, int(port)))
+
+    monkeypatch.setattr("uvicorn.run", fake_run)
+    from axiom.cli import main
+
+    main(["serve", "--host", "127.0.0.1", "--port", "8000"])
+    assert ran == [("127.0.0.1", 8000)]

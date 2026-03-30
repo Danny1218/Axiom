@@ -1,0 +1,16 @@
+# Mount local bundles/ and point AXIOM_BUNDLE_PATH at a file inside the mount.
+# Create bundles/model.axb (or change AXIOM_BUNDLE_PATH) before `docker compose up`.
+services:
+  axiom:
+    build: .
+    image: axiom-engine:local
+    ports:
+      - "8000:8000"
+    environment:
+      AXIOM_BUNDLE_PATH: /bundles/model.axb
+      AXIOM_API_KEY: change-me-in-production
+      AXIOM_BUNDLE_SECRET: ${AXIOM_BUNDLE_SECRET:-}
+      HOST: "0.0.0.0"
+      PORT: "8000"
+    volumes:
+      - ./bundles:/bundles:ro

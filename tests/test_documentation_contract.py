@@ -86,6 +86,7 @@ def test_cli_source_wires_documented_train_features():
     assert "Use either --dataset or --csv" in src
     assert "predict" in src and "load_bundle" in src and "--bundle" in src
     assert "serve" in src and "uvicorn" in src
+    assert "HOST" in src and "PORT" in src and "AXIOM_BUNDLE_PATH" in src
     assert "lock-bundle" in src and "lock_bundle_file" in src
 
 

@@ -311,8 +311,13 @@ def _cmd_serve(args: argparse.Namespace) -> None:
     if not bp.is_file():
         raise SystemExit(f"Bundle not found: {bp}")
 
+    host_env = os.environ.get("HOST")
+    host = host_env.strip() if host_env not in (None, "") else args.host
+    port_env = os.environ.get("PORT")
+    port = int(port_env) if port_env not in (None, "") else int(args.port)
+
     app = create_app(bp)
-    uvicorn.run(app, host=args.host, port=int(args.port), log_level="info")
+    uvicorn.run(app, host=host, port=port, log_level="info")
 
 
 def _cmd_inspect(_args: argparse.Namespace) -> int:
@@ -449,8 +454,18 @@ def main(argv: list[str] | None = None) -> None:
         default=None,
         help="Path to .axb (default: env AXIOM_BUNDLE_PATH).",
     )
-    p_serve.add_argument("--host", type=str, default="127.0.0.1", help="Bind address.")
-    p_serve.add_argument("--port", type=int, default=8000, help="TCP port.")
+    p_serve.add_argument(
+        "--host",
+        type=str,
+        default="127.0.0.1",
+        help="Bind address when HOST env is unset (Docker: set HOST=0.0.0.0).",
+    )
+    p_serve.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="TCP port when PORT env is unset.",
+    )
     p_serve.set_defaults(_handler=_cmd_serve)
 
     args = ap.parse_args(argv)
