@@ -41,7 +41,8 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-from onyx_gateway import build_trained_policy, chat_with_onyx, scan_text
+from axiom.gateway.core import default_scan_text as scan_text
+from onyx_gateway import build_trained_policy, chat_with_onyx
 
 
 @st.cache_resource(show_spinner="Training Axiom compliance policy (one-time)...")

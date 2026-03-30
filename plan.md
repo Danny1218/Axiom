@@ -2,6 +2,8 @@
 
 ## Current phase
 
+**Phase 55** — **Gateway server** — **`src/axiom/gateway/core.py`** (**`default_scan_text`**, **`resolve_signals`**, **`policy_explain`**, **`is_approved`**, **`build_block_audit`**, **`forward_to_downstream`**), **`src/axiom/gateway/server.py`** (**`create_gateway_app`**, **`POST /gateway/chat`**, **`create_app`** / env **`AXIOM_GATEWAY_*`**). CLI **`axiom gateway-serve --bundle --downstream-url ...`**. Optional **`pip install -e ".[gateway]"`** (adds **`fastapi`** + **`uvicorn`**). Examples **`onyx_gateway.py`** / **`enterprise_ui.py`** import **`default_scan_text`** from **`axiom.gateway.core`**. Tests: **`tests/test_gateway_server.py`**.
+
 **Phase 54** — **ONNX export (AOT)** — **`src/axiom/export/onnx_export.py`**: **`InterpretedBlock`** **`.axb`** only; **`torch.onnx.export`** on a dense **(B, D)** trunk wrapper; **`onnx.checker`**; **`OnnxExportError`** on empty ABI or exporter failure. CLI **`axiom export-onnx --bundle --output [--opset]`**. Optional **`pip install -e ".[export]"`** (**`onnx`**). Inference-only; no **`explain`** parity. Tests: **`tests/test_onnx_export.py`** (optional **`onnxruntime`** round-trip).
 
 **Phase 53** — **Docker** — **`Dockerfile`** (**`python:3.12-slim`**, **`pip install ".[serve,lock]"`**, **`CMD axiom serve`**, **`HOST=0.0.0.0 PORT=8000`**), **`docker-compose.yml`** (port **8000**, mount **`./bundles`**, env **`AXIOM_BUNDLE_PATH`** / **`AXIOM_API_KEY`** / **`AXIOM_BUNDLE_SECRET`** / **`HOST`** / **`PORT`**), **`bundles/.gitkeep`**, **`README`** Docker section. **`axiom serve`**: reads **`HOST`** and **`PORT`** from the environment when set (else **`--host`** / **`--port`**). Tests: **`tests/test_docker_packaging.py`**, **`tests/test_serve.py`** (env host/port).
@@ -10,7 +12,7 @@
 
 **Phase 51** — Bundle HTTP API (**`axiom serve`**, **`src/axiom/serve.py`**, **`src/axiom/api_models.py`**) — FastAPI + uvicorn (optional **`pip install -e ".[serve]"`**): load one **`.axb`** at startup (**`--bundle`** or **`AXIOM_BUNDLE_PATH`**), **`GET /health`**, **`POST /predict`**, **`POST /explain`**, **`POST /report`** (JSON **`inputs`**; report optional **`output_path`** else inline **`html`**). Optional **`AXIOM_API_KEY`** → **`Authorization: Bearer`** or **`X-API-Key`** on mutating routes (health unauthenticated). **`html_exporter.render_html_report`** for inline HTML. Tests: **`tests/test_serve.py`**.
 
-**Phase 50** — Enterprise Glass-Box UI (**`examples/enterprise_ui.py`**) — Streamlit chat front-end: **`@st.cache_resource`** **`build_trained_policy`**, sidebar metrics + **`st.progress`** from **`scan_text` + `explain`**, block path **`export_report`** → **`examples/live_audit.html`** + **`st.download_button`**, approve path **`chat_with_onyx`** (Onyx POST or mock). **`[gateway]`** extra includes **`requests`** + **`streamlit`**. Run: **`streamlit run examples/enterprise_ui.py --server.fileWatcherType none`**. **`chat_with_onyx(..., verbose=False)`** for silent UIs. Tests: **`tests/test_enterprise_ui.py`**.
+**Phase 50** — Enterprise Glass-Box UI (**`examples/enterprise_ui.py`**) — Streamlit chat front-end: **`@st.cache_resource`** **`build_trained_policy`**, sidebar metrics + **`st.progress`** from **`scan_text` + `explain`**, block path **`export_report`** → **`examples/live_audit.html`** + **`st.download_button`**, approve path **`chat_with_onyx`** (downstream POST or mock). **`[gateway]`** extra includes **`requests`**, **`streamlit`**, **`fastapi`**, **`uvicorn`**. **`scan_text`** is **`axiom.gateway.core.default_scan_text`**. Run: **`streamlit run examples/enterprise_ui.py --server.fileWatcherType none`**. **`chat_with_onyx(..., verbose=False)`** for silent UIs. Tests: **`tests/test_enterprise_ui.py`**.
 
 **Phase 49** — Onyx API gateway (**`examples/enterprise_policy.ax`**, **`examples/onyx_gateway.py`**) — regex **`scan_text`** → **`has_pii_data` / `mentions_competitor` / `text_toxicity`** → **`InterpretedBlock`** (liquid **`intent_risk`** + nested symbolic **`is_approved`** gates) → **`AxiomModel.explain`** / **`export_report`** on block, optional **`requests.post`** to **`http://localhost:8000/api/chat`** (lazy **`requests`** import; **`pip install -e ".[gateway]"`**). Training uses MSE on **`is_approved`** plus auxiliary MSE on **`intent_risk`** so high-toxicity rows learn **`intent_risk > 0.8`**. Audit HTML **`examples/blocked_audit.html`** (gitignored with **`examples/*.html`**). Tests: **`tests/test_onyx_gateway.py`**.
 
@@ -89,7 +91,8 @@
 - `pyproject.toml` — **`axiom-engine`**, script **`axiom` → `axiom.cli:main`**
 - `Dockerfile`, `docker-compose.yml`, `.dockerignore` — Phase 53 containerized **`axiom serve`**
 - `src/axiom/export/onnx_export.py` — Phase 54 optional **`.axb` → ONNX** (**InterpretedBlock**)
-- `src/axiom/cli.py` — train / inspect / predict / **lock-bundle** / **export-onnx** / **serve** subcommands
+- `src/axiom/gateway/core.py`, `src/axiom/gateway/server.py` — Phase 55 policy gateway + HTTP **`/gateway/chat`**
+- `src/axiom/cli.py` — train / inspect / predict / **lock-bundle** / **export-onnx** / **gateway-serve** / **serve** subcommands
 - `src/axiom/security/genetic_lock.py` — Phase 52 optional **`.axb`** neural encryption
 - `src/axiom/serve.py`, `src/axiom/api_models.py` — Phase 51 FastAPI bundle server
 - `src/axiom/datasets.py` — Titanic, sine, finance mock
@@ -144,6 +147,8 @@ axiom lock-bundle --input examples/portfolio_trained.axb --output examples/portf
 axiom predict --bundle examples/portfolio_locked.axb --input '{"volatility":0.6,"drawdown":0.1,"momentum":-0.8,"volume":1.5}'
 pip install -e ".[export]"
 axiom export-onnx --bundle examples/portfolio_trained.axb --output examples/portfolio.onnx
+# Policy gateway HTTP (save a policy .axb first, e.g. from a train script):
+# axiom gateway-serve --bundle policy.axb --downstream-url http://127.0.0.1:8000/api/chat --policy-source examples/enterprise_policy.ax
 axiom inspect
 ```
 

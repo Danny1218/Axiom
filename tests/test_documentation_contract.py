@@ -34,6 +34,11 @@ def test_readme_documents_onnx_export_optional():
     assert "export-onnx" in text and "ONNX" in text and "[export]" in text
 
 
+def test_readme_documents_gateway_optional():
+    text = (_root() / "readme.md").read_text(encoding="utf-8")
+    assert "gateway-serve" in text and "axiom.gateway" in text and "[gateway]" in text
+
+
 def test_readme_version_matches_pyproject():
     readme = (_root() / "readme.md").read_text(encoding="utf-8")
     pyproject = (_root() / "pyproject.toml").read_text(encoding="utf-8")
@@ -75,6 +80,7 @@ def test_array_literal_and_indexing_ir():
         ["serve", "--help"],
         ["lock-bundle", "--help"],
         ["export-onnx", "--help"],
+        ["gateway-serve", "--help"],
     ],
 )
 def test_cli_subcommands_help_exits_ok(argv: list):
@@ -95,6 +101,7 @@ def test_cli_source_wires_documented_train_features():
     assert "HOST" in src and "PORT" in src and "AXIOM_BUNDLE_PATH" in src
     assert "lock-bundle" in src and "lock_bundle_file" in src
     assert "export-onnx" in src and "export_bundle_to_onnx" in src
+    assert "gateway-serve" in src and "create_gateway_app" in src
 
 
 def test_cli_rejects_dataset_and_csv_together():

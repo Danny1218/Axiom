@@ -336,6 +336,40 @@ def _cmd_serve(args: argparse.Namespace) -> None:
     uvicorn.run(app, host=host, port=port, log_level="info")
 
 
+def _cmd_gateway_serve(args: argparse.Namespace) -> None:
+    try:
+        import uvicorn
+    except ImportError as e:
+        raise SystemExit(
+            'axiom gateway-serve requires: pip install -e ".[gateway]"'
+        ) from e
+    from axiom.api import load
+    from axiom.gateway.server import create_gateway_app
+
+    bundle = Path(args.bundle)
+    if not bundle.is_file():
+        raise SystemExit(f"Bundle not found: {bundle}")
+    policy_src = None
+    if args.policy_source:
+        ps = Path(args.policy_source)
+        if not ps.is_file():
+            raise SystemExit(f"Policy source not found: {ps}")
+        policy_src = ps.read_text(encoding="utf-8")
+    model = load(bundle)
+    app = create_gateway_app(
+        model,
+        policy_src,
+        downstream_url=str(args.downstream_url),
+        approve_threshold=float(args.approve_threshold),
+        audit_path_on_block=args.audit_path,
+    )
+    host_env = os.environ.get("HOST")
+    host = host_env.strip() if host_env not in (None, "") else args.host
+    port_env = os.environ.get("PORT")
+    port = int(port_env) if port_env not in (None, "") else int(args.port)
+    uvicorn.run(app, host=host, port=port, log_level="info")
+
+
 def _cmd_inspect(_args: argparse.Namespace) -> int:
     import axiom.tools
 
@@ -356,7 +390,7 @@ def _cmd_inspect(_args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(
         prog="axiom",
-        description="Axiom neural compiler CLI (train, predict, lock-bundle, inspect, serve).",
+        description="Axiom neural compiler CLI (train, predict, lock-bundle, export-onnx, inspect, serve, gateway-serve).",
     )
     sub = ap.add_subparsers(dest="cmd", required=True)
 
@@ -479,6 +513,44 @@ def main(argv: list[str] | None = None) -> None:
     )
     p_onnx.set_defaults(_handler=_cmd_export_onnx)
 
+    p_gw = sub.add_parser(
+        "gateway-serve",
+        help="Policy gateway HTTP server (POST /gateway/chat; requires Axiom [gateway] deps).",
+    )
+    p_gw.add_argument(
+        "--bundle",
+        type=Path,
+        required=True,
+        help="InterpretedBlock .axb (policy bundle).",
+    )
+    p_gw.add_argument(
+        "--downstream-url",
+        type=str,
+        required=True,
+        help="URL to forward approved requests (JSON body includes message).",
+    )
+    p_gw.add_argument(
+        "--policy-source",
+        type=Path,
+        default=None,
+        help="Optional .ax source text for Glass Box HTML audit reports.",
+    )
+    p_gw.add_argument(
+        "--audit-path",
+        type=Path,
+        default=None,
+        help="When policy blocks, also write audit HTML to this path.",
+    )
+    p_gw.add_argument(
+        "--approve-threshold",
+        type=float,
+        default=0.5,
+        help="Minimum is_approved trace value to allow downstream (default: 0.5).",
+    )
+    p_gw.add_argument("--host", type=str, default="127.0.0.1", help="Bind address.")
+    p_gw.add_argument("--port", type=int, default=8010, help="TCP port (default: 8010).")
+    p_gw.set_defaults(_handler=_cmd_gateway_serve)
+
     p_serve = sub.add_parser(
         "serve",
         help="Serve one .axb bundle over HTTP (FastAPI: /health, /predict, /explain, /report).",
@@ -514,6 +586,9 @@ def main(argv: list[str] | None = None) -> None:
         handler(args)
         return
     if handler is _cmd_serve:
+        handler(args)
+        return
+    if handler is _cmd_gateway_serve:
         handler(args)
         return
     if handler is _cmd_export_onnx:

@@ -61,6 +61,8 @@ This installs the **`axiom-engine`** package and the global **`axiom`** CLI. Req
 
 Optional ONNX export (InterpretedBlock **`.axb`** only, dense tensor in/out): **`pip install -e ".[export]"`**, then **`axiom export-onnx --bundle model.axb --output model.onnx`**. This is **inference-only** tracing; it does **not** preserve **`explain`** / Glass Box semantics, and some IR graphs may fail to export.
 
+**Policy gateway (optional):** **`pip install -e ".[gateway]"`** — **`axiom.gateway`** scans text (or accepts pre-extracted signals), runs **`AxiomModel.explain`**, blocks or forwards to a configurable downstream URL, and can emit Glass Box HTML on deny via **`export_report`** / **`render_html_report`**. HTTP: **`axiom gateway-serve --bundle policy.axb --downstream-url https://...`** → **`POST /gateway/chat`** (`message`, optional `signals`). Examples **`examples/onyx_gateway.py`** and **`examples/enterprise_ui.py`** use the same **`default_scan_text`** helper from **`axiom.gateway.core`**.
+
 ---
 
 ## Docker (bundle server)

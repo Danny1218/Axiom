@@ -9,7 +9,6 @@ Run from repo root: python examples/onyx_gateway.py
 from __future__ import annotations
 
 import random
-import re
 from pathlib import Path
 from typing import Any, Callable
 
@@ -17,6 +16,7 @@ import torch
 import torch.nn.functional as F
 
 from axiom.api import AxiomModel
+from axiom.gateway.core import default_scan_text as scan_text
 from axiom.compiler.ir import ast_to_ir, extract_abi_widths, extract_global_abi
 from axiom.compiler.parser import parse_ax_file, reset_parser
 from axiom.engine.block_executor import InterpretedBlock
@@ -27,25 +27,10 @@ AX_PATH = _EXAMPLES / "enterprise_policy.ax"
 AUDIT_PATH = _EXAMPLES / "blocked_audit.html"
 ONYX_URL = "http://localhost:8000/api/chat"
 
-_SSN_RE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
-
 
 def _trunk_dim(block: InterpretedBlock) -> int:
     abi, aw = block.abi, getattr(block, "abi_widths", {}) or {}
     return max((abi[n] + max(1, int(aw.get(n, 1))) for n in abi), default=8)
-
-
-def scan_text(prompt: str, *, rng: random.Random | None = None) -> dict[str, float]:
-    """Regex + demo toxicity draw (0..0.3) -> policy feature dict."""
-    r = rng or random.Random()
-    has_pii = 1.0 if _SSN_RE.search(prompt) else 0.0
-    low = prompt.lower()
-    comp = 1.0 if ("openai" in low or "anthropic" in low) else 0.0
-    return {
-        "has_pii_data": has_pii,
-        "mentions_competitor": comp,
-        "text_toxicity": r.uniform(0.0, 0.3),
-    }
 
 
 def build_trained_policy(
