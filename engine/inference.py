@@ -97,6 +97,7 @@ class AxiomRunner:
 
     def __init__(self, graph: ExecutionGraph) -> None:
         self.graph = graph
+        self.device = torch.device("cpu")
 
     def predict(
         self,
@@ -104,11 +105,13 @@ class AxiomRunner:
         device: Union[str, torch.device] = "cpu",
     ) -> torch.Tensor:
         dev = torch.device(device) if isinstance(device, str) else device
+        self.device = dev
         dt = torch.float32
         self.graph.to(dev)
         self.graph.eval()
         abi = getattr(self.graph, "abi", {}) or {}
         x = _inputs_to_tensor(inputs, abi, self.graph.supernet.dim, device=dev, dtype=dt)
+        x = x.to(self.device)
         with torch.no_grad():
             out, _, _ = self.graph(x)
         return out
@@ -119,14 +122,38 @@ class AxiomRunner:
         device: Union[str, torch.device] = "cpu",
     ) -> torch.Tensor:
         dev = torch.device(device) if isinstance(device, str) else device
+        self.device = dev
         dt = torch.float32
         self.graph.to(dev)
         self.graph.eval()
         abi = getattr(self.graph, "abi", {}) or {}
         x = _batch_inputs_to_tensor(inputs, abi, self.graph.supernet.dim, device=dev, dtype=dt)
+        x = x.to(self.device)
         with torch.no_grad():
             out, _, _ = self.graph(x)
         return out
+
+    def predict_dict(
+        self,
+        inputs: Dict[str, float],
+        device: Union[str, torch.device] = "cpu",
+    ) -> Dict[str, float]:
+        out_tensor = self.predict(inputs, device=device)
+        abi = getattr(self.graph, "abi", {}) or {}
+        return {name: float(out_tensor[0, col].item()) for name, col in abi.items()}
+
+    def predict_dict_batch(
+        self,
+        inputs: List[Dict[str, float]],
+        device: Union[str, torch.device] = "cpu",
+    ) -> List[Dict[str, float]]:
+        out_batch = self.predict_batch(inputs, device=device)
+        abi = getattr(self.graph, "abi", {}) or {}
+        B = out_batch.shape[0]
+        return [
+            {name: float(out_batch[b, col].item()) for name, col in abi.items()}
+            for b in range(B)
+        ]
 
     def predict_with_signals(
         self,
@@ -134,11 +161,13 @@ class AxiomRunner:
         device: Union[str, torch.device] = "cpu",
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         dev = torch.device(device) if isinstance(device, str) else device
+        self.device = dev
         dt = torch.float32
         self.graph.to(dev)
         self.graph.eval()
         abi = getattr(self.graph, "abi", {}) or {}
         x = _inputs_to_tensor(inputs, abi, self.graph.supernet.dim, device=dev, dtype=dt)
+        x = x.to(self.device)
         with torch.no_grad():
             out, _, signals = self.graph(x)
         return out, signals

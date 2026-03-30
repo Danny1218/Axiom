@@ -113,6 +113,41 @@ def test_axiom_runner_predict_no_grad(tmp_path):
     assert not y.requires_grad
 
 
+def test_predict_dict_matches_predict_tensor(tmp_path):
+    reset_parser()
+    ir = ast_to_ir(parse_ax("if (1 > 0) { a = 1; } else { a = 2; }"))
+    sn = LatentSupernet(6, ("then_0", "else_0"), rank=2)
+    sn.set_masks({"then_0": 1.0, "else_0": 1.0})
+    g = wire_execution_graph(ir, sn, [("then_0", "else_0")], mutation_entropy_norm_threshold=0.99)
+    prefix = tmp_path / "dict_bundle"
+    save_execution_bundle(g, prefix, ir=ir)
+    runner = AxiomRunner(load_execution_bundle(prefix))
+    t = runner.predict({"a": 3.0, "b": 9.0})
+    d = runner.predict_dict({"a": 3.0, "b": 9.0})
+    abi = runner.graph.abi
+    for name, col in abi.items():
+        assert d[name] == pytest.approx(t[0, col].item())
+
+
+def test_predict_dict_batch_matches_predict_batch(tmp_path):
+    reset_parser()
+    ir = ast_to_ir(parse_ax("if (1 > 0) { z = 1; } else { z = 2; }"))
+    sn = LatentSupernet(5, ("then_0", "else_0"), rank=2)
+    sn.set_masks({"then_0": 1.0, "else_0": 1.0})
+    g = wire_execution_graph(ir, sn, [("then_0", "else_0")], mutation_entropy_norm_threshold=0.99)
+    prefix = tmp_path / "batch_dict"
+    save_execution_bundle(g, prefix, ir=ir)
+    runner = AxiomRunner(load_execution_bundle(prefix))
+    rows = [{"z": 0.5}, {"z": -1.0}]
+    mat = runner.predict_batch(rows)
+    dec = runner.predict_dict_batch(rows)
+    assert len(dec) == 2
+    abi = runner.graph.abi
+    for b in range(2):
+        for name, col in abi.items():
+            assert dec[b][name] == pytest.approx(mat[b, col].item())
+
+
 def test_main_inference_mode(tmp_path):
     reset_parser()
     ax = Path(__file__).resolve().parents[1] / "train.ax"

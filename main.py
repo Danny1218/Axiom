@@ -59,9 +59,8 @@ def main(argv: list[str] | None = None) -> None:
             raise SystemExit(f"Inference requires saved bundle at {prefix} (.pt + _topology.json).")
         graph = load_execution_bundle(prefix).to(device)
         runner = AxiomRunner(graph)
-        out_t, signals = runner.predict_with_signals({"x": 5.0}, device=device)
-        print("out:", out_t)
-        print("signals:", {k: v.detach().cpu() for k, v in signals.items()})
+        out_dict = runner.predict_dict({"x": 1.0}, device=device)
+        print("out:", out_dict)
         return
 
     ir, sn, graph = build_from_ax(args.ax_path, args.dim, args.rank)

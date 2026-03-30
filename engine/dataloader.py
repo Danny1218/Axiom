@@ -20,6 +20,7 @@ class AxiomDataset(Dataset):
         self.abi = dict(abi)
         self.trunk_dim = int(trunk_dim)
         self.target_key = str(target_key)
+        self.target_col: Optional[int] = self.abi.get(self.target_key)
 
     def __len__(self) -> int:
         return len(self._rows)
@@ -30,6 +31,8 @@ class AxiomDataset(Dataset):
         for name, col in self.abi.items():
             if col < self.trunk_dim and name in row:
                 x[col] = float(row[name])
+        if self.target_col is not None and self.target_col < self.trunk_dim:
+            x[self.target_col] = 0.0
         t = float(row[self.target_key])
         y = torch.tensor([t], dtype=torch.float32)
         return x, y
