@@ -8,7 +8,9 @@ from axiom.compiler.ir import (
     ast_to_ir,
     expand_function_calls,
     parse_program,
+    RESERVED_MATH_BINARY,
     RESERVED_MATH_BUILTINS,
+    RESERVED_NEURAL_BUILTIN,
     RESERVED_REDUCTION_BUILTINS,
 )
 from axiom.compiler.parser import parse_ax, reset_parser
@@ -65,6 +67,14 @@ def test_reserved_math_names_cannot_be_user_functions():
     for name in RESERVED_MATH_BUILTINS:
         with pytest.raises(ValueError, match="reserved"):
             ast_to_ir(parse_ax(f"def {name}(x) {{ return x; }}"))
+
+
+def test_reserved_max_min_neural_cannot_be_user_functions():
+    for name in RESERVED_MATH_BINARY:
+        with pytest.raises(ValueError, match="reserved"):
+            ast_to_ir(parse_ax(f"def {name}(x) {{ return x; }}"))
+    with pytest.raises(ValueError, match="reserved"):
+        ast_to_ir(parse_ax(f"def {RESERVED_NEURAL_BUILTIN}(x) {{ return x; }}"))
 
 
 def test_double_call_two_independent_mangles():

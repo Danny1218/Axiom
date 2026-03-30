@@ -5,9 +5,18 @@ from typing import Dict, List, Optional, Set, Tuple
 import torch
 import torch.nn as nn
 
+from axiom.compiler.ir import extract_neural_node_specs
 from axiom.engine.interpreter import collect_load_names_from_stmts, exec_stmt
 
 Stmt = Tuple
+
+
+def _neural_mlp(in_dim: int) -> nn.Sequential:
+    return nn.Sequential(
+        nn.Linear(in_dim, 8),
+        nn.ReLU(),
+        nn.Linear(8, 1),
+    )
 
 
 class InterpretedBlock(nn.Module):
@@ -26,6 +35,10 @@ class InterpretedBlock(nn.Module):
         self.abi = dict(abi)
         self.abi_widths: Dict[str, int] = dict(abi_widths or {})
         self.max_unroll = int(max_unroll)
+        spec = extract_neural_node_specs(self.ir_stmts, self.abi_widths)
+        self.neural_registry: nn.ModuleDict = nn.ModuleDict(
+            {nid: _neural_mlp(w) for nid, w in spec.items()}
+        )
 
     def forward(self, h: torch.Tensor) -> torch.Tensor:
         if not self.ir_stmts:
@@ -60,6 +73,7 @@ class InterpretedBlock(nn.Module):
                 device=device,
                 dtype=dtype,
                 abi_widths=self.abi_widths,
+                neural_registry=self.neural_registry,
             )
         out = h.clone()
         for name, col in self.abi.items():

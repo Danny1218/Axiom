@@ -61,3 +61,18 @@ def test_compile_interpreted_block_vector_literal_aot_eager():
     assert torch.allclose(
         out_j[:, bc : bc + 2], torch.tensor([[2.0, 4.0]] * 4)
     )
+
+
+def test_interpreted_block_neural_backward():
+    reset_parser()
+    ir = ast_to_ir(parse_ax("y = neural([1.0, 2.0]);"))
+    abi = extract_global_abi(ir, max_vars=16)
+    aw = extract_abi_widths(ir, max_vars=16)
+    block = InterpretedBlock(ir, abi, abi_widths=aw)
+    h = torch.zeros(2, 16, requires_grad=True)
+    out = block(h)
+    loss = out[:, abi["y"]].sum()
+    loss.backward()
+    assert any(
+        p.grad is not None and torch.count_nonzero(p.grad) > 0 for p in block.parameters()
+    )

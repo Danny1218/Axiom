@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 Stmt = Tuple
@@ -26,8 +27,15 @@ def collect_load_names_from_stmts(stmts: List[Stmt]) -> List[str]:
 
     def walk_expr(ir: ExprIR) -> None:
         for tup in ir:
-            if isinstance(tup, tuple) and tup[0] == "OP_LOAD" and len(tup) > 1:
+            if not isinstance(tup, tuple) or not tup:
+                continue
+            if tup[0] == "OP_LOAD" and len(tup) > 1:
                 found.add(str(tup[1]))
+            elif tup[0] == "OP_NEURAL" and len(tup) >= 3:
+                walk_expr(list(tup[2]))
+            elif tup[0] == "OP_CALL":
+                for a in tup[2]:
+                    walk_expr(list(a))
 
     def walk_stmt(stmt: Stmt) -> None:
         op = stmt[0]
@@ -61,10 +69,15 @@ def collect_load_names(cond_ir: ExprIR, body_ir: List[Stmt]) -> List[str]:
 
     def walk_expr(ir: ExprIR) -> None:
         for tup in ir:
-            if not isinstance(tup, tuple):
+            if not isinstance(tup, tuple) or not tup:
                 continue
             if tup[0] == "OP_LOAD" and len(tup) > 1:
                 found.add(str(tup[1]))
+            elif tup[0] == "OP_NEURAL" and len(tup) >= 3:
+                walk_expr(list(tup[2]))
+            elif tup[0] == "OP_CALL":
+                for a in tup[2]:
+                    walk_expr(list(a))
 
     def walk_stmt(stmt: Stmt) -> None:
         op = stmt[0]
@@ -159,6 +172,7 @@ def eval_expr(
     B: int,
     device: torch.device,
     dtype: torch.dtype,
+    neural_registry: Optional[Union[Dict[str, nn.Module], nn.ModuleDict]] = None,
 ) -> torch.Tensor:
     stack: List[torch.Tensor] = []
     z = _batch_zeros(B, device, dtype)
@@ -232,6 +246,40 @@ def eval_expr(
             if fn is None:
                 raise ValueError(f"unknown OP_MATH_UNARY {tup[1]!r}")
             stack.append(fn(stack.pop()))
+        elif op == "OP_MATH_BINARY":
+            b, a = stack.pop(), stack.pop()
+            a, b = _promote_batch_binop(a, b)
+            fn = str(tup[1])
+            if fn == "max":
+                stack.append(torch.maximum(a, b))
+            elif fn == "min":
+                stack.append(torch.minimum(a, b))
+            else:
+                raise ValueError(f"unknown OP_MATH_BINARY {fn!r}")
+        elif op == "OP_NEURAL" and len(tup) >= 3:
+            feats = eval_expr(
+                env,
+                list(tup[2]),
+                B=B,
+                device=device,
+                dtype=dtype,
+                neural_registry=neural_registry,
+            )
+            feats2 = feats.unsqueeze(-1) if feats.dim() == 1 else feats
+            reg = neural_registry
+            nid = str(tup[1])
+            mod = reg[nid] if reg is not None and nid in reg else None
+            if mod is not None:
+                raw = mod(feats2)
+            else:
+                raw = torch.zeros(B, 1, device=device, dtype=dtype)
+            if raw.dim() == 1:
+                out = raw.unsqueeze(-1)
+            else:
+                out = raw
+            if out.shape[-1] != 1:
+                raise ValueError(f"neural {nid!r} must output width 1, got shape {tuple(out.shape)}")
+            stack.append(out.squeeze(-1))
         elif op == "OP_CMP_GT":
             b, a = stack.pop(), stack.pop()
             a, b = _promote_batch_binop(a, b)
@@ -305,6 +353,7 @@ def run_while_loop(
     dtype: torch.dtype,
     parent_active: Optional[torch.Tensor] = None,
     var_widths: Optional[Dict[str, int]] = None,
+    neural_registry: Optional[Union[Dict[str, nn.Module], nn.ModuleDict]] = None,
 ) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
     """
     Runs exactly ``max_unroll`` iterations (no early ``break``). When the condition is false,
@@ -318,7 +367,9 @@ def run_while_loop(
     snaps: List[torch.Tensor] = []
     masks: List[torch.Tensor] = []
     for _ in range(max_unroll):
-        cond_val = eval_expr(env, cond_ir, B=B, device=device, dtype=dtype)
+        cond_val = eval_expr(
+            env, cond_ir, B=B, device=device, dtype=dtype, neural_registry=neural_registry
+        )
         entering = scope & (cond_val != 0)
         for st in body_ir:
             exec_stmt(
@@ -331,6 +382,7 @@ def run_while_loop(
                 dtype=dtype,
                 active_mask=entering,
                 abi_widths=var_widths,
+                neural_registry=neural_registry,
             )
         snaps.append(
             snapshot_env(
@@ -352,21 +404,28 @@ def exec_stmt(
     dtype: torch.dtype,
     active_mask: Optional[torch.Tensor] = None,
     abi_widths: Optional[Dict[str, int]] = None,
+    neural_registry: Optional[Union[Dict[str, nn.Module], nn.ModuleDict]] = None,
 ) -> None:
     if active_mask is None:
         active_mask = _all_active(B, device)
     aw = abi_widths or {}
     op = stmt[0]
     if op == "OP_ASSIGN":
-        nv = eval_expr(env, stmt[2], B=B, device=device, dtype=dtype)
+        nv = eval_expr(
+            env, stmt[2], B=B, device=device, dtype=dtype, neural_registry=neural_registry
+        )
         k = str(stmt[1])
         old = env[k]
         m = _broadcast_mask(active_mask, nv)
         env[k] = torch.where(m, nv, old)
     elif op == "OP_BLEND_ASSIGN":
         k = str(stmt[1])
-        path_a = eval_expr(env, list(stmt[2]), B=B, device=device, dtype=dtype).to(dtype=dtype)
-        nv = eval_expr(env, list(stmt[3]), B=B, device=device, dtype=dtype)
+        path_a = eval_expr(
+            env, list(stmt[2]), B=B, device=device, dtype=dtype, neural_registry=neural_registry
+        ).to(dtype=dtype)
+        nv = eval_expr(
+            env, list(stmt[3]), B=B, device=device, dtype=dtype, neural_registry=neural_registry
+        )
         old = env[k]
         path_a, nv2 = _promote_batch_binop(path_a, nv)
         nv = nv2
@@ -376,9 +435,13 @@ def exec_stmt(
         aa = path_a * parent_m
         env[k] = aa * nv + (1.0 - aa) * old
     elif op == "OP_EXPR_STMT":
-        eval_expr(env, stmt[1], B=B, device=device, dtype=dtype)
+        eval_expr(
+            env, stmt[1], B=B, device=device, dtype=dtype, neural_registry=neural_registry
+        )
     elif op == "OP_CONDITIONAL":
-        cond_vec = eval_expr(env, stmt[1], B=B, device=device, dtype=dtype)
+        cond_vec = eval_expr(
+            env, stmt[1], B=B, device=device, dtype=dtype, neural_registry=neural_registry
+        )
         base = {k: v.clone() for k, v in env.items()}
         then_env = {k: v.clone() for k, v in env.items()}
         for s in stmt[2]:
@@ -392,6 +455,7 @@ def exec_stmt(
                 dtype=dtype,
                 active_mask=active_mask,
                 abi_widths=aw,
+                neural_registry=neural_registry,
             )
         else_env = {k: v.clone() for k, v in env.items()}
         for s in stmt[3]:
@@ -405,6 +469,7 @@ def exec_stmt(
                 dtype=dtype,
                 active_mask=active_mask,
                 abi_widths=aw,
+                neural_registry=neural_registry,
             )
         sel = cond_vec != 0
         for k in env.keys():
@@ -430,6 +495,7 @@ def exec_stmt(
             dtype=dtype,
             parent_active=active_mask,
             var_widths=aw,
+            neural_registry=neural_registry,
         )
     else:
         raise ValueError(f"unknown stmt {op}")
@@ -448,6 +514,7 @@ def run_loop_snapshots(
     dtype: Optional[torch.dtype] = None,
     trunk_dim: Optional[int] = None,
     abi_widths: Optional[Dict[str, int]] = None,
+    neural_registry: Optional[Union[Dict[str, nn.Module], nn.ModuleDict]] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Returns ``(seq, seq_mask)`` with **fixed** ``T = max_unroll`` (or ``T=0`` if ``max_unroll==0``).
 
@@ -490,6 +557,7 @@ def run_loop_snapshots(
             dtype=dt,
             active_mask=None,
             abi_widths=aw,
+            neural_registry=neural_registry,
         )
     if max_unroll == 0:
         z = torch.zeros(B, 0, dim, device=dev, dtype=dt)
@@ -507,6 +575,7 @@ def run_loop_snapshots(
         dtype=dt,
         parent_active=None,
         var_widths=aw,
+        neural_registry=neural_registry,
     )
     mat = torch.stack(snaps, dim=1)
     seq_mask = torch.stack(masks, dim=1)

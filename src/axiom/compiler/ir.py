@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -19,7 +20,11 @@ _CMP = {"GT": "OP_CMP_GT", "LT": "OP_CMP_LT", "EQ": "OP_CMP_EQ", "NE": "OP_CMP_N
 RESERVED_REDUCTION_BUILTINS = frozenset({"sum", "mean", "dot"})
 # Element-wise unary math: compile to ``OP_MATH_UNARY`` (same stack shape as input).
 RESERVED_MATH_BUILTINS = frozenset({"abs", "exp", "log", "sqrt", "sin", "cos"})
-RESERVED_BUILTIN_NAMES = RESERVED_REDUCTION_BUILTINS | RESERVED_MATH_BUILTINS
+RESERVED_MATH_BINARY = frozenset({"max", "min"})
+RESERVED_NEURAL_BUILTIN = "neural"
+RESERVED_BUILTIN_NAMES = (
+    RESERVED_REDUCTION_BUILTINS | RESERVED_MATH_BUILTINS | RESERVED_MATH_BINARY | {RESERVED_NEURAL_BUILTIN}
+)
 
 
 @dataclass(frozen=True)
@@ -127,6 +132,8 @@ def _expr_contains_op_call(expr: ExprIR) -> bool:
             continue
         if tup[0] == "OP_CALL":
             return True
+        if tup[0] == "OP_NEURAL" and len(tup) > 2 and _expr_contains_op_call(list(tup[2])):
+            return True
     return False
 
 
@@ -164,10 +171,25 @@ def expand_expr(expr: ExprIR, funcs: Dict[str, FunctionDef], ctr: List[int]) -> 
     hoists: IRList = []
     out: ExprIR = []
     for tup in expr:
+        if isinstance(tup, tuple) and tup and tup[0] == "OP_NEURAL":
+            h, inner = expand_expr(list(tup[2]), funcs, ctr)
+            hoists.extend(h)
+            out.append(("OP_NEURAL", str(tup[1]), inner))
+            continue
         if isinstance(tup, tuple) and tup and tup[0] == "OP_CALL":
             name = str(tup[1])
             if name in RESERVED_REDUCTION_BUILTINS:
                 h, tail = _expand_builtin_reduction_call(tup, funcs, ctr)
+                hoists.extend(h)
+                out.extend(tail)
+                continue
+            if name in RESERVED_MATH_BINARY:
+                h, tail = _expand_math_binary_call(tup, funcs, ctr)
+                hoists.extend(h)
+                out.extend(tail)
+                continue
+            if name == RESERVED_NEURAL_BUILTIN:
+                h, tail = _expand_neural_call(tup, funcs, ctr)
                 hoists.extend(h)
                 out.extend(tail)
                 continue
@@ -219,6 +241,30 @@ def _expand_math_builtin_call(
         raise ValueError(f"{name}() expects exactly 1 argument")
     h, e = expand_expr(list(arg_irs[0]), funcs, ctr)
     return h, e + [("OP_MATH_UNARY", name)]
+
+
+def _expand_math_binary_call(
+    tup: Tuple[Any, ...], funcs: Dict[str, FunctionDef], ctr: List[int]
+) -> Tuple[IRList, ExprIR]:
+    """Lower ``max(a,b)`` / ``min(a,b)`` to postfix ``OP_MATH_BINARY`` (like ``OP_DOT``)."""
+    name = str(tup[1])
+    arg_irs: Tuple[ExprIR, ...] = tuple(tuple(x) for x in tup[2])
+    if len(arg_irs) != 2:
+        raise ValueError(f"{name}() expects exactly 2 arguments")
+    h0, e0 = expand_expr(list(arg_irs[0]), funcs, ctr)
+    h1, e1 = expand_expr(list(arg_irs[1]), funcs, ctr)
+    return h0 + h1, e0 + e1 + [("OP_MATH_BINARY", name)]
+
+
+def _expand_neural_call(
+    tup: Tuple[Any, ...], funcs: Dict[str, FunctionDef], ctr: List[int]
+) -> Tuple[IRList, ExprIR]:
+    arg_irs: Tuple[ExprIR, ...] = tuple(tuple(x) for x in tup[2])
+    if len(arg_irs) != 1:
+        raise ValueError("neural() expects exactly 1 argument")
+    nid = f"neural_node_{uuid.uuid4().hex[:8]}"
+    h, e = expand_expr(list(arg_irs[0]), funcs, ctr)
+    return h, [("OP_NEURAL", nid, e)]
 
 
 def _load_e(name: str) -> ExprIR:
@@ -588,6 +634,8 @@ def _mangle_expr(expr: ExprIR, mp: Dict[str, str]) -> ExprIR:
             out.append(tup)
         elif op == "OP_VEC_PACK":
             out.append(tup)
+        elif op == "OP_NEURAL" and len(tup) >= 3:
+            out.append(("OP_NEURAL", str(tup[1]), _mangle_expr(list(tup[2]), mp)))
         elif op in (
             "OP_ADD",
             "OP_SUB",
@@ -598,6 +646,7 @@ def _mangle_expr(expr: ExprIR, mp: Dict[str, str]) -> ExprIR:
             "OP_REDUCE_MEAN",
             "OP_DOT",
             "OP_MATH_UNARY",
+            "OP_MATH_BINARY",
         ) or (isinstance(op, str) and op.startswith("OP_CMP_")):
             out.append(tup)
         else:
@@ -809,6 +858,15 @@ def _postfix_expr(t: Tree) -> List[tuple]:
                 if len(args) != 2:
                     raise ValueError("dot() expects exactly 2 arguments")
                 return _expr(args[0]) + _expr(args[1]) + [("OP_DOT",)]
+            if fname in RESERVED_MATH_BINARY:
+                if len(args) != 2:
+                    raise ValueError(f"{fname}() expects exactly 2 arguments")
+                return _expr(args[0]) + _expr(args[1]) + [("OP_MATH_BINARY", fname)]
+            if fname == RESERVED_NEURAL_BUILTIN:
+                if len(args) != 1:
+                    raise ValueError("neural() expects exactly 1 argument")
+                nid = f"neural_node_{uuid.uuid4().hex[:8]}"
+                return [("OP_NEURAL", nid, _expr(args[0]))]
             if fname in RESERVED_MATH_BUILTINS:
                 if len(args) != 1:
                     raise ValueError(f"{fname}() expects exactly 1 argument")
@@ -881,7 +939,7 @@ def _infer_expr_output_width(expr: ExprIR, known: Dict[str, int]) -> int:
             stack.pop()
             stack.pop()
             stack.append(1)
-        elif op in ("OP_ADD", "OP_SUB", "OP_MUL", "OP_DIV"):
+        elif op in ("OP_ADD", "OP_SUB", "OP_MUL", "OP_DIV", "OP_MATH_BINARY"):
             b, a = stack.pop(), stack.pop()
             stack.append(max(a, b))
         elif isinstance(op, str) and op.startswith("OP_CMP_"):
@@ -897,6 +955,9 @@ def _infer_expr_output_width(expr: ExprIR, known: Dict[str, int]) -> int:
             stack.append(1)
         elif op == "OP_MATH_UNARY":
             stack.append(stack.pop())
+        elif op == "OP_NEURAL" and len(tup) >= 3:
+            _infer_expr_output_width(list(tup[2]), known)
+            stack.append(1)
         elif op == "OP_CALL":
             raise ValueError("OP_CALL in width inference — expand calls before ABI layout")
         else:
@@ -963,6 +1024,11 @@ def extract_abi_layout(
                 continue
             if tup[0] == "OP_LOAD" and len(tup) > 1:
                 add_name(str(tup[1]))
+            elif tup[0] == "OP_NEURAL" and len(tup) >= 3:
+                walk_expr(list(tup[2]))
+            elif tup[0] == "OP_CALL":
+                for a in tup[2]:
+                    walk_expr(list(a))
 
     def walk_stmt(stmt: Stmt) -> None:
         if not isinstance(stmt, tuple) or not stmt:
@@ -1012,3 +1078,46 @@ def extract_abi_widths(ir: IRList, *, max_vars: Optional[int] = None) -> Dict[st
     """Per-name trunk column span (1 for scalars)."""
     starts, widths = extract_abi_layout(ir, max_vars=max_vars)
     return {n: max(1, int(widths.get(n, 1))) for n in starts}
+
+
+def extract_neural_node_specs(ir: IRList, known_widths: Dict[str, int]) -> Dict[str, int]:
+    """``node_id`` → feature width for each ``OP_NEURAL`` in statements (for ``nn.Linear`` in width)."""
+    out: Dict[str, int] = {}
+
+    def walk_expr(expr: ExprIR) -> None:
+        for tup in expr:
+            if not isinstance(tup, tuple) or not tup:
+                continue
+            if tup[0] == "OP_NEURAL" and len(tup) >= 3:
+                walk_expr(list(tup[2]))
+                nid = str(tup[1])
+                out[nid] = max(1, int(_infer_expr_output_width(list(tup[2]), known_widths)))
+            elif tup[0] == "OP_CALL":
+                for a in tup[2]:
+                    walk_expr(list(a))
+
+    def walk_stmt(stmt: Stmt) -> None:
+        if not isinstance(stmt, tuple) or not stmt:
+            return
+        op = stmt[0]
+        if op == "OP_ASSIGN":
+            walk_expr(list(stmt[2]))
+        elif op == "OP_BLEND_ASSIGN":
+            walk_expr(list(stmt[2]))
+            walk_expr(list(stmt[3]))
+        elif op == "OP_EXPR_STMT":
+            walk_expr(list(stmt[1]))
+        elif op == "OP_CONDITIONAL":
+            walk_expr(list(stmt[1]))
+            for s in stmt[2]:
+                walk_stmt(tuple(s) if isinstance(s, list) else s)
+            for s in stmt[3]:
+                walk_stmt(tuple(s) if isinstance(s, list) else s)
+        elif op == "OP_LOOP":
+            walk_expr(list(stmt[1]))
+            for s in stmt[2]:
+                walk_stmt(tuple(s) if isinstance(s, list) else s)
+
+    for instr in ir:
+        walk_stmt(tuple(instr) if isinstance(instr, list) else instr)
+    return out

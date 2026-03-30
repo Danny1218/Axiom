@@ -62,6 +62,8 @@
 
 **Phase 34 (complete):** **Standard math library (unary)** — **`RESERVED_MATH_BUILTINS`**: **`abs`**, **`exp`**, **`log`**, **`sqrt`**, **`sin`**, **`cos`**. Parse + **`expand_expr`** emit **`("OP_MATH_UNARY", name)`**; reserved alongside reducers (**`RESERVED_BUILTIN_NAMES`**). **`_infer_expr_output_width`**: unary math preserves tensor width. **`eval_expr`**: maps names to **`torch.*`**. Tests: **`tests/test_vectorized_interpreter.py`**, **`tests/test_ir.py`**, **`tests/test_function_inline.py`**.
 
+**Phase 35 (complete):** **Explicit neuro-symbolic + binary math** — **`max`/`min`** → postfix **`("OP_MATH_BINARY", name)`** (same stack pattern as **`OP_DOT`**), **`_promote_batch_binop`** + **`torch.maximum`/`torch.minimum`**. **`neural(expr)`** → **`("OP_NEURAL", neural_node_<8hex>, input_ir)`** (embedded input IR; output width **1**). **`eval_expr`**: registry lookup via **`nid in reg`** (**`ModuleDict`** / dict); missing module → zeros **`(B,)`**; registered → small MLP **`InterpretedBlock.neural_registry`** / **`InterpretedLiquidLoop.neural_registry`**. **`extract_neural_node_specs`** drives **`nn.ModuleDict`**. **`neural_registry`** threaded through **`exec_stmt` / `run_while_loop` / `run_loop_snapshots`** (no **`dict(ModuleDict)`** — Dynamo-safe). Tests: **`tests/test_vectorized_interpreter.py`**, **`tests/test_ir.py`**, **`tests/test_function_inline.py`**, **`tests/test_meta_compiler.py`**.
+
 ## Layout
 
 - `pyproject.toml` — **`axiom-engine`**, script **`axiom` → `axiom.cli:main`**
@@ -75,7 +77,7 @@
 
 ## IR opcodes
 
-`OP_CONST`, `OP_LOAD`, `OP_ADD`, `OP_SUB`, `OP_MUL`, `OP_DIV`, `OP_NEG`, `OP_CMP_*`, `OP_VEC_PACK`, `OP_INDEX`, `OP_REDUCE_SUM`, `OP_REDUCE_MEAN`, `OP_DOT`, `OP_MATH_UNARY`, `OP_CALL` (pre-expand), `OP_RETURN` (function body), `OP_ASSIGN`, `OP_BLEND_ASSIGN` (inlined fn), `OP_EXPR_STMT`, `OP_CONDITIONAL`, `OP_LOOP`.
+`OP_CONST`, `OP_LOAD`, `OP_ADD`, `OP_SUB`, `OP_MUL`, `OP_DIV`, `OP_NEG`, `OP_CMP_*`, `OP_VEC_PACK`, `OP_INDEX`, `OP_REDUCE_SUM`, `OP_REDUCE_MEAN`, `OP_DOT`, `OP_MATH_UNARY`, `OP_MATH_BINARY`, `OP_NEURAL`, `OP_CALL` (pre-expand), `OP_RETURN` (function body), `OP_ASSIGN`, `OP_BLEND_ASSIGN` (inlined fn), `OP_EXPR_STMT`, `OP_CONDITIONAL`, `OP_LOOP`.
 
 ## Run training (PowerShell)
 
@@ -91,4 +93,4 @@ axiom inspect
 
 ## Next
 
-**Phase 35 (ideas):** Element-wise **`max`/`min`** (two-arg); **`return` inside `while`**; call targets like **`f()[i]`**. Product: **`neural(...)`** in DSL; **`examples/portfolio.ax`**; Glass Box upgrades (**`--inspect`**). See **`readme.md` § Road ahead**.
+**Phase 36 (ideas):** **`return` inside `while`**; call targets like **`f()[i]`**. **`examples/portfolio.ax`**; Glass Box upgrades (**`--inspect`**). See **`readme.md` § Road ahead**.

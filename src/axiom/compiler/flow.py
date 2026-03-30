@@ -3,8 +3,8 @@
 User ``def`` / calls are expanded to a flat IR in ``ast_to_ir`` via
 ``expand_function_calls`` before graphs are built (macro inlining, no call stack).
 Built-ins ``sum`` / ``mean`` / ``dot`` lower to ``OP_REDUCE_*`` / ``OP_DOT``; unary
-``abs`` / ``exp`` / … to ``OP_MATH_UNARY`` (see ``ir.RESERVED_REDUCTION_BUILTINS``,
-``ir.RESERVED_MATH_BUILTINS``).
+``abs`` / ``exp`` / … to ``OP_MATH_UNARY``; binary ``max`` / ``min`` to ``OP_MATH_BINARY``;
+``neural(expr)`` to ``OP_NEURAL`` (see ``ir.RESERVED_*``).
 """
 
 from __future__ import annotations

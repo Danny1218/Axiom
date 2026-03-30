@@ -152,6 +152,31 @@ def test_math_unary_all_preserve_width_and_match_torch():
         assert torch.allclose(got, fn(x_t), equal_nan=True)
 
 
+def test_max_min_vector_literals_elementwise():
+    reset_parser()
+    ir = ast_to_ir(
+        parse_ax("r = max([1.0, 5.0], [3.0, 2.0]); s = min([1.0, 5.0], [3.0, 2.0]);")
+    )
+    abi = extract_global_abi(ir, max_vars=16)
+    aw = extract_abi_widths(ir, max_vars=16)
+    block = InterpretedBlock(ir, abi, abi_widths=aw)
+    h = torch.zeros(2, 16)
+    out = block(h)
+    rc, sc = abi["r"], abi["s"]
+    assert torch.allclose(out[:, rc : rc + 2], torch.tensor([[3.0, 5.0], [3.0, 5.0]]))
+    assert torch.allclose(out[:, sc : sc + 2], torch.tensor([[1.0, 2.0], [1.0, 2.0]]))
+
+
+def test_neural_expr_without_registry_yields_zeros():
+    reset_parser()
+    ir = ast_to_ir(parse_ax("neural([1.0, 2.0]);"))
+    expr = list(ir[0][1])
+    out = eval_expr(
+        {}, expr, B=4, device=_CPU, dtype=_F32, neural_registry=None
+    )
+    assert out.shape == (4,) and torch.allclose(out, torch.zeros(4))
+
+
 def test_sum_mean_dot_on_vector_literal():
     reset_parser()
     ir = ast_to_ir(

@@ -5,6 +5,9 @@ from typing import Dict, List, Optional, Tuple
 import torch
 import torch.nn as nn
 
+from axiom.compiler.ir import extract_neural_node_specs
+
+from axiom.engine.block_executor import _neural_mlp
 from axiom.engine.interpreter import run_loop_snapshots
 from axiom.engine.ssm import LiquidKANNode
 
@@ -36,6 +39,11 @@ class InterpretedLiquidLoop(nn.Module):
         self.abi_widths: Dict[str, int] = dict(abi_widths or {})
         self.max_unroll = max_unroll
         self.kan = LiquidKANNode(dim, num_basis=num_basis, max_unroll=max_unroll)
+        combined: List[Stmt] = list(prelude_stmts) + [("OP_LOOP", list(cond_ir), list(body_ir))]
+        spec = extract_neural_node_specs(combined, self.abi_widths)
+        self.neural_registry: nn.ModuleDict = nn.ModuleDict(
+            {nid: _neural_mlp(w) for nid, w in spec.items()}
+        )
 
     def forward(
         self, h: torch.Tensor
@@ -55,6 +63,7 @@ class InterpretedLiquidLoop(nn.Module):
             dtype=h.dtype,
             trunk_dim=flat.shape[-1],
             abi_widths=self.abi_widths,
+            neural_registry=self.neural_registry,
         )
         if seq.shape[1] == 0:
             y = self.kan.forward(flat)
