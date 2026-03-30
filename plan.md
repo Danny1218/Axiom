@@ -2,6 +2,8 @@
 
 ## Current phase
 
+**Phase 61** — **Semantic copilot CLI** — **`axiom copilot-draft`** / **`axiom copilot-search`** in **`src/axiom/cli.py`**: **`--backend onyx-qwen`**, **`--goal`**, optional **`--context`**, **`--expert-url`**, **`--expert-model`**, optional **`--expert-api-key`** (or **`AXIOM_EXPERT_API_KEY`**), optional **`--out`**. Search adds **`--iterations`**, **`--examples-json`** (array of **`inputs` / `expected`** row objects), **`--compile-only`**, **`--report-out`** (structured JSON). Requires **`pip install -e ".[copilot]"`** (`requests`); clear **`SystemExit`** if missing. Tests: **`tests/test_cli_copilot.py`**.
+
 **Phase 60** — **Copilot compile / validate / evaluate + draft–repair search** — **`src/axiom/copilot/`**: **`ProgramCandidate`**, **`ProgramValidationReport`**, **`ProgramEvaluationReport`**, **`ProgramMetric`**, **`ProgramFailure`**; **`validate_program`**, **`evaluate_program`** with modes **`compile_only`**, **`predict_rows`**, and explicit **`train_tabular`** “not implemented” failure. In-memory **`.ax`** → parse / IR / **`InterpretedBlock`**; optional batched **`AxiomModel.predict`** + caller **`score_fn`**. **`search.py`**: **`CopilotSearchConfig`**, **`CopilotIterationRecord`**, **`CopilotSearchResult`**, **`run_copilot_search`** — expert **`draft_program`** then evaluate / optional **`repair_program`** with structured repair prompts (goal, current source, failures/metrics); keeps best candidate (valid over invalid; higher **`score_sort_key`** when metrics exist). No network in the search module. Tests: **`tests/test_copilot_evaluator.py`**, **`tests/test_copilot_search.py`**.
 
 **Phase 59** — **Onyx / Qwen expert HTTP adapter** — **`src/axiom/experts/onyx_qwen.py`**, **`[copilot]`** extra (**`requests`**). Tests: **`tests/test_onyx_qwen_backend.py`**.
@@ -102,7 +104,7 @@
 - `Dockerfile`, `docker-compose.yml`, `.dockerignore` — Phase 53 containerized **`axiom serve`**
 - `src/axiom/export/onnx_export.py` — Phase 54 optional **`.axb` → ONNX** (**InterpretedBlock**)
 - `src/axiom/gateway/core.py`, `src/axiom/gateway/server.py` — Phase 55 policy gateway + HTTP **`/gateway/chat`**
-- `src/axiom/cli.py` — train / inspect / predict / **lock-bundle** / **export-onnx** / **gateway-serve** / **serve** subcommands
+- `src/axiom/cli.py` — train / inspect / predict / **copilot-draft** / **copilot-search** / **lock-bundle** / **export-onnx** / **gateway-serve** / **serve** subcommands
 - `src/axiom/security/genetic_lock.py` — Phase 52 optional **`.axb`** neural encryption
 - `src/axiom/serve.py`, `src/axiom/api_models.py` — Phase 51 FastAPI bundle server
 - `src/axiom/datasets.py` — Titanic, sine, finance mock
@@ -120,13 +122,13 @@
 - `src/axiom/compiler/`, `src/axiom/engine/`, `src/axiom/primitives/`
 - `src/axiom/experts/` — Phase 58 protocol + registry; Phase 59 **`onyx_qwen.py`** (optional **`[copilot]`**)
 - `src/axiom/copilot/` — Phase 60 validate / evaluate harness + **`search.py`** draft–repair loop
-- `tests/` — **`tests/test_architecture_baseline.py`**, **`tests/test_experts.py`**, **`tests/test_onyx_qwen_backend.py`**, **`tests/test_copilot_evaluator.py`**, **`tests/test_copilot_search.py`**
+- `tests/` — **`tests/test_architecture_baseline.py`**, **`tests/test_experts.py`**, **`tests/test_onyx_qwen_backend.py`**, **`tests/test_copilot_evaluator.py`**, **`tests/test_copilot_search.py`**, **`tests/test_cli_copilot.py`**
 
 ## Next target (semantic copilot — wiring)
 
-**Done:** typed **expert** API (**Phase 58**) + **Onyx/Qwen HTTP adapter** (**Phase 59**) + **in-memory evaluate harness** + **semantic draft–repair–search loop** (**Phase 60** — **`run_copilot_search`**).
+**Done:** typed **expert** API (**Phase 58**) + **Onyx/Qwen HTTP adapter** (**Phase 59**) + **in-memory evaluate harness** + **semantic draft–repair–search loop** (**Phase 60**) + **copilot CLI** (**Phase 61** — **`copilot-draft`**, **`copilot-search`**).
 
-**Not started:** copilot **CLI** or **FastAPI** routes, **`train_tabular`** inside the harness (use **`axiom train`** / **`EvolutionaryTrainer`**), and end-to-end product wiring beyond **`run_copilot_search`**.
+**Not started:** copilot **FastAPI** routes, **`train_tabular`** inside the harness (use **`axiom train`** / **`EvolutionaryTrainer`**), and product UI beyond the CLI.
 
 ## IR opcodes
 
@@ -169,6 +171,10 @@ axiom export-onnx --bundle examples/portfolio_trained.axb --output examples/port
 # Policy gateway HTTP (save a policy .axb first, e.g. from a train script):
 # axiom gateway-serve --bundle policy.axb --downstream-url http://127.0.0.1:8000/api/chat --policy-source examples/enterprise_policy.ax
 axiom inspect
+# Semantic copilot (Onyx/Qwen-style chat API — install [copilot] first):
+# pip install -e ".[copilot]"
+# axiom copilot-draft --backend onyx-qwen --goal "..." --expert-url https://host/v1/ --expert-model qwen-7b
+# axiom copilot-search --backend onyx-qwen --goal "..." --expert-url https://host/v1/ --expert-model qwen-7b --iterations 5
 ```
 
 ## Next

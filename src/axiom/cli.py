@@ -1,8 +1,6 @@
 """Axiom CLI entrypoint.
 
-Subcommands are the stable user surface (train, predict, bundle I/O, optional HTTP). Future work
-(e.g. semantic copilot) should not add subcommands without a dedicated phase; prefer composing
-``AxiomModel`` / ``axiom serve`` / ``axiom gateway-serve`` from external orchestrators.
+Subcommands are the stable user surface (train, predict, bundle I/O, optional HTTP, semantic copilot).
 """
 
 from __future__ import annotations
@@ -13,7 +11,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import torch
 from torch.utils.data import DataLoader
@@ -399,10 +397,231 @@ def _cmd_inspect(_args: argparse.Namespace) -> int:
     )
 
 
+_COPILOT_INSTALL = 'pip install -e ".[copilot]"'
+
+
+def _require_requests_for_copilot() -> None:
+    try:
+        import requests  # noqa: F401
+    except ImportError as e:
+        raise SystemExit(
+            f"Semantic copilot commands require the [copilot] extra ({_COPILOT_INSTALL})."
+        ) from e
+
+
+def _make_copilot_expert(args: argparse.Namespace):
+    """Return a :class:`~axiom.experts.base.SemanticExpert` from CLI flags (no hardcoded endpoints)."""
+    _require_requests_for_copilot()
+    if args.backend != "onyx-qwen":
+        raise SystemExit(f"Unsupported --backend {args.backend!r} (expected onyx-qwen).")
+    from axiom.experts.onyx_qwen import OnyxQwenBackend
+
+    url = (args.expert_url or "").strip()
+    model = (args.expert_model or "").strip()
+    if not url:
+        raise SystemExit("--expert-url is required for onyx-qwen.")
+    if not model:
+        raise SystemExit("--expert-model is required for onyx-qwen.")
+    key = args.expert_api_key
+    if key is None or str(key).strip() == "":
+        key = os.environ.get("AXIOM_EXPERT_API_KEY")
+    return OnyxQwenBackend(url, model, api_key=key)
+
+
+def _load_examples_json(path: Path) -> Tuple[List[dict], List[dict]]:
+    """Load row-based eval examples.
+
+    Format: JSON array of objects, each with ``inputs`` and ``expected`` dicts::
+
+        [{"inputs": {"x": 1.0}, "expected": {"y": 0.5}}, ...]
+    """
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as e:
+        raise SystemExit(f"Cannot read --examples-json: {e}") from e
+    except json.JSONDecodeError as e:
+        raise SystemExit(f"Invalid JSON in --examples-json: {e}") from e
+    if not isinstance(raw, list):
+        raise SystemExit("--examples-json must be a JSON array.")
+    inputs: List[dict] = []
+    expected: List[dict] = []
+    for i, row in enumerate(raw):
+        if not isinstance(row, dict):
+            raise SystemExit(f"--examples-json[{i}] must be an object.")
+        if "inputs" not in row or "expected" not in row:
+            raise SystemExit(f"--examples-json[{i}] must have \"inputs\" and \"expected\" keys.")
+        ins, exp = row["inputs"], row["expected"]
+        if not isinstance(ins, dict) or not isinstance(exp, dict):
+            raise SystemExit(f"--examples-json[{i}]: inputs and expected must be objects.")
+        inputs.append(dict(ins))
+        expected.append(dict(exp))
+    if not inputs:
+        raise SystemExit("--examples-json array is empty.")
+    return inputs, expected
+
+
+def _default_predict_score_fn() -> Callable[[List[Dict[str, Any]], List[Dict[str, Any]]], Dict[str, float]]:
+    """Higher ``neg_mse`` is better (matches copilot search ranking)."""
+
+    def score_fn(preds: List[Dict[str, Any]], exp: List[Dict[str, Any]]) -> Dict[str, float]:
+        total = 0.0
+        n = 0
+        for p, e in zip(preds, exp):
+            for k, ev in e.items():
+                if k not in p:
+                    continue
+                total += (float(p[k]) - float(ev)) ** 2
+                n += 1
+        mse = total / max(n, 1)
+        return {"neg_mse": float(-mse)}
+
+    return score_fn
+
+
+def _serialize_evaluation_report(rep: Any) -> dict:
+    return {
+        "success": rep.success,
+        "source": rep.source,
+        "compile_stage_reached": rep.compile_stage_reached,
+        "mode": rep.mode,
+        "failures": [
+            {"stage": f.stage, "kind": f.kind, "message": f.message, "detail": f.detail}
+            for f in rep.failures
+        ],
+        "warnings": list(rep.warnings),
+        "metrics": dict(rep.metrics),
+        "program_metrics": [{"name": m.name, "value": m.value} for m in rep.program_metrics],
+    }
+
+
+def _cmd_copilot_draft(args: argparse.Namespace) -> None:
+    from axiom.copilot.search import build_draft_context
+    from axiom.experts.base import ExpertDraftRequest
+
+    expert = _make_copilot_expert(args)
+    ctx = build_draft_context(
+        domain_context=args.context,
+        example_input_rows=None,
+        expected_rows=None,
+    )
+    resp = expert.draft_program(ExpertDraftRequest(goal=args.goal, context=ctx))
+    ax = resp.ax_source.rstrip() + "\n"
+    print(ax, end="")
+    if args.out is not None:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(ax, encoding="utf-8")
+        print(f"Wrote {args.out}", file=sys.stderr)
+
+
+def _cmd_copilot_search(args: argparse.Namespace) -> None:
+    from axiom.copilot.search import CopilotSearchConfig, run_copilot_search
+
+    expert = _make_copilot_expert(args)
+    example_in: Optional[List[dict]] = None
+    example_exp: Optional[List[dict]] = None
+    if args.examples_json is not None:
+        example_in, example_exp = _load_examples_json(args.examples_json)
+
+    if args.compile_only:
+        mode: str = "compile_only"
+        score_fn = None
+        sort_key = None
+    elif example_in is not None:
+        mode = "predict_rows"
+        score_fn = _default_predict_score_fn()
+        sort_key = "neg_mse"
+    else:
+        mode = "compile_only"
+        score_fn = None
+        sort_key = None
+
+    cfg = CopilotSearchConfig(
+        expert=expert,
+        goal=args.goal,
+        domain_context=args.context,
+        example_input_rows=example_in,
+        expected_rows=example_exp,
+        max_iterations=max(1, int(args.iterations)),
+        mode=mode,  # type: ignore[arg-type]
+        score_fn=score_fn,
+        score_sort_key=sort_key,
+        include_trace_snippet=False,
+    )
+    result = run_copilot_search(cfg)
+
+    for rec in result.iterations:
+        ev = rec.evaluation
+        print(
+            f"[iter {rec.index}] success={ev.success} stage={ev.compile_stage_reached!r} "
+            f"failures={len(ev.failures)} metrics={dict(ev.metrics)}",
+            file=sys.stderr,
+        )
+    print(result.best_source.rstrip() + "\n", end="")
+    if args.out is not None:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(result.best_source.rstrip() + "\n", encoding="utf-8")
+        print(f"Wrote best program to {args.out}", file=sys.stderr)
+    if args.report_out is not None:
+        payload = {
+            "converged": result.converged,
+            "best_source": result.best_source,
+            "best_evaluation": _serialize_evaluation_report(result.best_evaluation),
+            "final_report": _serialize_evaluation_report(result.final_report),
+            "iterations": [
+                {
+                    "index": rec.index,
+                    "source": rec.source,
+                    "evaluation": _serialize_evaluation_report(rec.evaluation),
+                    "producing_payload": rec.producing_payload,
+                    "outgoing_repair_error_report": rec.outgoing_repair_error_report,
+                }
+                for rec in result.iterations
+            ],
+        }
+        args.report_out.parent.mkdir(parents=True, exist_ok=True)
+        args.report_out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        print(f"Wrote report to {args.report_out}", file=sys.stderr)
+
+
+def _add_copilot_backend_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument(
+        "--backend",
+        choices=["onyx-qwen"],
+        required=True,
+        help="Semantic expert implementation (OpenAI-style chat; requires [copilot] / requests).",
+    )
+    p.add_argument("--goal", type=str, required=True, help="Natural-language goal for the .ax program.")
+    p.add_argument(
+        "--context",
+        type=str,
+        default=None,
+        help="Optional domain or task notes (embedded in expert context).",
+    )
+    p.add_argument(
+        "--expert-url",
+        type=str,
+        required=True,
+        help="Base URL for chat/completions (e.g. https://api.example.com/v1/).",
+    )
+    p.add_argument(
+        "--expert-model",
+        type=str,
+        required=True,
+        help="Remote model id (passed through to the chat API).",
+    )
+    p.add_argument(
+        "--expert-api-key",
+        type=str,
+        default=None,
+        help="Optional API key (else AXIOM_EXPERT_API_KEY).",
+    )
+    p.add_argument("--out", type=Path, default=None, help="Optional path to write the best/latest .ax source.")
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(
         prog="axiom",
-        description="Axiom neural compiler CLI (train, predict, lock-bundle, export-onnx, inspect, serve, gateway-serve).",
+        description="Axiom neural compiler CLI (train, predict, copilot-draft, copilot-search, lock-bundle, export-onnx, inspect, serve, gateway-serve).",
     )
     sub = ap.add_subparsers(dest="cmd", required=True)
 
@@ -587,6 +806,44 @@ def main(argv: list[str] | None = None) -> None:
     )
     p_serve.set_defaults(_handler=_cmd_serve)
 
+    p_cd = sub.add_parser(
+        "copilot-draft",
+        help="Ask a semantic expert to draft .ax source from a goal (requires pip install -e \".[copilot]\").",
+    )
+    _add_copilot_backend_args(p_cd)
+    p_cd.set_defaults(_handler=_cmd_copilot_draft)
+
+    p_cs = sub.add_parser(
+        "copilot-search",
+        help="Draft / evaluate / repair loop with an expert until success or iteration budget (see Phase 60).",
+    )
+    _add_copilot_backend_args(p_cs)
+    p_cs.add_argument(
+        "--iterations",
+        type=int,
+        default=8,
+        metavar="N",
+        help="Maximum evaluation rounds (default: 8).",
+    )
+    p_cs.add_argument(
+        "--examples-json",
+        type=Path,
+        default=None,
+        help='Optional JSON file: [{"inputs":{...},"expected":{...}}, ...] for predict_rows scoring.',
+    )
+    p_cs.add_argument(
+        "--compile-only",
+        action="store_true",
+        help="Validate with compile_only (ignore --examples-json for execution).",
+    )
+    p_cs.add_argument(
+        "--report-out",
+        type=Path,
+        default=None,
+        help="Write structured JSON (iterations, metrics, sources) to this path.",
+    )
+    p_cs.set_defaults(_handler=_cmd_copilot_search)
+
     args = ap.parse_args(argv)
     handler = args._handler
     if handler is _cmd_inspect:
@@ -604,6 +861,12 @@ def main(argv: list[str] | None = None) -> None:
         handler(args)
         return
     if handler is _cmd_export_onnx:
+        handler(args)
+        return
+    if handler is _cmd_copilot_draft:
+        handler(args)
+        return
+    if handler is _cmd_copilot_search:
         handler(args)
         return
     handler(args)

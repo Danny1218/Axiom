@@ -68,6 +68,7 @@ Optional extras:
 | **`[lock]`** | Genetic lock on **`.axb`** neural weights (`axiom lock-bundle`) |
 | **`[export]`** | ONNX export (`axiom export-onnx`) |
 | **`[gateway]`** | Policy gateway HTTP + examples (`requests`, Streamlit, overlaps `[serve]` on FastAPI) |
+| **`[copilot]`** | Semantic copilot CLI (`axiom copilot-draft`, `axiom copilot-search`) — `requests` for Onyx/Qwen-style chat APIs |
 | **`[dev]`** | Run the test suite (`pytest` + Glass Box deps for `inspect` / `glass_box` tests) |
 
 Run tests locally:
@@ -87,6 +88,38 @@ python -m pytest tests -q
 4. **Secure** — Optional **`pip install -e ".[lock]"`**, then **`axiom lock-bundle`** encrypts neural weights; **`AXIOM_BUNDLE_SECRET`** / device unlock at load time.  
 5. **Export** — Optional **`pip install -e ".[export]"`**, then **`axiom export-onnx`** for inference-only ONNX (no **`explain`** parity).  
 6. **Policy gateway** — Optional **`pip install -e ".[gateway]"`**, then **`axiom gateway-serve`** for **`POST /gateway/chat`** (scan + explain + allow/deny + optional downstream forward).
+7. **Semantic copilot** — Optional **`pip install -e ".[copilot]"`**, then **`axiom copilot-draft`** / **`axiom copilot-search`** to draft and repair **`.ax`** programs via an OpenAI-compatible chat endpoint (e.g. Onyx + Qwen).
+
+---
+
+## Semantic copilot CLI
+
+Install **`[copilot]`** so `requests` is available. Pass **`--expert-url`** (API base, e.g. `https://your-host/v1/`), **`--expert-model`**, and optionally **`--expert-api-key`** or set **`AXIOM_EXPERT_API_KEY`**. Iteration logs and “wrote file” lines go to **stderr**; the generated **`.ax`** source is printed to **stdout** so you can redirect it.
+
+**Draft** (goal → single program):
+
+```powershell
+pip install -e ".[copilot]"
+axiom copilot-draft --backend onyx-qwen --goal "Binary classifier with neural([a,b]) output survived_prob" `
+  --context "Titanic-style features" `
+  --expert-url "https://api.example.com/v1/" --expert-model "qwen-7b" `
+  --out drafted.ax
+```
+
+**Search** (draft → compile/evaluate → repair loop; optional row eval JSON):
+
+Row file format (JSON array): each element is `{"inputs": {...}, "expected": {...}}` for **`predict_rows`** scoring (default metric: **`neg_mse`**, higher is better). With **`--compile-only`**, examples are still passed into the expert context but evaluation stays compile-only.
+
+```powershell
+$examples = @'
+[{"inputs": {}, "expected": {"y": 0.5}}]
+'@
+Set-Content -Path examples.json -Value $examples -Encoding utf8
+axiom copilot-search --backend onyx-qwen --goal "Output y from defaults" `
+  --expert-url "https://api.example.com/v1/" --expert-model "qwen-7b" `
+  --iterations 5 --examples-json examples.json `
+  --out best.ax --report-out search_report.json
+```
 
 ---
 

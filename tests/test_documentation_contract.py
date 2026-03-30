@@ -41,6 +41,12 @@ def test_readme_documents_gateway_optional():
     assert "## Policy gateway" in text
 
 
+def test_readme_documents_copilot_cli():
+    text = (_root() / "readme.md").read_text(encoding="utf-8")
+    assert "copilot-draft" in text and "copilot-search" in text and "[copilot]" in text
+    assert "Semantic copilot" in text and "inputs" in text and "expected" in text
+
+
 def test_readme_from_compile_to_production_story():
     text = (_root() / "readme.md").read_text(encoding="utf-8")
     assert "## From compile to production" in text
@@ -152,6 +158,8 @@ def test_array_literal_and_indexing_ir():
         ["lock-bundle", "--help"],
         ["export-onnx", "--help"],
         ["gateway-serve", "--help"],
+        ["copilot-draft", "--help"],
+        ["copilot-search", "--help"],
     ],
 )
 def test_cli_subcommands_help_exits_ok(argv: list):
@@ -174,6 +182,7 @@ def test_cli_source_wires_documented_train_features():
     assert "export-onnx" in src and "export_bundle_to_onnx" in src
     assert "gateway-serve" in src and "create_gateway_app" in src
     assert "Glass Box requires" in src and ".[inspect]" in src
+    assert "copilot-draft" in src and "copilot-search" in src and "_make_copilot_expert" in src
 
 
 def test_cli_rejects_dataset_and_csv_together():

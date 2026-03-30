@@ -28,6 +28,7 @@ def test_plan_documents_semantic_copilot_roadmap():
     assert "## Next target (semantic copilot" in plan
     assert "Phase 58" in plan and "experts" in plan.lower()
     assert "Phase 60" in plan and "copilot" in plan.lower()
+    assert "Phase 61" in plan and "copilot-draft" in plan
     assert "Phase 57" in plan
 
 
@@ -42,6 +43,8 @@ def test_cli_subcommands_stable():
         "export-onnx",
         "gateway-serve",
         "serve",
+        "copilot-draft",
+        "copilot-search",
     }
     assert found == expected, f"CLI subcommands changed: {found ^ expected}"
 
