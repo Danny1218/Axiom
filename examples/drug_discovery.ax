@@ -1,0 +1,32 @@
+// The Target: A cancer cell represented by its receptor polarity and size
+features = [target_polarity, target_size, ambient_temp];
+
+// The AI designs the drug molecule's core properties using 3 distinct Liquid Networks
+carbon_angle = neural(features, "liquid");
+molecular_weight = neural(features, "liquid");
+drug_polarity = neural(features, "liquid");
+
+// 1. The Physics Sandbox (Differentiable Constraints)
+// Carbon angles must be between 90 and 180 degrees.
+if (carbon_angle > 180.0) {
+    physics_penalty = -10.0 * (carbon_angle - 180.0);
+} else {
+    if (carbon_angle < 90.0) {
+        physics_penalty = -10.0 * (90.0 - carbon_angle);
+    } else {
+        physics_penalty = 0.0;
+    }
+}
+
+// Weight must be positive and reasonable (e.g., > 10.0)
+if (molecular_weight < 10.0) {
+    weight_penalty = -10.0 * (10.0 - molecular_weight);
+} else {
+    weight_penalty = 0.0;
+}
+
+// 2. The Chemistry Target (Binding Affinity)
+binding_affinity = 100.0 - abs(drug_polarity - target_polarity);
+
+// 3. Final Viability Score (What we want to maximize)
+viability_score = binding_affinity + physics_penalty + weight_penalty;
