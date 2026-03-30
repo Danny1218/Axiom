@@ -36,6 +36,8 @@
 
 **Phase 21 (complete):** **Deep Liquid-KAN expressivity** — **`engine/ssm.py`**: **`_hat_basis` → `_rbf_basis`**, Gaussian bumps **`exp(-(diff²))`** on normalized time coordinate (centers on **[0,1]**). **`LiquidKANNode`**: **`fuse_proj`**: **`Linear(2D, D)`** on **`cat(h_cur, x_t)`**, **`F.layer_norm`**, RBF coefficients mix, **`w_gate`**: **`Linear(3D, 1)`** on **`cat(h_cur, x_t, h0)`** → sigmoid scales KAN output. **`forward_sequence` / `forward_sequence_tensors`**: proposal **`_kan_update(h_cur, x_t, h0, tn)`** only (no **`0.1 * x_t`**). **`forward`**: zero dummy **`x_t`**. **`t_norm`** kept in signature for API stability (unused). Tests: **`tests/test_ssm.py`** (RBF, grads on fusion, **`x_t`** sensitivity); **`tests/test_hybrid_execution.py`** symbolic test uses asymmetric branch constants so Sinkhorn blending is not exactly zero at **`b`**.
 
+**Phase 22 (complete):** **High-dimensional KAN splines** — **`_rbf_basis`**: **`sigmoid(fused_norm)`** per channel **`(B, D)`**, RBFs broadcast to **`(B, D, K)`** (no mean-pool). **`coeffs`**: **`(dim, num_basis)`**, init **`randn / sqrt(K)`**; readout **`(phi * coeffs).sum(-1)`** → **`(B, D)`**. **`tests/test_kan_mean_blindness.py`**: **`[1,-1]` vs `[-1,1]`** same mean, distinct **`phi`**; reference helper shows old pooled path collapses; **`LiquidKANNode`** with **`fuse_proj`** copying **`h`** from **`cat([h,0])`** + fixed gate proves full forward separates permutations. Re-saved bundles need retrain (**`coeffs`** shape vs Phase 21).
+
 ## Layout
 
 - `main.py` — CLI entry

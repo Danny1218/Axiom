@@ -8,13 +8,18 @@ from primitives.liquid_tensor import LiquidStateTensor
 def test_rbf_basis_simple():
     fused = torch.zeros(1, 5)
     b = _rbf_basis(fused, 5)
-    assert b.shape == (1, 5) and torch.isfinite(b).all() and (b > 0).all()
+    assert b.shape == (1, 5, 5) and torch.isfinite(b).all() and (b > 0).all()
 
 
 def test_rbf_basis_num_basis_one():
     fused = torch.randn(2, 3)
     b = _rbf_basis(fused, 1)
-    assert b.shape == (2, 1) and (b == 1).all()
+    assert b.shape == (2, 3, 1) and (b == 1).all()
+
+
+def test_coeffs_shape_dim_by_num_basis():
+    m = LiquidKANNode(7, num_basis=5)
+    assert m.coeffs.shape == (7, 5)
 
 
 def test_liquid_kan_forward_shape_and_grad():

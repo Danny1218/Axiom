@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Optional, Sequence
 
 import torch
@@ -10,22 +11,26 @@ from primitives.liquid_tensor import LiquidStateTensor, stack_liquid_states
 
 
 def _rbf_basis(fused_norm: torch.Tensor, num_basis: int) -> torch.Tensor:
-    """Gaussian RBFs on [0, 1] from fused trunk features: fused_norm (B, D) → phi (B, K)."""
-    u = torch.sigmoid(fused_norm.mean(dim=-1, keepdim=True))
-    x = u.squeeze(-1).clamp(0.0, 1.0)
+    """Per-channel Gaussian RBFs on [0, 1]: fused_norm (B, D) → phi (B, D, K)."""
+    scalar_x = torch.sigmoid(fused_norm)
     if num_basis < 2:
-        return torch.ones(x.shape[0], 1, device=fused_norm.device, dtype=fused_norm.dtype)
+        return torch.ones(
+            *scalar_x.shape,
+            1,
+            device=fused_norm.device,
+            dtype=fused_norm.dtype,
+        )
     centers = torch.linspace(0.0, 1.0, num_basis, device=fused_norm.device, dtype=fused_norm.dtype).view(
-        1, -1
+        1, 1, -1
     )
     width = 1.0 / max(num_basis - 1, 1)
-    diff = (x.unsqueeze(-1) - centers) / width
+    diff = (scalar_x.unsqueeze(-1) - centers) / width
     return torch.exp(-(diff**2))
 
 
 class LiquidKANNode(nn.Module):
     """
-    Liquid memory + KAN: Gaussian RBF basis over a scalar gate; sequence input fused into the basis path.
+    Liquid memory + KAN: per-dimension Gaussian RBF bases; sequence input fused into the basis path.
     `forward(h)` runs a fixed-depth recurrence (compile-time unroll). `forward_sequence` consumes
     a list of `LiquidStateTensor` (per-timestep τ and payload).
     """
@@ -43,7 +48,7 @@ class LiquidKANNode(nn.Module):
         self.max_unroll = max_unroll
         self.fuse_proj = nn.Linear(dim * 2, dim, bias=False)
         self.w_gate = nn.Linear(dim * 3, 1, bias=True)
-        self.coeffs = nn.Parameter(torch.randn(num_basis, dim) * 0.02)
+        self.coeffs = nn.Parameter(torch.randn(dim, num_basis) / math.sqrt(float(num_basis)))
 
     def _kan_update(
         self,
@@ -59,7 +64,7 @@ class LiquidKANNode(nn.Module):
         fused = self.fuse_proj(torch.cat([h2, x2], dim=-1))
         fused_norm = F.layer_norm(fused, (self.dim,))
         phi = _rbf_basis(fused_norm, self.num_basis)
-        out = phi @ self.coeffs
+        out = (phi * self.coeffs.unsqueeze(0)).sum(dim=-1)
         gate = torch.sigmoid(self.w_gate(torch.cat([h2, x2, h02], dim=-1)))
         return (out * gate).reshape(h2.shape[0], -1)
 
