@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, List
+from typing import Any, Dict, List, Optional
 
 import torch
+import torch.nn as nn
 
 from axiom.compiler.deserializer import load_bundle
 from axiom.engine.block_executor import InterpretedBlock
@@ -17,8 +18,12 @@ def _trunk_dim_from_block_abi(block: InterpretedBlock) -> int:
     return max((abi[n] + max(1, int(aw.get(n, 1))) for n in abi), default=16)
 
 
-def load(bundle_path: str | Path) -> AxiomModel:
-    return AxiomModel(load_bundle(bundle_path))
+def load(
+    bundle_path: str | Path,
+    custom_neural_registry: Optional[Dict[str, nn.Module]] = None,
+) -> AxiomModel:
+    """Load a ``.axb`` bundle. Pass ``custom_neural_registry`` if training used non-default ``neural()`` nets."""
+    return AxiomModel(load_bundle(bundle_path, custom_neural_registry=custom_neural_registry))
 
 
 class AxiomModel:

@@ -153,3 +153,4 @@ def test_examples_spy_alpha_ax_circuit_breaker_ir():
     assert any("OP_NEURAL" in str(s) for s in ir)
     src = (_root() / "examples" / "spy_alpha.ax").read_text(encoding="utf-8")
     assert "0.025" in src and "volatility" in src
+    assert "sma_10" in src and "volatility_20d" in src

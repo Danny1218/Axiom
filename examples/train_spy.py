@@ -8,16 +8,18 @@ Run from repo root: ``python examples/train_spy.py``
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import pandas as pd
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 import axiom
-from axiom.compiler.ir import ast_to_ir, extract_abi_widths, extract_global_abi
+from axiom.compiler.ir import ast_to_ir, extract_abi_widths, extract_global_abi, extract_neural_node_specs
 from axiom.compiler.parser import parse_ax_file, reset_parser
 from axiom.compiler.serializer import save_bundle
 from axiom.engine.block_executor import InterpretedBlock
@@ -29,12 +31,26 @@ BUNDLE_PATH = _EXAMPLES / "spy_trained.axb"
 TEST_TAIL = 500
 
 
+def make_spy_alpha_custom_brain() -> nn.Module:
+    return nn.Sequential(
+        nn.Linear(6, 32),
+        nn.GELU(),
+        nn.Dropout(0.2),
+        nn.Linear(32, 16),
+        nn.GELU(),
+        nn.Linear(16, 1),
+    )
+
+
 def add_spy_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Add momentum / volatility / next-day target; expects yfinance OHLCV column names."""
+    """Add momentum, volatility, SMA divergence, 20d vol, next-day target; expects yfinance OHLCV names."""
     out = df.copy()
     out["momentum_1d"] = out["Close"].pct_change(1)
     out["momentum_5d"] = out["Close"].pct_change(5)
     out["volatility"] = (out["High"] - out["Low"]) / out["Open"]
+    out["sma_10"] = out["Close"].rolling(window=10).mean() / out["Close"] - 1.0
+    out["sma_50"] = out["Close"].rolling(window=50).mean() / out["Close"] - 1.0
+    out["volatility_20d"] = out["Close"].pct_change().rolling(window=20).std()
     out["target_return"] = out["Close"].pct_change(1).shift(-1)
     return out.dropna()
 
@@ -60,10 +76,26 @@ def cumulative_return_from_series(returns: pd.Series) -> float:
     return float((1.0 + returns).prod() - 1.0)
 
 
+def annualized_sharpe(returns: pd.Series, periods_per_year: float = 252.0) -> float:
+    m = returns.mean()
+    s = returns.std()
+    if s == 0 or pd.isna(s) or len(returns) < 2:
+        return float("nan")
+    return float((m / s) * math.sqrt(periods_per_year))
+
+
+def max_drawdown_from_returns(returns: pd.Series) -> float:
+    """Largest peak-to-trough drop on the equity curve (1+r).cumprod(); negative fraction."""
+    equity = (1.0 + returns).cumprod()
+    peak = equity.cummax()
+    dd = (equity / peak) - 1.0
+    return float(dd.min())
+
+
 def backtest_metrics(
     test_df: pd.DataFrame, predictions: List[Dict[str, Any]]
 ) -> Dict[str, float]:
-    """Align ``model.predict`` outputs with ``test_df`` rows; return cumulative strategy vs buy-hold."""
+    """Align ``model.predict`` outputs with ``test_df`` rows; return cum returns, Sharpe, max DD."""
     if len(predictions) != len(test_df):
         raise ValueError("predictions length must match test_df rows")
     df_test = test_df.reset_index(drop=True).copy()
@@ -72,7 +104,18 @@ def backtest_metrics(
     df_test["strategy_return"] = df_test["position"] * df_test["target_return"]
     strat = cumulative_return_from_series(df_test["strategy_return"])
     bh = cumulative_return_from_series(df_test["target_return"])
-    return {"cumulative_strategy": strat, "cumulative_buy_hold": bh}
+    sh_s = annualized_sharpe(df_test["strategy_return"])
+    sh_bh = annualized_sharpe(df_test["target_return"])
+    mdd_s = max_drawdown_from_returns(df_test["strategy_return"])
+    mdd_bh = max_drawdown_from_returns(df_test["target_return"])
+    return {
+        "cumulative_strategy": strat,
+        "cumulative_buy_hold": bh,
+        "sharpe_strategy": sh_s,
+        "sharpe_buy_hold": sh_bh,
+        "max_drawdown_strategy": mdd_s,
+        "max_drawdown_buy_hold": mdd_bh,
+    }
 
 
 def fetch_spy_frame(period: str = "6y") -> pd.DataFrame:
@@ -88,7 +131,19 @@ def main() -> None:
     aw = extract_abi_widths(ir, max_vars=64)
     dim = max((abi[n] + max(1, int(aw.get(n, 1))) for n in abi), default=8)
     pred_col = abi["prediction"]
-    block = InterpretedBlock(ir, abi, abi_widths=aw)
+
+    probe = InterpretedBlock(ir, abi, abi_widths=aw)
+    neural_keys = list(probe.neural_registry.keys())
+    print("Neural node id(s):", neural_keys)
+    del probe
+    nid = neural_keys[0]
+    spec = extract_neural_node_specs(ir, aw)
+    if spec.get(nid, 0) != 6:
+        raise RuntimeError(f"expected neural input width 6, got {spec.get(nid)}")
+    custom_brain = make_spy_alpha_custom_brain()
+    block = InterpretedBlock(
+        ir, abi, abi_widths=aw, custom_neural_registry={nid: custom_brain}
+    )
 
     raw = fetch_spy_frame("6y")
     df = add_spy_features(raw)
@@ -124,11 +179,15 @@ def main() -> None:
     print(f"Saved {BUNDLE_PATH}")
 
     print("\n--- RUNNING OUT-OF-SAMPLE BACKTEST ---\n")
-    model = axiom.load(BUNDLE_PATH)
+    model = axiom.load(BUNDLE_PATH, custom_neural_registry={nid: make_spy_alpha_custom_brain()})
     results = model.predict(test_df)
     metrics = backtest_metrics(test_df, results)
     print(f"Cumulative strategy return (OOS): {metrics['cumulative_strategy']:.4f}")
     print(f"Cumulative buy-and-hold return (OOS): {metrics['cumulative_buy_hold']:.4f}")
+    print(f"Sharpe ratio (strategy, ann.): {metrics['sharpe_strategy']:.4f}")
+    print(f"Sharpe ratio (buy-and-hold, ann.): {metrics['sharpe_buy_hold']:.4f}")
+    print(f"Max drawdown (strategy): {metrics['max_drawdown_strategy']*100:.2f}%")
+    print(f"Max drawdown (buy-and-hold): {metrics['max_drawdown_buy_hold']*100:.2f}%")
 
 
 if __name__ == "__main__":

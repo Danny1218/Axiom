@@ -135,13 +135,13 @@ axiom train examples/sequence.ax --dataset sine --epochs 30 --dim 32
 
 ## Live SPY — neuro-symbolic trading (optional)
 
-Install extras: **`pip install -e ".[spy]"`** (**pandas**, **yfinance**). **`examples/spy_alpha.ax`** trains a **`neural([momentum_1d, momentum_5d, volatility])`** signal on real **SPY** history, but **symbolically** forces **`prediction = 0.0`** (cash) when **daily** **`(High − Low) / Open > 2.5%`**. Run:
+Install extras: **`pip install -e ".[spy]"`** (**pandas**, **yfinance**). **`examples/spy_alpha.ax`** feeds **six** features into **`neural(...)`** (momentum, daily range vol, **SMA 10/50** divergence vs price, **20d** return volatility), and **symbolically** forces **`prediction = 0.0`** (cash) when **daily** **`(High − Low) / Open > 2.5%`**. Training swaps in a **deeper custom PyTorch stack** (via **`custom_neural_registry`**) instead of the default tiny MLP. Run:
 
 ```bash
 python examples/train_spy.py
 ```
 
-This downloads ~6y of data, trains 50 epochs, writes **`examples/spy_trained.axb`**, reloads it with **`axiom.load`**, runs **`model.predict`** on the held-out last **500** trading days, and prints **cumulative strategy return** (long / short / cash from the sign of the prediction) vs **buy-and-hold**.
+This downloads ~6y of data, trains 50 epochs, writes **`examples/spy_trained.axb`**, reloads with **`axiom.load(..., custom_neural_registry=...)`** (same architecture as training), runs **`model.predict`** on the held-out last **500** trading days, and prints **cumulative returns**, **annualized Sharpe ratios**, and **max drawdowns** (strategy vs buy-and-hold)—better risk-aware readouts than raw return alone.
 
 ---
 

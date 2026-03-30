@@ -52,7 +52,14 @@ def test_volatility_circuit_breaker_forces_zero_prediction():
     dim = max((abi[n] + max(1, int(aw.get(n, 1))) for n in abi), default=8)
     block = InterpretedBlock(ir, abi, abi_widths=aw)
     block.eval()
-    row = {"momentum_1d": 0.01, "momentum_5d": 0.02, "volatility": 0.05}
+    row = {
+        "momentum_1d": 0.01,
+        "momentum_5d": 0.02,
+        "volatility": 0.05,
+        "sma_10": 0.0,
+        "sma_50": 0.0,
+        "volatility_20d": 0.0,
+    }
     h = _inputs_to_tensor(
         row, abi, dim, device=torch.device("cpu"), dtype=torch.float32, abi_widths=aw
     )
@@ -77,6 +84,7 @@ def test_add_spy_features_and_chronological_split():
     )
     df = ts.add_spy_features(raw)
     assert "momentum_1d" in df.columns and "target_return" in df.columns
+    assert "sma_10" in df.columns and "sma_50" in df.columns and "volatility_20d" in df.columns
     tr, te = ts.chronological_split(df, test_rows=10)
     assert len(te) == 10 and len(tr) == len(df) - 10
 
@@ -100,6 +108,13 @@ def test_backtest_metrics_matches_manual():
     bh = (1 + 0.01) * (1 - 0.02) * (1 + 0.03) - 1.0
     assert m["cumulative_strategy"] == pytest.approx(strat)
     assert m["cumulative_buy_hold"] == pytest.approx(bh)
+    import math
+
+    strat_rets = pd.Series([0.01, 0.02, 0.0])
+    assert m["sharpe_strategy"] == pytest.approx(ts.annualized_sharpe(strat_rets))
+    assert m["sharpe_buy_hold"] == pytest.approx(ts.annualized_sharpe(test_df["target_return"]))
+    assert not math.isnan(m["max_drawdown_strategy"])
+    assert not math.isnan(m["max_drawdown_buy_hold"])
 
 
 def test_mini_train_save_load_predict_backtest(tmp_path):
@@ -150,7 +165,10 @@ def test_mini_train_save_load_predict_backtest(tmp_path):
     assert len(results) == len(test_df)
     m = ts.backtest_metrics(test_df, results)
     assert "cumulative_strategy" in m and "cumulative_buy_hold" in m
-    assert all(abs(m[k]) < 10.0 for k in m)
+    assert "sharpe_strategy" in m and "max_drawdown_strategy" in m
+    import math
+
+    assert math.isfinite(m["cumulative_strategy"]) and math.isfinite(m["cumulative_buy_hold"])
 
 
 @pytest.mark.integration

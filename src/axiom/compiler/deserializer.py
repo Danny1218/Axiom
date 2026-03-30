@@ -64,8 +64,15 @@ def _resolve_abi_widths(data: Dict[str, Any], dim: int) -> Dict[str, int]:
     return {}
 
 
-def load_bundle(path: str | Path) -> InterpretedBlock:
-    """Load ``.axb`` written by ``save_bundle`` (``InterpretedBlock`` + optional neural weights)."""
+def load_bundle(
+    path: str | Path,
+    custom_neural_registry: Optional[Dict[str, nn.Module]] = None,
+) -> InterpretedBlock:
+    """Load ``.axb`` written by ``save_bundle`` (``InterpretedBlock`` + optional neural weights).
+
+    If the bundle was trained with ``custom_neural_registry``, pass the same mapping here so
+    ``load_state_dict`` matches module shapes.
+    """
     p = Path(path)
     if not p.is_file():
         raise FileNotFoundError(p)
@@ -86,7 +93,13 @@ def load_bundle(path: str | Path) -> InterpretedBlock:
     max_unroll = int(topo.get("max_unroll", 8))
     abi_widths_raw = payload.get("abi_widths") or {}
     abi_widths = {str(k): int(v) for k, v in abi_widths_raw.items()}
-    block = InterpretedBlock(ir_prog, abi, max_unroll=max_unroll, abi_widths=abi_widths)
+    block = InterpretedBlock(
+        ir_prog,
+        abi,
+        max_unroll=max_unroll,
+        abi_widths=abi_widths,
+        custom_neural_registry=custom_neural_registry,
+    )
     nw = payload.get("neural_weights")
     if nw:
         block.neural_registry.load_state_dict(nw, strict=True)

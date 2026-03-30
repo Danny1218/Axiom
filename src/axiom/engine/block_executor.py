@@ -29,6 +29,7 @@ class InterpretedBlock(nn.Module):
         *,
         max_unroll: int = 8,
         abi_widths: Optional[Dict[str, int]] = None,
+        custom_neural_registry: Optional[Dict[str, nn.Module]] = None,
     ) -> None:
         super().__init__()
         self.ir_stmts = list(ir_stmts)
@@ -36,9 +37,14 @@ class InterpretedBlock(nn.Module):
         self.abi_widths: Dict[str, int] = dict(abi_widths or {})
         self.max_unroll = int(max_unroll)
         spec = extract_neural_node_specs(self.ir_stmts, self.abi_widths)
-        self.neural_registry: nn.ModuleDict = nn.ModuleDict(
-            {nid: _neural_mlp(w) for nid, w in spec.items()}
-        )
+        custom = dict(custom_neural_registry or {})
+        built: Dict[str, nn.Module] = {}
+        for nid, w in spec.items():
+            if nid in custom:
+                built[nid] = custom[nid]
+            else:
+                built[nid] = _neural_mlp(w)
+        self.neural_registry: nn.ModuleDict = nn.ModuleDict(built)
 
     def forward(self, h: torch.Tensor) -> torch.Tensor:
         if not self.ir_stmts:

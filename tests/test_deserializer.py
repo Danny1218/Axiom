@@ -113,6 +113,42 @@ def test_load_bundle_restores_neural_weights(tmp_path):
         assert torch.allclose(b(x2), b2(x2), atol=0, rtol=0)
 
 
+def test_load_bundle_restores_custom_neural_weights(tmp_path):
+    from axiom.compiler.ir import extract_neural_node_specs
+
+    reset_parser()
+    ir = ast_to_ir(parse_ax("z = neural([0.5]);"))
+    gabi = extract_global_abi(ir, max_vars=16)
+    gaw = extract_abi_widths(ir, max_vars=16)
+    spec = extract_neural_node_specs(ir, gaw)
+    nid = next(iter(spec.keys()))
+    custom = torch.nn.Sequential(
+        torch.nn.Linear(1, 4), torch.nn.ReLU(), torch.nn.Linear(4, 1)
+    )
+    b = InterpretedBlock(
+        ir, gabi, abi_widths=gaw, custom_neural_registry={nid: custom}
+    )
+    opt = torch.optim.SGD(b.parameters(), lr=0.1)
+    for _ in range(5):
+        x = torch.randn(2, 16)
+        opt.zero_grad()
+        b(x).sum().backward()
+        opt.step()
+    p = tmp_path / "custom.axb"
+    save_bundle(b, p)
+    b2 = load_bundle(
+        p,
+        custom_neural_registry={
+            nid: torch.nn.Sequential(
+                torch.nn.Linear(1, 4), torch.nn.ReLU(), torch.nn.Linear(4, 1)
+            )
+        },
+    )
+    x2 = torch.randn(4, 16)
+    with torch.no_grad():
+        assert torch.allclose(b(x2), b2(x2), atol=1e-6, rtol=1e-5)
+
+
 def test_load_execution_bundle_raises_missing_json(tmp_path):
     p = tmp_path / "missing"
     with pytest.raises(FileNotFoundError):
