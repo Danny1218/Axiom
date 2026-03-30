@@ -144,3 +144,12 @@ def test_examples_portfolio_ax_flagship_ir():
         isinstance(s, tuple) and s[0] == "OP_ASSIGN" and str(s[1]) == "position"
         for s in ir
     )
+
+
+def test_examples_spy_alpha_ax_circuit_breaker_ir():
+    reset_parser()
+    ir = ast_to_ir(parse_ax_file(_root() / "examples" / "spy_alpha.ax"))
+    assert any(s[0] == "OP_CONDITIONAL" for s in ir)
+    assert any("OP_NEURAL" in str(s) for s in ir)
+    src = (_root() / "examples" / "spy_alpha.ax").read_text(encoding="utf-8")
+    assert "0.025" in src and "volatility" in src

@@ -25,3 +25,6 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 axiom = ["compiler/*.lark"]
+
+[project.optional-dependencies]
+spy = ["pandas>=2.0", "yfinance>=0.2.36"]

@@ -1,0 +1,12 @@
+// We want to predict tomorrow's return based on today's features
+features = [momentum_1d, momentum_5d, volatility];
+alpha_signal = neural(features);
+
+// The Symbolic Circuit Breaker (Risk Management)
+// If daily volatility exceeds 2.5%, the market is crashing or behaving erratically.
+// We force our prediction to 0.0 (Cash), completely ignoring the neural alpha.
+if (volatility > 0.025) {
+    prediction = 0.0;
+} else {
+    prediction = alpha_signal;
+}

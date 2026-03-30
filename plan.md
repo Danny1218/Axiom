@@ -74,8 +74,9 @@
 - `src/axiom/cli.py` — train / inspect subcommands
 - `src/axiom/datasets.py` — Titanic, sine, finance mock
 - `src/axiom/tools/inspector.py`, `glass_box.py` — Glass Box
-- `examples/titanic.ax`, `examples/sequence.ax`, `examples/portfolio.ax` — domain sketches
+- `examples/titanic.ax`, `examples/sequence.ax`, `examples/portfolio.ax`, `examples/spy_alpha.ax` — domain sketches
 - `examples/train_portfolio.py` — Phase 36 train + symbolic ablation
+- `examples/train_spy.py` — live SPY + Phase 38 backtest (optional: `pip install -e ".[spy]"`)
 - `train.ax` — default **`axiom train`** sketch (cwd)
 - `src/axiom/compiler/`, `src/axiom/engine/`, `src/axiom/primitives/`
 - `tests/`
@@ -95,11 +96,15 @@ axiom train examples/titanic.ax --dataset titanic --epochs 30 --out axiom_bundle
 axiom train examples/sequence.ax --dataset sine --epochs 30 --dim 32 --out axiom_bundle
 python examples/train_portfolio.py
 axiom predict --bundle examples/portfolio_trained.axb --input '{"volatility":0.6,"drawdown":0.1,"momentum":-0.8,"volume":1.5}'
+pip install -e ".[spy]"
+python examples/train_spy.py
 axiom inspect
 ```
 
 ## Next
 
 **Phase 38 (complete):** **`src/axiom/api.py`** — **`AxiomModel`**, **`axiom.load(bundle_path)`**; **`predict(dict)`** → dict, **`predict([{...}, ...])`** → list of dicts, **`predict(DataFrame)`** via **`type(...).__name__ == "DataFrame"`** (pandas optional). Uses **`_inputs_to_tensor`** / **`_abi_outputs_from_trunk_row`** and **`_trunk_dim_from_block_abi`** (same span rule as CLI). Root **`from axiom import load, AxiomModel`**. Tests: **`tests/test_api.py`**. Readme Quickstart documents the API.
+
+**Phase 39 (complete):** **Live SPY neuro-symbolic flagship** — **`examples/spy_alpha.ax`**: **`neural([momentum_1d, momentum_5d, volatility])`** + symbolic **`if (volatility > 0.025)`** forces **`prediction = 0.0`** (cash). **`examples/train_spy.py`**: yfinance **`SPY`** 6y OHLCV, engineered features, chronological train / last-500 OOS, Adam 50 epochs, **`save_bundle`** → **`axiom.load`** + **`model.predict(test_df)`** + long/short/cash positions vs **`target_return`**; prints cumulative strategy vs buy-and-hold. Optional extra **`pip install -e ".[spy]"`** (**`pandas`**, **`yfinance`**). Tests: **`tests/test_spy_strategy.py`** (IR, circuit breaker, feature pipeline, backtest math, mini train→bundle→predict; **`@pytest.mark.integration`** fetch smoke).
 
 **Later ideas:** **`return` inside `while`**; call targets like **`f()[i]`**. Glass Box upgrades (**`--inspect`** / graph of **`OP_NEURAL`**). See **`readme.md` § Road ahead**.
