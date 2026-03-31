@@ -860,7 +860,14 @@ def _cmd_copilot_run(args: argparse.Namespace) -> None:
         summ_path.write_text(json.dumps(doc, indent=2), encoding="utf-8")
         print(f"Wrote pipeline summary to {summ_path}", file=sys.stderr)
     if cfg.artifact_dir is not None:
-        print(f"Wrote artifact bundle to {cfg.artifact_dir.resolve()}", file=sys.stderr)
+        root = cfg.artifact_dir.resolve()
+        if restarts > 1:
+            print(
+                f"{prefix} Wrote artifact bundles under {root} (restart_0 … restart_{restarts - 1}/).",
+                file=sys.stderr,
+            )
+        else:
+            print(f"{prefix} Wrote artifact bundle to {root}", file=sys.stderr)
 
 
 def _print_copilot_benchmark_summary(doc: dict) -> None:

@@ -8,6 +8,7 @@ import pytest
 
 pytest.importorskip("fastapi")
 
+from axiom.copilot.artifacts import BEST_AX_NAME
 from axiom.copilot.benchmarks import BenchmarkDispatchExpert
 from axiom.copilot.server import create_app
 from axiom.experts.base import (
@@ -286,6 +287,69 @@ def test_run_skips_final_validation_when_disabled(client):
     )
     assert r.status_code == 200
     assert r.json()["final_validation"] is None
+
+
+def test_run_accepts_restarts_and_returns_per_restart_summaries(client):
+    c, _ = client
+    r = c.post(
+        "/run",
+        json={"goal": "trivial", "max_iterations": 1, "compile_only": True, "restarts": 2},
+    )
+    assert r.status_code == 200
+    d = r.json()
+    assert d["restarts_total"] == 2
+    assert len(d["per_restart_summaries"]) == 2
+    assert d["winning_restart_index"] in (0, 1)
+
+
+def test_run_multi_restart_picks_best_and_writes_restart_subdirs(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("AXIOM_COPILOT_API_KEY", raising=False)
+    from fastapi.testclient import TestClient
+
+    class _SeqExpert:
+        def __init__(self) -> None:
+            self._q = [
+                "risk_score = 0.5 * risk_a + 0.5 * risk_b;\n",
+                "risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));\n",
+            ]
+
+        def draft_program(self, request: ExpertDraftRequest) -> ExpertDraftResponse:
+            return ExpertDraftResponse(ax_source=self._q.pop(0), backend_name="seq", metadata={})
+
+        def repair_program(self, request: ExpertRepairRequest) -> ExpertDraftResponse:
+            return ExpertDraftResponse(
+                ax_source="risk_score = 0.5 * risk_a + 0.5 * risk_b;\n",
+                backend_name="seq",
+            )
+
+        def summarize_trace(self, request: ExpertTraceSummaryRequest) -> str:
+            return "ok"
+
+    app = create_app(_SeqExpert())
+    c = TestClient(app)
+    ad = str(tmp_path / "run_restart_http")
+    r = c.post(
+        "/run",
+        json={
+            "goal": "risk_score blend",
+            "max_iterations": 1,
+            "compile_only": False,
+            "repair_valid_with_metrics": False,
+            "restarts": 2,
+            "artifact_dir": ad,
+            "examples": [
+                {"inputs": {"risk_a": 1.0, "risk_b": 0.0}, "expected": {"risk_score": 0.7}},
+            ],
+        },
+    )
+    assert r.status_code == 200
+    d = r.json()
+    assert d["restarts_total"] == 2
+    assert d["winning_restart_index"] == 1
+    assert "max(0.0" in d["best_source"]
+    assert (Path(ad) / "restart_0" / BEST_AX_NAME).is_file()
+    assert (Path(ad) / "restart_1" / BEST_AX_NAME).is_file()
+    assert Path(d["per_restart_summaries"][0]["artifact_subdir"]).name == "restart_0"
 
 
 def test_run_writes_artifact_dir(tmp_path: Path, monkeypatch):

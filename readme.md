@@ -163,6 +163,15 @@ axiom copilot-run --backend onyx-qwen --goal "Small policy on x" `
   --artifact-dir ./copilot_e2e --summary-out pipeline_summary.json --out best.ax
 ```
 
+**Multi-restart** (same flags; add **`--restarts N`** — artifacts go under **`restart_0/`** … when **`N > 1`**):
+
+```powershell
+axiom copilot-run --backend onyx-qwen --goal "…" `
+  --expert-url "https://api.example.com/v1/" --expert-model "qwen-7b" `
+  --iterations 10 --examples-json ./examples/risk_score_v3.json `
+  --restarts 5 --artifact-dir ./copilot_run --summary-out ./pipeline.json --out ./best.ax
+```
+
 **Benchmark harness:** `axiom.copilot.benchmarks` defines tiny NL tasks (`DEFAULT_BENCHMARK_TASKS`), compares draft-only vs full search, and serializes with **`benchmark_suite_to_dict`**. **CLI:** **`axiom copilot-benchmark`** (expert flags like other copilot commands; optional **`--task-json`**, **`--out`**, **`--draft-only`** or **`--search`**, **`--max-iterations`**). **HTTP:** with **`pip install -e ".[serve,copilot]"`**, **`POST /benchmarks/run`** on the copilot server accepts optional inline **`tasks`**, **`max_iterations`**, **`draft_only`**, **`search_only`**; response wraps the same JSON document under **`suite`**. Extra tasks can be loaded from **`axiom/copilot/fixtures/benchmark_tasks.json`** or your own file matching that schema.
 
 **In-memory tabular training (library API):** **`evaluate_program(..., mode="train_tabular")`** trains a compiled **`InterpretedBlock`** on **`train_rows`** with Adam (numeric dict rows, ABI-aware trunk fill, **`target_var`** column blinded in inputs like **`AxiomDataset`**), reports **`train_mse`** / **`eval_mse`** on **`eval_rows`**, optional **`TrainTabularParams`** (**`epochs`**, **`learning_rate`**, **`weight_decay`**, **`batch_size`**) and **`max_unroll`**. Purely symbolic programs get a **`no_trainable_parameters`** warning and eval metrics only—no subprocess and not a replacement for full **`axiom train`**.
