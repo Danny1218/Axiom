@@ -19,7 +19,7 @@ from axiom.copilot.models import (
 )
 from axiom.copilot.summarize import safe_summarize_evaluation
 from axiom.experts.base import ExpertDraftRequest, ExpertRepairRequest, SemanticExpert
-from axiom.experts.onyx_qwen import COMPLETION_OVERRIDES_CONTEXT_KEY, ax_source_metadata_flags
+from axiom.experts.onyx_qwen import COMPLETION_OVERRIDES_CONTEXT_KEY, OnyxQwenHTTPError, ax_source_metadata_flags
 
 ExpertRequestPayload = Dict[str, Any]
 
@@ -322,6 +322,39 @@ def _draft_payload_dict(req: ExpertDraftRequest) -> ExpertRequestPayload:
     return {"type": "draft", "goal": req.goal, "context": dict(req.context)}
 
 
+def _backend_http_failure_report(
+    config: CopilotSearchConfig,
+    exc: OnyxQwenHTTPError,
+    *,
+    phase: str,
+    source: str = "",
+    prior_report: Optional[ProgramEvaluationReport] = None,
+) -> ProgramEvaluationReport:
+    body = exc.body_snippet or ""
+    kind = "backend_oom" if "CUDA error: out of memory" in body else "backend_http"
+    detail_obj: Dict[str, Any] = {
+        "status_code": int(exc.status_code),
+        "body_snippet": body,
+        "phase": phase,
+    }
+    if prior_report is not None:
+        detail_obj["prior_evaluation_success"] = bool(prior_report.success)
+    return ProgramEvaluationReport(
+        success=False,
+        source=source,
+        compile_stage_reached="expert",
+        mode=config.mode,
+        failures=[
+            ProgramFailure(
+                stage="expert",
+                kind=kind,
+                message=f"Expert backend HTTP {exc.status_code} during {phase}",
+                detail=json.dumps(detail_obj, ensure_ascii=False),
+            )
+        ],
+    )
+
+
 def _metric_value(report: ProgramEvaluationReport, sort_key: Optional[str]) -> Optional[float]:
     if not report.metrics:
         return None
@@ -437,7 +470,34 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
         ctx["exact_symbolic_examples_task"] = True
     ctx = merge_completion_overrides_into_context(ctx, config.completion_overrides)
     draft_req = ExpertDraftRequest(goal=config.goal, context=ctx)
-    draft_resp = config.expert.draft_program(draft_req)
+    try:
+        draft_resp = config.expert.draft_program(draft_req)
+    except OnyxQwenHTTPError as e:
+        fail_rep = _backend_http_failure_report(config, e, phase="draft")
+        metric_thr_eff = _effective_metric_threshold(config)
+        result = CopilotSearchResult(
+            best_source="",
+            best_evaluation=fail_rep,
+            final_report=fail_rep,
+            converged=False,
+            iterations=[
+                CopilotIterationRecord(
+                    index=0,
+                    source="",
+                    evaluation=fail_rep,
+                    producing_payload=_draft_payload_dict(draft_req),
+                    outgoing_repair_error_report=None,
+                    producing_expert={},
+                    semantic_trace_summary=None,
+                )
+            ],
+            metric_repair_enabled=bool(config.repair_valid_with_metrics),
+            metric_repair_threshold_effective=metric_thr_eff,
+            convergence_reason="failure",
+        )
+        if config.artifact_dir is not None:
+            persist_copilot_artifacts(config, result, config.artifact_dir)
+        return result
     current = draft_resp.ax_source
     provenance_meta = expert_response_to_dict(draft_resp, "draft")
     sort_key = config.score_sort_key
@@ -539,7 +599,27 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
                 context=repair_ctx,
             )
             ingress_payload = _repair_payload_dict(repair_req)
-            repair_resp = config.expert.repair_program(repair_req)
+            try:
+                repair_resp = config.expert.repair_program(repair_req)
+            except OnyxQwenHTTPError as e:
+                fail_rep = _backend_http_failure_report(
+                    config, e, phase="repair", source=source_evaluated, prior_report=report
+                )
+                final_report = fail_rep
+                converged = False
+                convergence_reason = "failure"
+                iterations.append(
+                    CopilotIterationRecord(
+                        index=i,
+                        source=source_evaluated,
+                        evaluation=fail_rep,
+                        producing_payload=producing,
+                        outgoing_repair_error_report=err_full,
+                        producing_expert=iter_expert_meta,
+                        semantic_trace_summary=sem_summary,
+                    )
+                )
+                break
             current = repair_resp.ax_source
             provenance_meta = expert_response_to_dict(repair_resp, "repair")
         else:

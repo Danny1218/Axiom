@@ -1418,6 +1418,15 @@ def main(argv: list[str] | None = None) -> None:
         help="Draft / evaluate / repair loop with an expert until success or iteration budget (see Phase 60).",
     )
     _add_copilot_backend_args(p_cs)
+    p_cs.add_argument(
+        "--timeout",
+        "--expert-timeout",
+        type=float,
+        default=None,
+        dest="expert_timeout",
+        metavar="SEC",
+        help="Per-request HTTP timeout in seconds (default: 120).",
+    )
     _add_copilot_search_loop_args(p_cs)
     _add_copilot_completion_args(p_cs)
     p_cs.add_argument(
@@ -1467,6 +1476,15 @@ def main(argv: list[str] | None = None) -> None:
         help="End-to-end NL→.ax pipeline: search + optional artifact bundle + pipeline summary JSON + final compile check (Phase 71).",
     )
     _add_copilot_backend_args(p_cr)
+    p_cr.add_argument(
+        "--timeout",
+        "--expert-timeout",
+        type=float,
+        default=None,
+        dest="expert_timeout",
+        metavar="SEC",
+        help="Per-request HTTP timeout in seconds (default: 120).",
+    )
     _add_copilot_search_loop_args(p_cr)
     _add_copilot_completion_args(p_cr)
     p_cr.add_argument(

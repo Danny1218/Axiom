@@ -34,6 +34,7 @@ from axiom.experts import (
     ExpertTraceSummaryRequest,
     SemanticExpert,
 )
+from axiom.experts.onyx_qwen import OnyxQwenHTTPError
 
 BROKEN_AX = "y = ++++ ;"
 GOOD_AX = "y = neural([1.0, 2.0]);"
@@ -458,3 +459,47 @@ def test_run_copilot_search_omitted_overrides_leaves_context_without_key():
     )
     run_copilot_search(cfg)
     assert COMPLETION_OVERRIDES_CONTEXT_KEY not in ex.draft_calls[0].context
+
+
+def test_run_copilot_search_draft_http_error_returns_failure_report():
+    class _E:
+        def draft_program(self, request: ExpertDraftRequest) -> ExpertDraftResponse:
+            raise OnyxQwenHTTPError(500, '{"detail":"internal"}')
+
+        def repair_program(self, request: ExpertRepairRequest) -> ExpertDraftResponse:
+            raise AssertionError("no repair")
+
+        def summarize_trace(self, request: ExpertTraceSummaryRequest) -> str:
+            return ""
+
+    ex: SemanticExpert = _E()  # type: ignore[assignment]
+    r = run_copilot_search(
+        CopilotSearchConfig(expert=ex, goal="g", max_iterations=2, mode="compile_only")
+    )
+    assert not r.converged and r.convergence_reason == "failure"
+    assert not r.best_evaluation.success
+    assert len(r.iterations) == 1
+    f = r.best_evaluation.failures[0]
+    assert f.kind == "backend_http"
+    assert f.detail and '"status_code": 500' in f.detail and "internal" in f.detail
+
+
+def test_run_copilot_search_repair_http_oom_kind():
+    class _E:
+        def draft_program(self, request: ExpertDraftRequest) -> ExpertDraftResponse:
+            return ExpertDraftResponse(ax_source=BROKEN_AX, backend_name="t", metadata={})
+
+        def repair_program(self, request: ExpertRepairRequest) -> ExpertDraftResponse:
+            raise OnyxQwenHTTPError(500, "CUDA error: out of memory")
+
+        def summarize_trace(self, request: ExpertTraceSummaryRequest) -> str:
+            return ""
+
+    ex: SemanticExpert = _E()  # type: ignore[assignment]
+    r = run_copilot_search(
+        CopilotSearchConfig(expert=ex, goal="g", max_iterations=2, mode="compile_only")
+    )
+    assert len(r.iterations) == 1
+    f = r.final_report.failures[0]
+    assert f.kind == "backend_oom"
+    assert "CUDA error: out of memory" in f.detail
