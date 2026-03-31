@@ -51,7 +51,7 @@
     },
     {
       "id": "piecewise_threshold",
-      "title": "piecewise_threshold (expert backend)",
+      "title": "piecewise_threshold (deterministic fast-path)",
       "goal": "Write .ax: if x > 0 then y = x else y = 0.0.",
       "domain_context": "Control-flow threshold policy currently proven through expert-backed synthesis.",
       "evaluation_mode": "predict_rows",
@@ -60,15 +60,15 @@
       "expected_rows": [{ "y": 0.0 }, { "y": 0.0 }, { "y": 0.4 }, { "y": 2.0 }],
       "score_sort_key": "neg_mse",
       "metric_pass_min": ["neg_mse", -0.000000000001],
-      "fast_path_expected": false,
-      "backend_expected": "expert_backend",
+      "fast_path_expected": true,
+      "backend_expected": "fast_path",
       "category": "control_flow"
     },
     {
       "id": "three_input_affine",
-      "title": "three_input_affine (expert backend)",
-      "goal": "Write .ax so score = 0.5 * a + 0.3 * b + 0.2 * c.",
-      "domain_context": "Three-input affine blend proven in non-fast-path smoke.",
+      "title": "three_input_affine (deterministic fast-path)",
+      "goal": "Write a valid Axiom .ax program in this repo's DSL that computes score = 0.5 * a + 0.3 * b + 0.2 * c.",
+      "domain_context": "Three-input affine blend proven in focused smoke; use exact symbolic arithmetic in Axiom .ax syntax.",
       "evaluation_mode": "predict_rows",
       "max_unroll": 8,
       "example_input_rows": [
@@ -87,8 +87,8 @@
       ],
       "score_sort_key": "neg_mse",
       "metric_pass_min": ["neg_mse", -0.000000000001],
-      "fast_path_expected": false,
-      "backend_expected": "expert_backend",
+      "fast_path_expected": true,
+      "backend_expected": "fast_path",
       "category": "symbolic_affine"
     },
     {
@@ -136,8 +136,8 @@
     {
       "id": "minmax_blend",
       "title": "minmax_blend (expert backend)",
-      "goal": "Write .ax so score = max(0.0, min(a + b, 1.0)).",
-      "domain_context": "Composed min/max blend proven in backend-only smoke.",
+      "goal": "Write a valid Axiom .ax program in this repo's DSL that computes score = max(0.0, min(a + b, 1.0));",
+      "domain_context": "Composed min/max blend proven in focused smoke; use exact symbolic min/max composition.",
       "evaluation_mode": "predict_rows",
       "max_unroll": 8,
       "example_input_rows": [

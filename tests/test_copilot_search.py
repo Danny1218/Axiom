@@ -230,6 +230,82 @@ def test_repair_prompt_includes_row_mismatches_when_valid_but_wrong_metric():
     assert "row_comparisons" in d
 
 
+def test_repair_prompt_adds_missing_bias_hint_for_constant_offset_rows():
+    rep = ProgramEvaluationReport(
+        success=True,
+        source="y = a + a * b;",
+        compile_stage_reached="predict",
+        mode="predict_rows",
+        row_comparisons=[
+            {"predicted": {"y": 0.0}, "expected": {"y": 1.0}},
+            {"predicted": {"y": 3.0}, "expected": {"y": 4.0}},
+            {"predicted": {"y": -4.0}, "expected": {"y": -3.0}},
+        ],
+    )
+    txt = build_repair_error_report(
+        goal="Write .ax so y = a * b + a + 1.0.",
+        domain_context="",
+        current_ax="y = a + a * b;",
+        evaluation=rep,
+        symbolic_exact_hint=True,
+    )
+    assert "near-constant offset across rows" in txt
+    assert "missing or altered additive bias" in txt
+    assert "preserve additive bias terms exactly" in txt
+
+
+def test_repair_prompt_adds_cross_term_preservation_hint():
+    rep = ProgramEvaluationReport(
+        success=True,
+        source="y = a * 2 + a + 1.0;",
+        compile_stage_reached="predict",
+        mode="predict_rows",
+        row_comparisons=[
+            {"inputs": {"a": 0.0, "b": 0.0}, "predicted": {"y": 1.0}, "expected": {"y": 1.0}},
+            {"inputs": {"a": 1.0, "b": 0.0}, "predicted": {"y": 2.0}, "expected": {"y": 2.0}},
+            {"inputs": {"a": 0.0, "b": 1.0}, "predicted": {"y": 1.0}, "expected": {"y": 1.0}},
+            {"inputs": {"a": 1.0, "b": 1.0}, "predicted": {"y": 3.0}, "expected": {"y": 4.0}},
+            {"inputs": {"a": 2.0, "b": 2.0}, "predicted": {"y": 5.0}, "expected": {"y": 9.0}},
+        ],
+    )
+    txt = build_repair_error_report(
+        goal="Write a valid Axiom .ax program in this repo's DSL that computes y = a * b + a + 1.0;",
+        domain_context="",
+        current_ax="y = a * 2 + a + 1.0;",
+        evaluation=rep,
+        symbolic_exact_hint=True,
+    )
+    assert "Preserve interaction terms exactly (e.g. `a * b` when the goal requires a product of inputs)." in txt
+    assert "Do not replace interaction terms with scaled unary terms." in txt
+    assert "interaction term is missing or wrong" in txt
+    assert "`a * b`" in txt
+    assert "missing interaction term (`a * b`)" in txt
+
+
+def test_repair_prompt_adds_distorted_unary_coefficient_hint():
+    rep = ProgramEvaluationReport(
+        success=True,
+        source="y = 2.0 * a + b + 1.0;",
+        compile_stage_reached="predict",
+        mode="predict_rows",
+        row_comparisons=[
+            {"inputs": {"a": 0.0, "b": 0.0}, "predicted": {"y": 1.0}, "expected": {"y": 1.0}},
+            {"inputs": {"a": 1.0, "b": 0.0}, "predicted": {"y": 3.0}, "expected": {"y": 2.0}},
+            {"inputs": {"a": 2.0, "b": 0.0}, "predicted": {"y": 5.0}, "expected": {"y": 3.0}},
+            {"inputs": {"a": 3.0, "b": 0.0}, "predicted": {"y": 7.0}, "expected": {"y": 4.0}},
+        ],
+    )
+    txt = build_repair_error_report(
+        goal="Write .ax so y = a + b + 1.0.",
+        domain_context="",
+        current_ax="y = 2.0 * a + b + 1.0;",
+        evaluation=rep,
+        symbolic_exact_hint=True,
+    )
+    assert "a coefficient on that variable is likely distorted" in txt
+    assert "do not replace interaction terms with scaled unary terms" in txt.lower()
+
+
 def test_predict_rows_metric_budget_exhausted_when_still_poor():
     ex = ScriptedExpert(BAD_DOUBLE_AX, [BAD_DOUBLE_AX])
     cfg = CopilotSearchConfig(

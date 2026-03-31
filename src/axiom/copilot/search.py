@@ -605,6 +605,204 @@ def format_row_mismatches_for_repair(row_comparisons: Sequence[Mapping[str, Any]
     )
 
 
+def _constant_offset_from_row_comparisons(
+    row_comparisons: Sequence[Mapping[str, Any]],
+) -> Optional[float]:
+    """If one output error is approximately constant across rows, return that signed offset."""
+    deltas: List[float] = []
+    for row in row_comparisons:
+        pred = row.get("predicted")
+        exp = row.get("expected")
+        if not isinstance(pred, Mapping) or not isinstance(exp, Mapping):
+            continue
+        shared = [k for k in exp.keys() if k in pred]
+        if len(shared) != 1:
+            continue
+        k = shared[0]
+        try:
+            d = float(pred[k]) - float(exp[k])
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(d):
+            deltas.append(d)
+    if len(deltas) < 3:
+        return None
+    mean = sum(deltas) / len(deltas)
+    if abs(mean) < 1e-6:
+        return None
+    spread = max(abs(d - mean) for d in deltas)
+    if spread > 1e-4:
+        return None
+    return mean
+
+
+_GOAL_HAS_INTERACTION_TERM = re.compile(r"\b[a-zA-Z_]\w*\s*\*\s*[a-zA-Z_]\w*\b")
+
+
+def _goal_suggests_cross_term_with_additive(goal: str) -> bool:
+    g = (goal or "").lower()
+    return bool(_GOAL_HAS_INTERACTION_TERM.search(g) and "+" in g)
+
+
+def _extract_numeric_row_errors(
+    row_comparisons: Sequence[Mapping[str, Any]],
+) -> tuple[List[Dict[str, float]], List[float], Optional[str]]:
+    """Return numeric inputs per row, signed errors, and target output key when unambiguous."""
+    xs: List[Dict[str, float]] = []
+    errs: List[float] = []
+    out_key: Optional[str] = None
+    for row in row_comparisons:
+        pred = row.get("predicted")
+        exp = row.get("expected")
+        inp = row.get("inputs")
+        if not isinstance(pred, Mapping) or not isinstance(exp, Mapping) or not isinstance(inp, Mapping):
+            continue
+        shared = [k for k in exp.keys() if k in pred]
+        if len(shared) != 1:
+            continue
+        k = str(shared[0])
+        try:
+            y_pred = float(pred[k])
+            y_exp = float(exp[k])
+        except (TypeError, ValueError):
+            continue
+        if not (math.isfinite(y_pred) and math.isfinite(y_exp)):
+            continue
+        num_inp: Dict[str, float] = {}
+        ok_inputs = True
+        for ik, iv in inp.items():
+            try:
+                fv = float(iv)
+            except (TypeError, ValueError):
+                ok_inputs = False
+                break
+            if not math.isfinite(fv):
+                ok_inputs = False
+                break
+            num_inp[str(ik)] = fv
+        if not ok_inputs:
+            continue
+        if out_key is None:
+            out_key = k
+        elif out_key != k:
+            return [], [], None
+        xs.append(num_inp)
+        errs.append(y_pred - y_exp)
+    if len(xs) != len(errs) or not xs:
+        return [], [], None
+    return xs, errs, out_key
+
+
+def _corr_abs(xs: Sequence[float], ys: Sequence[float]) -> float:
+    if len(xs) != len(ys) or len(xs) < 3:
+        return 0.0
+    mx = sum(xs) / len(xs)
+    my = sum(ys) / len(ys)
+    num = 0.0
+    denx = 0.0
+    deny = 0.0
+    for x, y in zip(xs, ys):
+        dx = x - mx
+        dy = y - my
+        num += dx * dy
+        denx += dx * dx
+        deny += dy * dy
+    if denx <= 1e-18 or deny <= 1e-18:
+        return 0.0
+    return abs(num / math.sqrt(denx * deny))
+
+
+def _symbolic_row_error_hints(
+    goal: str,
+    row_comparisons: Sequence[Mapping[str, Any]],
+) -> List[str]:
+    """Heuristic, deterministic symbolic repair hints inferred from row error structure."""
+    hints: List[str] = []
+
+    offset = _constant_offset_from_row_comparisons(row_comparisons)
+    if offset is not None:
+        hints.append(
+            "Row errors suggest a near-constant offset across rows "
+            f"(`predicted - expected ~= {offset:.6g}`): missing or altered additive bias is likely; "
+            "preserve additive bias terms exactly."
+        )
+
+    xs, errs, _ = _extract_numeric_row_errors(row_comparisons)
+    if len(xs) < 3:
+        return hints
+
+    input_keys = sorted(xs[0].keys())
+    for r in xs[1:]:
+        if sorted(r.keys()) != input_keys:
+            return hints
+
+    # Distorted coefficient on one variable: error tracks one input (unary / linear in one ABI name).
+    best_key = ""
+    best_corr = 0.0
+    for k in input_keys:
+        corr = _corr_abs([r[k] for r in xs], errs)
+        if corr > best_corr:
+            best_corr = corr
+            best_key = k
+    if best_key and best_corr >= 0.85:
+        hints.append(
+            f"Error varies strongly with `{best_key}` (corr~{best_corr:.2f}); "
+            "a coefficient on that variable is likely distorted. Preserve variable coefficients exactly; "
+            "do not replace interaction terms with scaled unary terms."
+        )
+    elif best_key and 0.7 <= best_corr < 0.85:
+        hints.append(
+            f"Error correlates with `{best_key}` (corr~{best_corr:.2f}); "
+            "a coefficient on that variable may be distorted — recheck unary terms vs the goal."
+        )
+
+    # Interaction term (e.g. a * b): error aligns with product more than unary — or moderate product signal.
+    if _goal_suggests_cross_term_with_additive(goal) and len(input_keys) >= 2:
+        best_pair = ""
+        best_pair_corr = 0.0
+        for i in range(len(input_keys)):
+            for j in range(i + 1, len(input_keys)):
+                a = input_keys[i]
+                b = input_keys[j]
+                corr = _corr_abs([r[a] * r[b] for r in xs], errs)
+                if corr > best_pair_corr:
+                    best_pair_corr = corr
+                    best_pair = f"{a} * {b}"
+        strong = bool(
+            best_pair and best_pair_corr >= max(0.8, best_corr + 0.05)
+        )
+        moderate = bool(
+            best_pair
+            and 0.5 <= best_pair_corr < max(0.8, best_corr + 0.05)
+            and best_pair_corr + 1e-9 >= best_corr
+        )
+        if strong:
+            hints.append(
+                "Row errors suggest the interaction term is missing or wrong "
+                f"(error tracks `{best_pair}` with corr~{best_pair_corr:.2f}). "
+                f"Preserve interaction terms exactly; keep an explicit `{best_pair}` (or equivalent) in the formula. "
+                "Do not replace interaction terms with scaled unary terms."
+            )
+        elif moderate:
+            hints.append(
+                f"Row errors partially align with `{best_pair}` (corr~{best_pair_corr:.2f}); "
+                f"verify an explicit interaction term like `{best_pair}` is present and correct — "
+                "preserve interaction terms exactly; do not replace interaction terms with scaled unary terms."
+            )
+    return hints
+
+
+def _exact_symbolic_row_repair_preamble() -> str:
+    """Fixed bullets for exact-symbolic tasks with row data (repair prompts only)."""
+    return (
+        "- Preserve interaction terms exactly (e.g. `a * b` when the goal requires a product of inputs).\n"
+        "- Preserve additive bias terms exactly (intercepts, constant offsets).\n"
+        "- Do not replace interaction terms with scaled unary terms.\n"
+        "- Check row errors for: missing interaction term (`a * b`), distorted coefficient on a variable, "
+        "or missing/altered additive bias.\n"
+    )
+
+
 def build_repair_error_report(
     *,
     goal: str,
@@ -644,6 +842,16 @@ def build_repair_error_report(
             "written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed "
             "symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n"
         )
+        if evaluation.row_comparisons:
+            parts.append("### Exact symbolic repair cues")
+            parts.append(
+                "The program compiles but mismatches examples — fix semantics, not syntax only:\n"
+            )
+            parts.append(_exact_symbolic_row_repair_preamble().rstrip())
+            parts.append("")
+            for h in _symbolic_row_error_hints(goal, evaluation.row_comparisons):
+                parts.append(f"- {h}")
+            parts.append("")
     parts.append(
         "## Instructions\n"
         "Return a **corrected full** Axiom (.ax) program as plain source only "

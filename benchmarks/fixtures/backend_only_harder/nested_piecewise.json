@@ -1,0 +1,14 @@
+[
+  {
+    "inputs": { "x": -2.0 },
+    "expected": { "y": 0.0 }
+  },
+  {
+    "inputs": { "x": 0.4 },
+    "expected": { "y": 0.4 }
+  },
+  {
+    "inputs": { "x": 1.8 },
+    "expected": { "y": 1.0 }
+  }
+]

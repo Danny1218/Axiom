@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -286,3 +287,35 @@ def test_copilot_search_config_context_extras_merged():
         repair_context_extras={"extra_k": 1},
     )
     run_copilot_search(cfg)
+
+
+def test_symbolic_generalization_tasks_include_harder_backend_only_ids():
+    root = Path(__file__).resolve().parents[1]
+    task_json = root / "benchmarks" / "copilot_symbolic_and_generalization_tasks.json"
+    raw = json.loads(task_json.read_text(encoding="utf-8"))
+    tasks = benchmark_tasks_from_json_dict(raw)
+    ids = {t.id for t in tasks}
+    assert {"quadratic_with_cross_term", "nested_piecewise", "three_way_maxmin"}.issubset(ids)
+
+
+def test_backend_only_harder_example_fixtures_are_loadable():
+    from axiom.cli import _load_examples_json
+
+    root = Path(__file__).resolve().parents[1]
+    fixtures = [
+        root / "benchmarks" / "fixtures" / "backend_only_harder" / "quadratic_with_cross_term.json",
+        root / "benchmarks" / "fixtures" / "backend_only_harder" / "nested_piecewise.json",
+        root / "benchmarks" / "fixtures" / "backend_only_harder" / "three_way_maxmin.json",
+    ]
+    for path in fixtures:
+        assert path.is_file()
+        input_rows, expected_rows = _load_examples_json(path)
+        assert len(input_rows) == len(expected_rows) and len(input_rows) >= 3
+
+
+def test_smoke_backend_only_script_references_harder_task_examples():
+    root = Path(__file__).resolve().parents[1]
+    script = (root / "scripts" / "smoke_copilot_backend_only.ps1").read_text(encoding="utf-8")
+    assert "examples/quadratic_with_cross_term.json" in script
+    assert "examples/nested_piecewise.json" in script
+    assert "examples/three_way_maxmin.json" in script

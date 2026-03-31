@@ -36,9 +36,20 @@ SYSTEM_DRAFT = (
     "Use JavaScript-like statements terminated with semicolons. "
     "Use `=` for assignment (never `:=`). "
     "Use `if (condition) { ... } else { ... }` and `while (condition) { ... }`. "
-    "Forbidden tokens: `:=`, `>=`, `<=`, `&&`, `||`, `then`; float literals must be canonical (e.g. `2.0`, never bare `2.`). "
+    "Nested control-flow stability (draft + search): you must NOT emit `else if`, `&&`, `||`, "
+    "chained comparisons (e.g. `0.0<x<1.0`), `==` where an assignment is required, or any statement "
+    "missing a terminating `;`. "
+    "Forbidden tokens: `:=`, `>=`, `<=`, `&&`, `||`, `then`, `else if`; float literals must be canonical (e.g. `2.0`, never bare `2.`). "
+    "Do not use dotted variable access like `input.a` or `obj.value`; use direct variables only (e.g. `a`, `b`, `c`, `x`, `y`, `score`). "
+    "Do not use `else if` as a single construct. For nested branching, write `else { if (...) { ... } else { ... } }`. "
+    "Do not use chained comparisons like `a < b < c`, `0.0 < x < 1.0`, or `0.9999<x<1`; split them into nested control flow. "
+    "Never use `==` in assignment position (bad: `y == x` ; good: `y = x;`). "
+    "Every assignment/statement must end with `;` (no missing semicolons). "
+    "Use only well-formed `if`/`else` branches with braces; do not invent invalid branch structure. "
+    "Do not emit malformed literals like `0.0 0` or `1.0 0`. "
     "Comparisons allowed: `>`, `<`, `==`, `!=` only. "
     "Do not use `print`. Do not emit prose, commentary, or explanations unless the user explicitly asks for them. "
+    "Return only valid `.ax` source with a semicolon on every assignment statement. "
     "When you use a markdown fence, use the info string `ax` so the block is ```ax ... ```.\n"
     "Canonical valid examples:\n"
     "  y = x * 2.0;\n"
@@ -51,8 +62,19 @@ SYSTEM_REPAIR = (
     "Do not wrap in markdown unless you must; if you fence, use ```ax ... ```. "
     "Match syntax to this repo: `=` assignment, semicolon-terminated statements, `if`/`while` with braces, "
     "`neural(features)` or `neural(features, \"liquid\")`. Never use `:=` or `print`. "
-    "Forbidden: `:=`, `>=`, `<=`, `&&`, `||`, `then`; no bare float `2.` — use `2.0`. "
+    "Nested control-flow stability (repair + search): you must NOT emit `else if`, `&&`, `||`, "
+    "chained comparisons (e.g. `0.0<x<1.0`), `==` where an assignment is required, or any statement "
+    "missing a terminating `;`. "
+    "Forbidden: `:=`, `>=`, `<=`, `&&`, `||`, `then`, `else if`; no bare float `2.` — use `2.0`. "
+    "Do not use dotted variable access like `input.a` or `obj.value`; use direct variables only (e.g. `a`, `b`, `c`, `x`, `y`, `score`). "
+    "Do not use `else if` as a single construct. For nested branching, write `else { if (...) { ... } else { ... } }`. "
+    "Do not use chained comparisons like `a < b < c`, `0.0 < x < 1.0`, or `0.9999<x<1`; split them into nested control flow. "
+    "Never use `==` in assignment position (bad: `y == x` ; good: `y = x;`). "
+    "Every assignment/statement must end with `;` (no missing semicolons). "
+    "Use only well-formed `if`/`else` branches with braces; do not invent invalid branch structure. "
+    "Do not emit malformed literals like `0.0 0` or `1.0 0`. "
     "Comparisons: `>`, `<`, `==`, `!=` only; if parse errors mention stray `=`, `|`, or `.`, rewrite to supported operators and canonical floats.\n"
+    "Return only valid `.ax` source with a semicolon on every assignment statement. "
     "Repair hint — bad → good: `x := 1` → `x = 1.0;` ; `print(y);` → delete or assign to an output variable instead."
 )
 
@@ -70,11 +92,20 @@ SYNTAX_SUMMARY = """Syntax summary (this repo's `.ax` DSL):
 FORBIDDEN_SYNTAX_BLOCK = """Forbidden syntax (not in this grammar — do not emit):
 - Tokens: `:=`, `>=`, `<=`, `&&`, `||`, and the keyword `then`
 - Unsupported control-flow patterns: `if (cond) then ...`, `if (cond) then { ... }`, `then (...)`
+- Dotted variable access: `input.a`, `foo.bar`, `obj.value`
+- Nested search stability — never emit: `else if` (as one keyword), `&&`, `||`, chained comparisons, `==` as assignment, or missing `;`
+- `else if` as a single construct (nest explicitly with `else { if (...) { ... } else { ... } }`)
+- Chained comparisons like `a < b < c`, `0.0 < x < 1.0`, `0.0<x<1.0`, or `0.9999<x<1` — use nested `if`/`else` only (never chained comparisons)
+- `==` in assignment position (bad: `y == x` — use `y = x;`)
+- Missing semicolons after assignments/statements (every `y = ...` line ends with `;`)
+- Malformed numeric literals like `0.0 0` or `1.0 0`
 - Float format: do not use a lone trailing dot (e.g. `2.`) — use canonical decimals like `2.0`"""
 
 ALLOWED_SYNTAX_BLOCK = """Allowed syntax:
 - Assignment: `y = x * 2.0;`
 - `if`: `if (x > 0) { y = x; } else { y = 0.0; }`
+- Use the real variable names from examples directly (`a`, `b`, `c`, `x`, `y`, `score`) — no dotted prefixes
+- Nested branching form: `else { if (...) { ... } else { ... } }`
 - Comparisons only: `>`, `<`, `==`, `!=` (express range checks with `min`/`max` and/or nested `if`/`else`, not `&&`/`||`/`>=`/`<=`)"""
 
 REPAIR_PARSE_ERROR_RULE = """Repair-specific rule: if parse errors mention unexpected `=`, `|`, or `.`, rewrite using only grammar-supported operators and canonical floats like `2.0` (not `2.`)."""
@@ -82,16 +113,56 @@ REPAIR_PARSE_ERROR_RULE = """Repair-specific rule: if parse errors mention unexp
 SYNTAX_BAD_GOOD_FEWSHOT = """Few-shot bad → good rewrites:
 1. `y := x * 2` → `y = x * 2.0;`
 2. `if (x >= 0 && x <= 1) { ... }` → use only `>`, `<`, `==`, `!=`, and/or `min`/`max` with nested `if`/`else` — not `&&`, `||`, `>=`, or `<=`
-3. `y = x + 2.;` → `y = x + 2.0;`"""
+3. `y = x + 2.;` → `y = x + 2.0;`
+4. `score = max(min(input.a, input.b), input.c);` → `score = max(min(a, b), c);`
+5. `x = 1.0 0;` → `x = 1.0;`"""
 
 CONTROL_FLOW_FEWSHOT = """Control-flow few-shot rewrites (grammar-supported only):
-1. `if (x == 0) then y = 0.0 else y = x;` →
+
+Canonical nested `if`/`else` (use this shape for piecewise / range logic — copy structure, adapt conditions):
+```ax
+if (x < 0.0) {
+    y = 0.0;
+} else {
+    if (x < 1.0) {
+        y = x;
+    } else {
+        y = 1.0;
+    }
+}
+```
+
+Bad → good:
+1. bad: `else if (x < 1.0) { ... }`
+   good: `else { if (x < 1.0) { ... } else { ... } }` (never `else if` as one construct)
+2. bad: `if (0.9999<x<1) { y = x; }` — never chained comparisons; rewrite with nested `if`/`else` like the canonical example (split `x` lower/upper bounds into separate conditions).
+3. bad: `if (0.0<x<1.0) { y = x; }` or `if (0.0 < x < 1.0) { ... }`
+   good: nested `if`/`else` as in the canonical example above — never chained comparisons
+4. bad: `y == x` (assignment intent)
+   good: `y = x;`
+5. `if (x == 0) then y = 0.0 else y = x;` →
 ```ax
 if (x == 0) { y = 0.0; } else { y = x; }
 ```
-2. `if (x < 0) then (y = 0.0) else (y = x)` →
+6. `if (x < 0) then (y = 0.0) else (y = x)` →
 ```ax
 if (x < 0) { y = 0.0; } else { y = x; }
+```
+7. bad: `if (x <= 0) { ... }`
+   good: use only `<`, `>`, `==`, `!=` (no `<=`), with strict comparisons and nested `if`/`else` as needed.
+8. Simple two-branch `if` (valid when you do not need a third region): `if (x < 0.0) { y = 0.0; } else { y = x; }`
+9. bad: `if (x <= 0) { y = 0.0; } else { y = x; }` when you need an extra boundary
+   good:
+```ax
+if (x < 0.0) {
+    y = 0.0;
+} else {
+    if (x == 0.0) {
+        y = 0.0;
+    } else {
+        y = x;
+    }
+}
 ```"""
 
 DRAFT_FEWSHOT = """Tiny example (valid `.ax`):
@@ -249,7 +320,8 @@ def user_prompt_draft(goal: str, context: Mapping[str, Any]) -> str:
             f"{SYNTAX_BAD_GOOD_FEWSHOT}\n\n",
             f"{CONTROL_FLOW_FEWSHOT}\n\n",
             f"{DRAFT_FEWSHOT}\n\n",
-            "Respond with the complete `.ax` program only (fenced with `ax` if you use a fence).",
+            "Respond with the complete `.ax` program only (fenced with `ax` if you use a fence). "
+            "Return only valid `.ax` source with a semicolon on every assignment statement.",
         ]
     )
     return "".join(parts)
@@ -279,7 +351,8 @@ def user_prompt_repair(goal: str, current_program: str, error_report: str, conte
     parts.extend(
         [
             f"Current program:\n```ax\n{current_program.rstrip()}\n```\n\n",
-            "Return the corrected full `.ax` program only (fenced with `ax` if you must).",
+            "Return the corrected full `.ax` program only (fenced with `ax` if you must). "
+            "Return only valid `.ax` source with a semicolon on every assignment statement.",
         ]
     )
     return "".join(parts)

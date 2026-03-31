@@ -12,19 +12,14 @@ Set-Location $root
 $NegMseMinDefault = -1e-9
 
 function _Get-NegMse {
-    param(
-        [Parameter(Mandatory = $true)]
-        $Metrics
-    )
+    param([Parameter(Mandatory = $true)]$Metrics)
     if ($null -eq $Metrics) { return $null }
-
     if ($Metrics -is [System.Collections.IDictionary]) {
         if ($Metrics.Contains("neg_mse")) {
             try { return [double]$Metrics["neg_mse"] } catch { return $null }
         }
         return $null
     }
-
     if ($Metrics -is [System.Array] -or $Metrics -is [System.Collections.IEnumerable] -and -not ($Metrics -is [string])) {
         foreach ($item in $Metrics) {
             if ($null -eq $item) { continue }
@@ -39,7 +34,6 @@ function _Get-NegMse {
         }
         return $null
     }
-
     $prop = $Metrics.PSObject.Properties["neg_mse"]
     if ($null -ne $prop) {
         try { return [double]$prop.Value } catch { return $null }
@@ -49,10 +43,8 @@ function _Get-NegMse {
 
 function _Get-PropValue {
     param(
-        [Parameter(Mandatory = $true)]
-        $Object,
-        [Parameter(Mandatory = $true)]
-        [string]$Name
+        [Parameter(Mandatory = $true)]$Object,
+        [Parameter(Mandatory = $true)][string]$Name
     )
     if ($null -eq $Object) { return $null }
     $p = $Object.PSObject.Properties[$Name]
@@ -63,12 +55,7 @@ function _Get-PropValue {
 function _Read-JsonDoc {
     param([string]$Path)
     if (-not (Test-Path -LiteralPath $Path)) { return $null }
-    try {
-        return (Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json)
-    }
-    catch {
-        return $null
-    }
+    try { return (Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json) } catch { return $null }
 }
 
 function _BackendKind {
@@ -80,112 +67,103 @@ function _BackendKind {
 
 $steps = @(
     @{
-        Name = "copilot-search three_input_affine"
+        Name = "copilot-search quadratic_with_cross_term"
         Type = "search"
-        ReportPath = "debug_benchmark_failures_three_input_affine/search_report_cli.json"
-        IterationsPath = "debug_benchmark_failures_three_input_affine/iterations.json"
+        ReportPath = "debug_backend_only_quadratic_with_cross_term/search_report_cli.json"
+        IterationsPath = "debug_backend_only_quadratic_with_cross_term/iterations.json"
         NegMseMin = $NegMseMinDefault
         Command = @(
             "axiom", "copilot-search",
             "--backend", $Backend,
-            "--goal", "Write a valid Axiom .ax program in this repo's DSL that computes score = 0.5 * a + 0.3 * b + 0.2 * c.",
-            "--examples-json", "examples/three_input_affine.json",
+            "--goal", "Write .ax so y = a * b + a + 1.0.",
+            "--examples-json", "benchmarks/fixtures/backend_only_harder/quadratic_with_cross_term.json",
             "--iterations", "10",
             "--expert-url", $ExpertUrl,
             "--expert-model", $ExpertModel,
             "--expert-api-key", $ExpertApiKey,
-            "--artifact-dir", "debug_benchmark_failures_three_input_affine",
-            "--report-out", "debug_benchmark_failures_three_input_affine/search_report_cli.json",
-            "--out", "debug_benchmark_failures_three_input_affine/best.ax"
+            "--artifact-dir", "debug_backend_only_quadratic_with_cross_term",
+            "--report-out", "debug_backend_only_quadratic_with_cross_term/search_report_cli.json",
+            "--out", "debug_backend_only_quadratic_with_cross_term/best.ax"
         )
     },
     @{
-        Name = "copilot-run three_input_affine"
+        Name = "copilot-run quadratic_with_cross_term"
         Type = "run"
-        ReportPath = "showcase_benchmark_failures_three_input_affine/pipeline_summary.json"
-        IterationsPath = "showcase_benchmark_failures_three_input_affine/iterations.json"
+        ReportPath = "showcase_backend_only_quadratic_with_cross_term/pipeline_summary.json"
+        IterationsPath = "showcase_backend_only_quadratic_with_cross_term/iterations.json"
         NegMseMin = $NegMseMinDefault
         Command = @(
             "axiom", "copilot-run",
             "--backend", $Backend,
-            "--goal", "Write a valid Axiom .ax program in this repo's DSL that computes score = 0.5 * a + 0.3 * b + 0.2 * c.",
-            "--examples-json", "examples/three_input_affine.json",
+            "--goal", "Write .ax so y = a * b + a + 1.0.",
+            "--examples-json", "benchmarks/fixtures/backend_only_harder/quadratic_with_cross_term.json",
             "--iterations", "10",
             "--expert-url", $ExpertUrl,
             "--expert-model", $ExpertModel,
             "--expert-api-key", $ExpertApiKey,
-            "--artifact-dir", "showcase_benchmark_failures_three_input_affine",
-            "--summary-out", "showcase_benchmark_failures_three_input_affine/pipeline_summary.json",
-            "--out", "showcase_benchmark_failures_three_input_affine.ax"
+            "--artifact-dir", "showcase_backend_only_quadratic_with_cross_term",
+            "--summary-out", "showcase_backend_only_quadratic_with_cross_term/pipeline_summary.json",
+            "--out", "showcase_backend_only_quadratic_with_cross_term.ax"
         )
     },
     @{
-        Name = "copilot-search minmax_blend"
+        Name = "copilot-search nested_piecewise"
         Type = "search"
-        ReportPath = "debug_benchmark_failures_minmax_blend/search_report_cli.json"
-        IterationsPath = "debug_benchmark_failures_minmax_blend/iterations.json"
+        ReportPath = "debug_backend_only_nested_piecewise/search_report_cli.json"
+        IterationsPath = "debug_backend_only_nested_piecewise/iterations.json"
         NegMseMin = $NegMseMinDefault
         Command = @(
             "axiom", "copilot-search",
             "--backend", $Backend,
-            "--goal", "Write a valid Axiom .ax program in this repo's DSL that computes score = max(0.0, min(a + b, 1.0));",
-            "--examples-json", "examples/minmax_blend.json",
+            "--goal", "Write .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.",
+            "--examples-json", "benchmarks/fixtures/backend_only_harder/nested_piecewise.json",
             "--iterations", "10",
             "--expert-url", $ExpertUrl,
             "--expert-model", $ExpertModel,
             "--expert-api-key", $ExpertApiKey,
-            "--artifact-dir", "debug_benchmark_failures_minmax_blend",
-            "--report-out", "debug_benchmark_failures_minmax_blend/search_report_cli.json",
-            "--out", "debug_benchmark_failures_minmax_blend/best.ax"
+            "--artifact-dir", "debug_backend_only_nested_piecewise",
+            "--report-out", "debug_backend_only_nested_piecewise/search_report_cli.json",
+            "--out", "debug_backend_only_nested_piecewise/best.ax"
         )
     },
     @{
-        Name = "copilot-run minmax_blend"
+        Name = "copilot-run nested_piecewise"
         Type = "run"
-        ReportPath = "showcase_benchmark_failures_minmax_blend/pipeline_summary.json"
-        IterationsPath = "showcase_benchmark_failures_minmax_blend/iterations.json"
+        ReportPath = "showcase_backend_only_nested_piecewise/pipeline_summary.json"
+        IterationsPath = "showcase_backend_only_nested_piecewise/iterations.json"
         NegMseMin = $NegMseMinDefault
         Command = @(
             "axiom", "copilot-run",
             "--backend", $Backend,
-            "--goal", "Write a valid Axiom .ax program in this repo's DSL that computes score = max(0.0, min(a + b, 1.0));",
-            "--examples-json", "examples/minmax_blend.json",
+            "--goal", "Write .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.",
+            "--examples-json", "benchmarks/fixtures/backend_only_harder/nested_piecewise.json",
             "--iterations", "10",
             "--expert-url", $ExpertUrl,
             "--expert-model", $ExpertModel,
             "--expert-api-key", $ExpertApiKey,
-            "--artifact-dir", "showcase_benchmark_failures_minmax_blend",
-            "--summary-out", "showcase_benchmark_failures_minmax_blend/pipeline_summary.json",
-            "--out", "showcase_benchmark_failures_minmax_blend.ax"
+            "--artifact-dir", "showcase_backend_only_nested_piecewise",
+            "--summary-out", "showcase_backend_only_nested_piecewise/pipeline_summary.json",
+            "--out", "showcase_backend_only_nested_piecewise.ax"
         )
     }
 )
 
 $processPassCount = 0
-$qualityPassCount = 0
 $processFailCount = 0
+$qualityPassCount = 0
 
 foreach ($step in $steps) {
     Write-Host "==> Running: $($step.Name)" -ForegroundColor Cyan
     & $step.Command[0] $step.Command[1..($step.Command.Length - 1)]
     $exitCode = $LASTEXITCODE
-    if ($exitCode -eq 0) {
-        $processPassCount++
-    }
-    else {
-        $processFailCount++
-    }
+    if ($exitCode -eq 0) { $processPassCount++ } else { $processFailCount++ }
 
     $qualityOk = $true
     $converged = $null
     $negMse = $null
     $backendName = "unknown"
-    $backendKind = "unknown"
     $why = @()
-    if ($exitCode -ne 0) {
-        # Process errors are diagnostic only; quality verdict still comes from parsed artifacts.
-        $why += ("process_exit={0}" -f $exitCode)
-    }
+    if ($exitCode -ne 0) { $why += ("process_exit={0}" -f $exitCode) }
 
     $doc = _Read-JsonDoc -Path $step.ReportPath
     if ($null -eq $doc) {
@@ -217,9 +195,7 @@ foreach ($step in $steps) {
             $finalEvalMetrics = _Get-PropValue -Object $finalEvaluation -Name "metrics"
             $bestEvalMetrics = _Get-PropValue -Object $bestEvaluation -Name "metrics"
             $negMse = _Get-NegMse -Metrics $finalEvalMetrics
-            if ($null -eq $negMse) {
-                $negMse = _Get-NegMse -Metrics $bestEvalMetrics
-            }
+            if ($null -eq $negMse) { $negMse = _Get-NegMse -Metrics $bestEvalMetrics }
         }
 
         if (($null -ne $converged) -and (-not [bool]$converged)) {
@@ -243,20 +219,16 @@ foreach ($step in $steps) {
             $first = $iterations[0]
             $producing = _Get-PropValue -Object $first -Name "producing_expert"
             $bn = _Get-PropValue -Object $producing -Name "backend_name"
-            if (-not [string]::IsNullOrWhiteSpace([string]$bn)) {
-                $backendName = [string]$bn
-            }
+            if (-not [string]::IsNullOrWhiteSpace([string]$bn)) { $backendName = [string]$bn }
         }
     }
     $backendKind = _BackendKind -BackendName $backendName
-    if ($backendKind -eq "deterministic_fast_path") {
+    if ($backendKind -ne "expert_backend") {
         $qualityOk = $false
-        $why += "deterministic_fast_path_used"
+        $why += "non_expert_backend_used"
     }
 
-    if ($qualityOk) {
-        $qualityPassCount++
-    }
+    if ($qualityOk) { $qualityPassCount++ }
 
     $status = if ($qualityOk) { "PASS" } else { "FAIL" }
     $convText = if ($null -eq $converged) { "n/a" } else { "$converged" }

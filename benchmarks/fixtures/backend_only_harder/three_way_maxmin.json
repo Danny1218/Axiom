@@ -1,0 +1,14 @@
+[
+  {
+    "inputs": { "a": 1.0, "b": 2.0, "c": 0.5 },
+    "expected": { "score": 1.0 }
+  },
+  {
+    "inputs": { "a": -1.0, "b": 3.0, "c": 0.0 },
+    "expected": { "score": 0.0 }
+  },
+  {
+    "inputs": { "a": 4.0, "b": 2.0, "c": 3.5 },
+    "expected": { "score": 3.5 }
+  }
+]

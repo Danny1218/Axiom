@@ -128,6 +128,23 @@ def test_system_repair_requires_ax_only():
     assert "print" in SYSTEM_REPAIR.lower()
 
 
+def test_draft_and_repair_prompts_forbid_backend_only_failure_patterns():
+    assert "input.a" in SYSTEM_DRAFT and "input.a" in SYSTEM_REPAIR
+    assert "<=" in SYSTEM_DRAFT and "<=" in SYSTEM_REPAIR
+    assert "else if" in SYSTEM_DRAFT and "else if" in SYSTEM_REPAIR
+    assert "0.0 0" in SYSTEM_DRAFT and "1.0 0" in SYSTEM_REPAIR
+
+
+def test_prompt_contains_backend_only_fewshot_rewrites():
+    p = user_prompt_draft("g", {"example_input_rows": [{"a": 1.0}], "expected_outputs": [{"score": 1.0}]})
+    assert "score = max(min(input.a, input.b), input.c);" in p
+    assert "score = max(min(a, b), c);" in p
+    assert "else if (x < 1.0)" in p
+    assert "else { if (x < 1.0)" in p
+    assert "if (x <= 0) { y = 0.0; }" in p
+    assert "if (x < 0.0) { y = 0.0; } else { y = x; }" in p
+
+
 def test_user_prompt_draft_is_deterministic():
     a = user_prompt_draft("g", {"b": 1, "a": 2})
     b = user_prompt_draft("g", {"a": 2, "b": 1})
@@ -265,6 +282,12 @@ def test_split_ax_normalizes_colon_eq_and_trailing_dot_float():
     assert r.extraction.get("normalized_trailing_dot_float") is True
     # Detected from raw response before normalization.
     assert "assign_colon_eq" in (r.extraction.get("forbidden_tokens_detected") or [])
+
+
+def test_split_ax_normalization_does_not_introduce_dotted_access():
+    r = split_ax_and_prose("```ax\nscore := max(min(a, b), c);\n```")
+    assert r.ax_source == "score = max(min(a, b), c);"
+    assert "input." not in r.ax_source
 
 
 def test_draft_metadata_includes_normalization_flags():
