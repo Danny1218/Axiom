@@ -24,6 +24,7 @@ from axiom.copilot.benchmarks import default_neg_mse_score_fn
 from axiom.copilot.search import (
     DEFAULT_METRIC_REPAIR_THRESHOLD,
     _is_better,
+    _try_linear_xy_fast_path,
     is_exact_symbolic_examples_task,
     merge_completion_overrides_into_context,
 )
@@ -503,3 +504,90 @@ def test_run_copilot_search_repair_http_oom_kind():
     f = r.final_report.failures[0]
     assert f.kind == "backend_oom"
     assert "CUDA error: out of memory" in f.detail
+
+
+def test_linear_xy_fast_path_skips_expert_and_emits_canonical_source():
+    ex = ScriptedExpert("SHOULD_NOT_USE", [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="double x",
+        max_iterations=2,
+        mode="predict_rows",
+        example_input_rows=[{"x": 0.0}, {"x": 1.0}],
+        expected_rows=[{"y": 0.0}, {"y": 2.0}],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+        repair_valid_with_metrics=False,
+    )
+    out = run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 0
+    assert out.best_source.strip() == "y = x * 2.0;"
+    assert out.iterations[0].producing_expert["backend_name"] == "linear_xy_fast_path"
+    assert out.iterations[0].producing_expert["metadata"].get("fast_path") == "linear_xy"
+    assert out.converged and out.best_evaluation.success
+
+
+def test_linear_xy_fast_path_not_used_single_example_row():
+    ex = ScriptedExpert(GOOD_DOUBLE_AX, [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="double x",
+        max_iterations=2,
+        mode="predict_rows",
+        example_input_rows=EX_IN,
+        expected_rows=EX_EXP,
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+        repair_valid_with_metrics=False,
+    )
+    run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 1
+
+
+def test_linear_xy_fast_path_not_used_non_collinear():
+    ex = ScriptedExpert(GOOD_DOUBLE_AX, [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="double x",
+        max_iterations=2,
+        mode="predict_rows",
+        example_input_rows=[{"x": 0.0}, {"x": 1.0}, {"x": 2.0}],
+        expected_rows=[{"y": 0.0}, {"y": 1.0}, {"y": 5.0}],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+        repair_valid_with_metrics=False,
+    )
+    run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 1
+
+
+def test_linear_xy_fast_path_affine_with_intercept():
+    ex = ScriptedExpert("noop", [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="linear formula",
+        max_iterations=1,
+        mode="predict_rows",
+        example_input_rows=[{"x": 0.0}, {"x": 1.0}],
+        expected_rows=[{"y": 1.0}, {"y": 3.0}],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+        repair_valid_with_metrics=False,
+    )
+    out = run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 0
+    assert out.best_source.strip() == "y = x * 2.0 + 1.0;"
+
+
+def test_try_linear_xy_fast_path_none_when_keys_not_only_x_y():
+    cfg = CopilotSearchConfig(
+        expert=ScriptedExpert(GOOD_AX, []),
+        goal="double x",
+        max_iterations=1,
+        mode="predict_rows",
+        example_input_rows=[{"x": 1.0, "z": 0.0}, {"x": 2.0, "z": 0.0}],
+        expected_rows=[{"y": 2.0}, {"y": 4.0}],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+    )
+    assert _try_linear_xy_fast_path(cfg) is None

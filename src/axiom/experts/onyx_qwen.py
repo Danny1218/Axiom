@@ -36,6 +36,8 @@ SYSTEM_DRAFT = (
     "Use JavaScript-like statements terminated with semicolons. "
     "Use `=` for assignment (never `:=`). "
     "Use `if (condition) { ... } else { ... }` and `while (condition) { ... }`. "
+    "Forbidden tokens: `:=`, `>=`, `<=`, `&&`, `||`, `then`; float literals must be canonical (e.g. `2.0`, never bare `2.`). "
+    "Comparisons allowed: `>`, `<`, `==`, `!=` only. "
     "Do not use `print`. Do not emit prose, commentary, or explanations unless the user explicitly asks for them. "
     "When you use a markdown fence, use the info string `ax` so the block is ```ax ... ```.\n"
     "Canonical valid examples:\n"
@@ -48,7 +50,9 @@ SYSTEM_REPAIR = (
     "Return ONLY the corrected full `.ax` program — no explanation, no preamble, no bullet points. "
     "Do not wrap in markdown unless you must; if you fence, use ```ax ... ```. "
     "Match syntax to this repo: `=` assignment, semicolon-terminated statements, `if`/`while` with braces, "
-    "`neural(features)` or `neural(features, \"liquid\")`. Never use `:=` or `print`.\n"
+    "`neural(features)` or `neural(features, \"liquid\")`. Never use `:=` or `print`. "
+    "Forbidden: `:=`, `>=`, `<=`, `&&`, `||`, `then`; no bare float `2.` — use `2.0`. "
+    "Comparisons: `>`, `<`, `==`, `!=` only; if parse errors mention stray `=`, `|`, or `.`, rewrite to supported operators and canonical floats.\n"
     "Repair hint — bad → good: `x := 1` → `x = 1.0;` ; `print(y);` → delete or assign to an output variable instead."
 )
 
@@ -62,6 +66,22 @@ SYNTAX_SUMMARY = """Syntax summary (this repo's `.ax` DSL):
 - Vectors like `[x, y]`. Use `neural(features)` or `neural(features, "liquid")`.
 - Control flow: `if (cond) { ... } else { ... }`, `while (cond) { ... }`.
 - No `print`."""
+
+FORBIDDEN_SYNTAX_BLOCK = """Forbidden syntax (not in this grammar — do not emit):
+- Tokens: `:=`, `>=`, `<=`, `&&`, `||`, and the keyword `then`
+- Float format: do not use a lone trailing dot (e.g. `2.`) — use canonical decimals like `2.0`"""
+
+ALLOWED_SYNTAX_BLOCK = """Allowed syntax:
+- Assignment: `y = x * 2.0;`
+- `if`: `if (x > 0) { y = x; } else { y = 0.0; }`
+- Comparisons only: `>`, `<`, `==`, `!=` (express range checks with `min`/`max` and/or nested `if`/`else`, not `&&`/`||`/`>=`/`<=`)"""
+
+REPAIR_PARSE_ERROR_RULE = """Repair-specific rule: if parse errors mention unexpected `=`, `|`, or `.`, rewrite using only grammar-supported operators and canonical floats like `2.0` (not `2.`)."""
+
+SYNTAX_BAD_GOOD_FEWSHOT = """Few-shot bad → good rewrites:
+1. `y := x * 2` → `y = x * 2.0;`
+2. `if (x >= 0 && x <= 1) { ... }` → use only `>`, `<`, `==`, `!=`, and/or `min`/`max` with nested `if`/`else` — not `&&`, `||`, `>=`, or `<=`
+3. `y = x + 2.;` → `y = x + 2.0;`"""
 
 DRAFT_FEWSHOT = """Tiny example (valid `.ax`):
 ```ax
@@ -213,6 +233,9 @@ def user_prompt_draft(goal: str, context: Mapping[str, Any]) -> str:
     parts.extend(
         [
             f"{SYNTAX_SUMMARY}\n\n",
+            f"{FORBIDDEN_SYNTAX_BLOCK}\n\n",
+            f"{ALLOWED_SYNTAX_BLOCK}\n\n",
+            f"{SYNTAX_BAD_GOOD_FEWSHOT}\n\n",
             f"{DRAFT_FEWSHOT}\n\n",
             "Respond with the complete `.ax` program only (fenced with `ax` if you use a fence).",
         ]
@@ -228,7 +251,16 @@ def user_prompt_repair(goal: str, current_program: str, error_report: str, conte
     ]
     _append_examples_semantics_if_needed(parts, context)
     _append_exact_symbolic_math_if_needed(parts, context)
-    parts.extend([f"{SYNTAX_SUMMARY}\n\n", f"{REPAIR_FEWSHOT}\n\n"])
+    parts.extend(
+        [
+            f"{SYNTAX_SUMMARY}\n\n",
+            f"{FORBIDDEN_SYNTAX_BLOCK}\n\n",
+            f"{ALLOWED_SYNTAX_BLOCK}\n\n",
+            f"{REPAIR_PARSE_ERROR_RULE}\n\n",
+            f"{SYNTAX_BAD_GOOD_FEWSHOT}\n\n",
+            f"{REPAIR_FEWSHOT}\n\n",
+        ]
+    )
     _append_repair_unroll_hints_if_needed(parts, current_program)
     _append_repair_neural_to_symbolic_if_needed(parts, current_program, context)
     parts.extend(
@@ -342,6 +374,33 @@ def _finalize_extracted_source(ax: str, extraction: dict[str, Any]) -> str:
     return ax
 
 
+# Lone `2.` → `2.0` without touching `2.0`, `3.14`, or the fractional part after `.` in `2.0.`
+_TRAILING_DOT_FLOAT = re.compile(r"(?<!\.\d)(\d+)\.(?![0-9.])")
+
+
+def _normalize_ax_source_conservative(ax: str) -> tuple[str, dict[str, bool]]:
+    """Small deterministic fixes on extracted source; sets flags only when something changed."""
+    meta: dict[str, bool] = {}
+    out = ax
+    if ":=" in out:
+        out = out.replace(":=", "=")
+        meta["normalized_colon_eq"] = True
+    out2, n = _TRAILING_DOT_FLOAT.subn(r"\1.0", out)
+    if n:
+        out = out2
+        meta["normalized_trailing_dot_float"] = True
+    return out, meta
+
+
+def _split_ax_result(ax: str, explanation: Optional[str], extraction: dict[str, Any], raw: str) -> AxSplitResult:
+    extraction.update(_forbidden_flags(ax, raw))
+    ax = _finalize_extracted_source(ax, extraction)
+    ax, norm_meta = _normalize_ax_source_conservative(ax)
+    extraction.update(norm_meta)
+    extraction.update(_pattern_warnings(ax))
+    return AxSplitResult(ax, explanation, extraction)
+
+
 def _best_code_run(lines: list[str]) -> tuple[int, int] | None:
     """Return (start, end) line indices of best contiguous run of code-like lines (end exclusive)."""
     scores = [_line_code_score(l) for l in lines]
@@ -372,13 +431,6 @@ def _score_fence_body(body: str) -> int:
         return sum(_line_code_score(l) for l in ls)
     a, b = run
     return sum(_line_code_score(l) for l in ls[a:b])
-
-
-def _split_ax_result(ax: str, explanation: Optional[str], extraction: dict[str, Any], raw: str) -> AxSplitResult:
-    extraction.update(_forbidden_flags(ax, raw))
-    ax = _finalize_extracted_source(ax, extraction)
-    extraction.update(_pattern_warnings(ax))
-    return AxSplitResult(ax, explanation, extraction)
 
 
 def split_ax_and_prose(raw: str) -> AxSplitResult:

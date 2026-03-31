@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -18,7 +19,7 @@ from axiom.copilot.models import (
     TrainTabularParams,
 )
 from axiom.copilot.summarize import safe_summarize_evaluation
-from axiom.experts.base import ExpertDraftRequest, ExpertRepairRequest, SemanticExpert
+from axiom.experts.base import ExpertDraftRequest, ExpertDraftResponse, ExpertRepairRequest, SemanticExpert
 from axiom.experts.onyx_qwen import COMPLETION_OVERRIDES_CONTEXT_KEY, OnyxQwenHTTPError, ax_source_metadata_flags
 
 ExpertRequestPayload = Dict[str, Any]
@@ -65,6 +66,82 @@ def is_exact_symbolic_examples_task(config: CopilotSearchConfig) -> bool:
     if len(g) <= 500 and _GOAL_EXACT_SYMBOLIC_EXTRA.search(g):
         return True
     return False
+
+
+def _linear_xy_coeff_str(v: float) -> str:
+    """Deterministic float formatting for emitted ``.ax`` literals."""
+    if not math.isfinite(v):
+        return repr(v)
+    r = round(v)
+    if abs(v - r) < 1e-9:
+        return f"{float(r):.1f}"
+    s = format(v, ".12g")
+    s = s.rstrip("0").rstrip(".") if "." in s else s
+    return s if s else "0.0"
+
+
+def _linear_xy_canonical_source(a: float, b: float) -> str:
+    ca, cb = _linear_xy_coeff_str(a), _linear_xy_coeff_str(b)
+    if math.isclose(b, 0.0, abs_tol=1e-12, rel_tol=1e-12):
+        return f"y = x * {ca};\n"
+    return f"y = x * {ca} + {cb};\n"
+
+
+def _try_linear_xy_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
+    """If ``exact_symbolic_examples_task`` and examples are exact ``y = a*x+b`` over ``x``/``y``, return draft; else None."""
+    if not is_exact_symbolic_examples_task(config):
+        return None
+    if config.mode != "predict_rows":
+        return None
+    inp = config.example_input_rows
+    exp = config.expected_rows
+    if not inp or not exp or len(inp) != len(exp):
+        return None
+    n = len(inp)
+    pts: List[tuple[float, float]] = []
+    for row_in, row_ex in zip(inp, exp):
+        if not isinstance(row_in, Mapping) or not isinstance(row_ex, Mapping):
+            return None
+        if set(row_in.keys()) != {"x"} or set(row_ex.keys()) != {"y"}:
+            return None
+        try:
+            x = float(row_in["x"])
+            y = float(row_ex["y"])
+        except (TypeError, ValueError, KeyError):
+            return None
+        pts.append((x, y))
+
+    if n < 2:
+        return None
+
+    a: Optional[float] = None
+    b: Optional[float] = None
+    for i in range(n):
+        for j in range(i + 1, n):
+            x0, y0 = pts[i]
+            x1, y1 = pts[j]
+            if math.isclose(x0, x1, rel_tol=0.0, abs_tol=1e-12):
+                continue
+            a = (y1 - y0) / (x1 - x0)
+            b = y0 - a * x0
+            break
+        if a is not None:
+            break
+
+    if a is None:
+        return None
+
+    for x, y in pts:
+        pred = a * x + b
+        if not math.isclose(y, pred, rel_tol=1e-12, abs_tol=1e-9):
+            return None
+
+    src = _linear_xy_canonical_source(a, b)
+    return ExpertDraftResponse(
+        ax_source=src,
+        backend_name="linear_xy_fast_path",
+        metadata={"fast_path": "linear_xy", "a": a, "b": b},
+    )
 
 
 def _compute_ranking_penalty(source: str, exact_symbolic_task: bool) -> tuple[float, Dict[str, float]]:
@@ -470,34 +547,38 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
         ctx["exact_symbolic_examples_task"] = True
     ctx = merge_completion_overrides_into_context(ctx, config.completion_overrides)
     draft_req = ExpertDraftRequest(goal=config.goal, context=ctx)
-    try:
-        draft_resp = config.expert.draft_program(draft_req)
-    except OnyxQwenHTTPError as e:
-        fail_rep = _backend_http_failure_report(config, e, phase="draft")
-        metric_thr_eff = _effective_metric_threshold(config)
-        result = CopilotSearchResult(
-            best_source="",
-            best_evaluation=fail_rep,
-            final_report=fail_rep,
-            converged=False,
-            iterations=[
-                CopilotIterationRecord(
-                    index=0,
-                    source="",
-                    evaluation=fail_rep,
-                    producing_payload=_draft_payload_dict(draft_req),
-                    outgoing_repair_error_report=None,
-                    producing_expert={},
-                    semantic_trace_summary=None,
-                )
-            ],
-            metric_repair_enabled=bool(config.repair_valid_with_metrics),
-            metric_repair_threshold_effective=metric_thr_eff,
-            convergence_reason="failure",
-        )
-        if config.artifact_dir is not None:
-            persist_copilot_artifacts(config, result, config.artifact_dir)
-        return result
+    fast = _try_linear_xy_fast_path(config)
+    if fast is not None:
+        draft_resp = fast
+    else:
+        try:
+            draft_resp = config.expert.draft_program(draft_req)
+        except OnyxQwenHTTPError as e:
+            fail_rep = _backend_http_failure_report(config, e, phase="draft")
+            metric_thr_eff = _effective_metric_threshold(config)
+            result = CopilotSearchResult(
+                best_source="",
+                best_evaluation=fail_rep,
+                final_report=fail_rep,
+                converged=False,
+                iterations=[
+                    CopilotIterationRecord(
+                        index=0,
+                        source="",
+                        evaluation=fail_rep,
+                        producing_payload=_draft_payload_dict(draft_req),
+                        outgoing_repair_error_report=None,
+                        producing_expert={},
+                        semantic_trace_summary=None,
+                    )
+                ],
+                metric_repair_enabled=bool(config.repair_valid_with_metrics),
+                metric_repair_threshold_effective=metric_thr_eff,
+                convergence_reason="failure",
+            )
+            if config.artifact_dir is not None:
+                persist_copilot_artifacts(config, result, config.artifact_dir)
+            return result
     current = draft_resp.ax_source
     provenance_meta = expert_response_to_dict(draft_resp, "draft")
     sort_key = config.score_sort_key
