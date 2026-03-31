@@ -2,6 +2,76 @@
   "schema_version": 1,
   "tasks": [
     {
+      "id": "exact_linear_with_intercept_json",
+      "title": "Exact linear with intercept (fast-path expected)",
+      "goal": "Write .ax so y = 1.5 * x + 0.5.",
+      "domain_context": "Single-input exact symbolic mapping; fast-path expected.",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [{ "x": -1.0 }, { "x": 0.0 }, { "x": 2.0 }],
+      "expected_rows": [{ "y": -1.0 }, { "y": 0.5 }, { "y": 3.5 }],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.000000000001]
+    },
+    {
+      "id": "three_input_affine_blend_json",
+      "title": "Three-input affine blend (model backend expected)",
+      "goal": "Write .ax so score = 0.5 * a + 0.3 * b + 0.2 * c.",
+      "domain_context": "Three inputs; this is outside current deterministic fast-path shapes.",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [
+        { "a": 1.0, "b": 0.0, "c": 0.0 },
+        { "a": 0.0, "b": 1.0, "c": 0.0 },
+        { "a": 0.0, "b": 0.0, "c": 1.0 },
+        { "a": 1.0, "b": 1.0, "c": 1.0 }
+      ],
+      "expected_rows": [
+        { "score": 0.5 },
+        { "score": 0.3 },
+        { "score": 0.2 },
+        { "score": 1.0 }
+      ],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.000000000001]
+    },
+    {
+      "id": "piecewise_threshold_json",
+      "title": "Piecewise threshold (model backend expected)",
+      "goal": "Write .ax: if x > 0 then y = x else y = 0.0.",
+      "domain_context": "Use if/else and supported comparisons only.",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [{ "x": -2.0 }, { "x": 0.0 }, { "x": 0.4 }],
+      "expected_rows": [{ "y": 0.0 }, { "y": 0.0 }, { "y": 0.4 }],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.000000000001]
+    },
+    {
+      "id": "bounded_affine_with_bias_json",
+      "title": "Bounded affine with bias (fast-path expected)",
+      "goal": "Write .ax so risk_score = max(0.0, min(1.0, 0.6 * risk_a + 0.2 * risk_b + 0.1)).",
+      "domain_context": "Two-input bounded affine clamp; deterministic fast-path eligible.",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [
+        { "risk_a": 0.0, "risk_b": 0.0 },
+        { "risk_a": 1.0, "risk_b": 0.0 },
+        { "risk_a": 0.0, "risk_b": 1.0 },
+        { "risk_a": -1.0, "risk_b": 0.0 },
+        { "risk_a": 2.0, "risk_b": 2.0 }
+      ],
+      "expected_rows": [
+        { "risk_score": 0.1 },
+        { "risk_score": 0.7 },
+        { "risk_score": 0.3 },
+        { "risk_score": 0.0 },
+        { "risk_score": 1.0 }
+      ],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.000000000001]
+    },
+    {
       "id": "risk_from_json_fixture",
       "title": "Minimal JSON fixture (risk blend)",
       "goal": "Output risk_score from risk_a and risk_b (0-1 clamped blend).",

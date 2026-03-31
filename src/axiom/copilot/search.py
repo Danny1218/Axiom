@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import itertools
 import math
 import re
 from dataclasses import dataclass, field
@@ -85,6 +86,78 @@ def _linear_xy_canonical_source(a: float, b: float) -> str:
     if math.isclose(b, 0.0, abs_tol=1e-12, rel_tol=1e-12):
         return f"y = x * {ca};\n"
     return f"y = x * {ca} + {cb};\n"
+
+
+def _piecewise_threshold_identity_source(in_key: str, out_key: str) -> str:
+    return (
+        f"if ({in_key} < 0.0) {{\n"
+        f"    {out_key} = 0.0;\n"
+        "} else {\n"
+        f"    {out_key} = {in_key};\n"
+        "}\n"
+    )
+
+
+def _try_piecewise_threshold_identity_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
+    """Exact one-input/one-output zero-floor identity: ``y = x`` for non-negative ``x``, else ``0.0``."""
+    if not is_exact_symbolic_examples_task(config):
+        return None
+    if config.mode != "predict_rows":
+        return None
+    inp = config.example_input_rows
+    exp = config.expected_rows
+    if not inp or not exp or len(inp) != len(exp):
+        return None
+
+    in_key: Optional[str] = None
+    out_key: Optional[str] = None
+    saw_neg = False
+    saw_pos = False
+
+    for row_in, row_ex in zip(inp, exp):
+        if not isinstance(row_in, Mapping) or not isinstance(row_ex, Mapping):
+            return None
+        if len(row_in) != 1 or len(row_ex) != 1:
+            return None
+
+        ik = str(next(iter(row_in.keys())))
+        ok = str(next(iter(row_ex.keys())))
+        if in_key is None:
+            in_key = ik
+        elif ik != in_key:
+            return None
+        if out_key is None:
+            out_key = ok
+        elif ok != out_key:
+            return None
+
+        try:
+            x = float(row_in[in_key])
+            y = float(row_ex[out_key])
+        except (TypeError, ValueError, KeyError):
+            return None
+        if not math.isfinite(x) or not math.isfinite(y):
+            return None
+
+        if x < 0.0:
+            saw_neg = True
+            if not math.isclose(y, 0.0, rel_tol=0.0, abs_tol=1e-9):
+                return None
+        else:
+            if x > 0.0:
+                saw_pos = True
+            if not math.isclose(y, x, rel_tol=1e-12, abs_tol=1e-9):
+                return None
+
+    # Require both sides of the threshold to avoid ambiguous/extrapolated inference.
+    if not saw_neg or not saw_pos:
+        return None
+    assert in_key is not None and out_key is not None
+    return ExpertDraftResponse(
+        ax_source=_piecewise_threshold_identity_source(in_key, out_key),
+        backend_name="piecewise_threshold_identity_fast_path",
+        metadata={"fast_path": "piecewise_threshold_identity", "in_key": in_key, "out_key": out_key},
+    )
 
 
 def _try_linear_xy_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
@@ -201,6 +274,147 @@ def _bounded_affine2_inner_source(k1: str, k2: str, out_var: str, a: float, b: f
         cc = _linear_xy_coeff_str(abs(c))
         inner = f"{inner} - {cc}" if c < 0 else f"{inner} + {_linear_xy_coeff_str(c)}"
     return f"{out_var} = max(0.0, min(1.0, {inner}));\n"
+
+
+def _solve_linear_system(matrix: Sequence[Sequence[float]], rhs: Sequence[float]) -> Optional[List[float]]:
+    """Solve square system by Gaussian elimination with partial pivoting; None when singular."""
+    n = len(matrix)
+    if n == 0 or len(rhs) != n:
+        return None
+    a: List[List[float]] = []
+    for i in range(n):
+        row = list(matrix[i])
+        if len(row) != n:
+            return None
+        a.append(row + [float(rhs[i])])
+
+    for col in range(n):
+        pivot = col
+        best = abs(a[col][col])
+        for r in range(col + 1, n):
+            v = abs(a[r][col])
+            if v > best:
+                best = v
+                pivot = r
+        if best < 1e-15:
+            return None
+        if pivot != col:
+            a[col], a[pivot] = a[pivot], a[col]
+        pv = a[col][col]
+        for j in range(col, n + 1):
+            a[col][j] /= pv
+        for r in range(n):
+            if r == col:
+                continue
+            f = a[r][col]
+            if abs(f) < 1e-18:
+                continue
+            for j in range(col, n + 1):
+                a[r][j] -= f * a[col][j]
+    return [a[i][n] for i in range(n)]
+
+
+def _affine_multi_input_source(out_key: str, in_keys: Sequence[str], weights: Sequence[float], bias: float) -> str:
+    terms = [f"{_linear_xy_coeff_str(weights[i])} * {in_keys[i]}" for i in range(len(in_keys))]
+    expr = " + ".join(terms)
+    if not math.isclose(bias, 0.0, abs_tol=1e-12, rel_tol=1e-12):
+        if bias < 0:
+            expr = f"{expr} - {_linear_xy_coeff_str(abs(bias))}"
+        else:
+            expr = f"{expr} + {_linear_xy_coeff_str(bias)}"
+    return f"{out_key} = {expr};\n"
+
+
+def _try_affine_multi_input_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
+    """Exact one-output affine fit for N>=3 numeric inputs: out = sum(w_i * x_i) + b."""
+    if not is_exact_symbolic_examples_task(config):
+        return None
+    if config.mode != "predict_rows":
+        return None
+    inp = config.example_input_rows
+    exp = config.expected_rows
+    if not inp or not exp or len(inp) != len(exp):
+        return None
+    if len(inp) < 4:
+        return None
+
+    in_keys: Optional[List[str]] = None
+    out_key: Optional[str] = None
+    xs: List[List[float]] = []
+    ys: List[float] = []
+
+    for row_in, row_ex in zip(inp, exp):
+        if not isinstance(row_in, Mapping) or not isinstance(row_ex, Mapping):
+            return None
+        if len(row_ex) != 1:
+            return None
+        keys = sorted(str(k) for k in row_in.keys())
+        if in_keys is None:
+            if len(keys) < 3:
+                return None
+            in_keys = keys
+        elif keys != in_keys:
+            return None
+        ok = str(next(iter(row_ex.keys())))
+        if out_key is None:
+            out_key = ok
+        elif ok != out_key:
+            return None
+        try:
+            xrow = [float(row_in[k]) for k in in_keys]
+            yv = float(row_ex[out_key])
+        except (TypeError, ValueError, KeyError):
+            return None
+        xs.append(xrow)
+        ys.append(yv)
+
+    assert in_keys is not None and out_key is not None
+    n_in = len(in_keys)
+    unknowns = n_in + 1
+    if len(xs) < unknowns:
+        return None
+
+    valid_solution: Optional[List[float]] = None
+    indices = range(len(xs))
+    for combo in itertools.combinations(indices, unknowns):
+        mat: List[List[float]] = []
+        rhs: List[float] = []
+        for idx in combo:
+            mat.append(xs[idx] + [1.0])
+            rhs.append(ys[idx])
+        sol = _solve_linear_system(mat, rhs)
+        if sol is None:
+            continue
+        ok = True
+        for xrow, yv in zip(xs, ys):
+            pred = sum(sol[i] * xrow[i] for i in range(n_in)) + sol[-1]
+            if not math.isclose(pred, yv, rel_tol=1e-11, abs_tol=1e-8):
+                ok = False
+                break
+        if not ok:
+            continue
+        if valid_solution is None:
+            valid_solution = sol
+        else:
+            # Multiple materially different exact fits => ambiguous.
+            if any(not math.isclose(valid_solution[i], sol[i], rel_tol=1e-10, abs_tol=1e-8) for i in range(unknowns)):
+                return None
+
+    if valid_solution is None:
+        return None
+
+    src = _affine_multi_input_source(out_key, in_keys, valid_solution[:-1], valid_solution[-1])
+    return ExpertDraftResponse(
+        ax_source=src,
+        backend_name="affine_multi_input_fast_path",
+        metadata={
+            "fast_path": "affine_multi_input",
+            "in_keys": list(in_keys),
+            "out_key": out_key,
+            "weights": list(valid_solution[:-1]),
+            "bias": valid_solution[-1],
+        },
+    )
 
 
 def _try_bounded_affine2_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
@@ -705,9 +919,13 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
         ctx["exact_symbolic_examples_task"] = True
     ctx = merge_completion_overrides_into_context(ctx, config.completion_overrides)
     draft_req = ExpertDraftRequest(goal=config.goal, context=ctx)
-    fast = _try_linear_xy_fast_path(config)
+    fast = _try_piecewise_threshold_identity_fast_path(config)
+    if fast is None:
+        fast = _try_linear_xy_fast_path(config)
     if fast is None:
         fast = _try_bounded_affine2_fast_path(config)
+    if fast is None:
+        fast = _try_affine_multi_input_fast_path(config)
     if fast is not None:
         draft_resp = fast
     else:

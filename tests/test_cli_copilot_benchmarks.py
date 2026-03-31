@@ -49,7 +49,14 @@ def test_copilot_benchmark_runs_with_dispatch_expert(tmp_path: Path, capsys, mon
     data = json.loads(out_json.read_text(encoding="utf-8"))
     assert data["kind"] == "axiom.copilot.benchmark_suite"
     assert data["run_options"] == {"draft": True, "search": True}
-    assert len(data["tasks"]) == 3
+    assert len(data["tasks"]) >= 7
+    first = data["tasks"][0]
+    assert "producing_backend_name" in first["draft_only"]
+    assert "backend_kind" in first["draft_only"]
+    assert "winner_origin" in first["draft_only"]
+    assert "producing_backend_name" in first["search"]
+    assert "backend_kind" in first["search"]
+    assert "winner_origin" in first["search"]
 
 
 def test_copilot_benchmark_draft_only_and_task_json(tmp_path: Path, capsys, monkeypatch):
@@ -77,7 +84,7 @@ def test_copilot_benchmark_draft_only_and_task_json(tmp_path: Path, capsys, monk
     data = json.loads(out_json.read_text(encoding="utf-8"))
     assert data["run_options"] == {"draft": True, "search": False}
     assert data["search_summary"] is None
-    assert len(data["tasks"]) == 1
+    assert len(data["tasks"]) >= 5
 
 
 def test_copilot_benchmark_rejects_draft_and_search_together(monkeypatch):

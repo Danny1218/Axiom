@@ -200,6 +200,126 @@ $steps = @(
             "--summary-out", "showcase_backend_only_minmax_blend/pipeline_summary.json",
             "--out", "showcase_backend_only_minmax_blend.ax"
         )
+    },
+    @{
+        Name = "copilot-search quadratic_with_cross_term"
+        Type = "search"
+        ReportPath = "debug_backend_only_quadratic_with_cross_term/search_report_cli.json"
+        IterationsPath = "debug_backend_only_quadratic_with_cross_term/iterations.json"
+        NegMseMin = $NegMseMinDefault
+        Command = @(
+            "axiom", "copilot-search",
+            "--backend", $Backend,
+            "--goal", "Write a valid Axiom .ax program in this repo's DSL that computes y = a * b + a + 1.0;",
+            "--examples-json", "examples/quadratic_with_cross_term.json",
+            "--iterations", "10",
+            "--expert-url", $ExpertUrl,
+            "--expert-model", $ExpertModel,
+            "--expert-api-key", $ExpertApiKey,
+            "--artifact-dir", "debug_backend_only_quadratic_with_cross_term",
+            "--report-out", "debug_backend_only_quadratic_with_cross_term/search_report_cli.json",
+            "--out", "debug_backend_only_quadratic_with_cross_term/best.ax"
+        )
+    },
+    @{
+        Name = "copilot-run quadratic_with_cross_term"
+        Type = "run"
+        ReportPath = "showcase_backend_only_quadratic_with_cross_term/pipeline_summary.json"
+        IterationsPath = "showcase_backend_only_quadratic_with_cross_term/iterations.json"
+        NegMseMin = $NegMseMinDefault
+        Command = @(
+            "axiom", "copilot-run",
+            "--backend", $Backend,
+            "--goal", "Write a valid Axiom .ax program in this repo's DSL that computes y = a * b + a + 1.0;",
+            "--examples-json", "examples/quadratic_with_cross_term.json",
+            "--iterations", "10",
+            "--expert-url", $ExpertUrl,
+            "--expert-model", $ExpertModel,
+            "--expert-api-key", $ExpertApiKey,
+            "--artifact-dir", "showcase_backend_only_quadratic_with_cross_term",
+            "--summary-out", "showcase_backend_only_quadratic_with_cross_term/pipeline_summary.json",
+            "--out", "showcase_backend_only_quadratic_with_cross_term.ax"
+        )
+    },
+    @{
+        Name = "copilot-search nested_piecewise"
+        Type = "search"
+        ReportPath = "debug_backend_only_nested_piecewise/search_report_cli.json"
+        IterationsPath = "debug_backend_only_nested_piecewise/iterations.json"
+        NegMseMin = $NegMseMinDefault
+        Command = @(
+            "axiom", "copilot-search",
+            "--backend", $Backend,
+            "--goal", "Write a valid Axiom .ax program in this repo's DSL so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0;",
+            "--examples-json", "examples/nested_piecewise.json",
+            "--iterations", "10",
+            "--expert-url", $ExpertUrl,
+            "--expert-model", $ExpertModel,
+            "--expert-api-key", $ExpertApiKey,
+            "--artifact-dir", "debug_backend_only_nested_piecewise",
+            "--report-out", "debug_backend_only_nested_piecewise/search_report_cli.json",
+            "--out", "debug_backend_only_nested_piecewise/best.ax"
+        )
+    },
+    @{
+        Name = "copilot-run nested_piecewise"
+        Type = "run"
+        ReportPath = "showcase_backend_only_nested_piecewise/pipeline_summary.json"
+        IterationsPath = "showcase_backend_only_nested_piecewise/iterations.json"
+        NegMseMin = $NegMseMinDefault
+        Command = @(
+            "axiom", "copilot-run",
+            "--backend", $Backend,
+            "--goal", "Write a valid Axiom .ax program in this repo's DSL so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0;",
+            "--examples-json", "examples/nested_piecewise.json",
+            "--iterations", "10",
+            "--expert-url", $ExpertUrl,
+            "--expert-model", $ExpertModel,
+            "--expert-api-key", $ExpertApiKey,
+            "--artifact-dir", "showcase_backend_only_nested_piecewise",
+            "--summary-out", "showcase_backend_only_nested_piecewise/pipeline_summary.json",
+            "--out", "showcase_backend_only_nested_piecewise.ax"
+        )
+    },
+    @{
+        Name = "copilot-search three_way_maxmin"
+        Type = "search"
+        ReportPath = "debug_backend_only_three_way_maxmin/search_report_cli.json"
+        IterationsPath = "debug_backend_only_three_way_maxmin/iterations.json"
+        NegMseMin = $NegMseMinDefault
+        Command = @(
+            "axiom", "copilot-search",
+            "--backend", $Backend,
+            "--goal", "Write a valid Axiom .ax program in this repo's DSL that computes score = max(min(a, b), c);",
+            "--examples-json", "examples/three_way_maxmin.json",
+            "--iterations", "10",
+            "--expert-url", $ExpertUrl,
+            "--expert-model", $ExpertModel,
+            "--expert-api-key", $ExpertApiKey,
+            "--artifact-dir", "debug_backend_only_three_way_maxmin",
+            "--report-out", "debug_backend_only_three_way_maxmin/search_report_cli.json",
+            "--out", "debug_backend_only_three_way_maxmin/best.ax"
+        )
+    },
+    @{
+        Name = "copilot-run three_way_maxmin"
+        Type = "run"
+        ReportPath = "showcase_backend_only_three_way_maxmin/pipeline_summary.json"
+        IterationsPath = "showcase_backend_only_three_way_maxmin/iterations.json"
+        NegMseMin = $NegMseMinDefault
+        Command = @(
+            "axiom", "copilot-run",
+            "--backend", $Backend,
+            "--goal", "Write a valid Axiom .ax program in this repo's DSL that computes score = max(min(a, b), c);",
+            "--examples-json", "examples/three_way_maxmin.json",
+            "--iterations", "10",
+            "--expert-url", $ExpertUrl,
+            "--expert-model", $ExpertModel,
+            "--expert-api-key", $ExpertApiKey,
+            "--artifact-dir", "showcase_backend_only_three_way_maxmin",
+            "--summary-out", "showcase_backend_only_three_way_maxmin/pipeline_summary.json",
+            "--out", "showcase_backend_only_three_way_maxmin.ax"
+        )
     }
 )
 

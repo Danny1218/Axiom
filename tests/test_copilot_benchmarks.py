@@ -36,11 +36,22 @@ def _fresh_parser():
     reset_parser()
 
 
-def test_default_benchmark_tasks_cover_finance_risk_loop():
+def test_default_benchmark_tasks_cover_expected_ids():
     ids = {t.id for t in DEFAULT_BENCHMARK_TASKS}
-    assert ids == {"finance_threshold_policy", "simple_risk_score", "looped_numeric_counter"}
-    assert DEFAULT_BENCHMARK_TASKS[0].evaluation_mode == "predict_rows"
-    assert DEFAULT_BENCHMARK_TASKS[2].evaluation_mode == "compile_only"
+    assert {
+        "exact_linear_with_intercept",
+        "three_input_affine_blend",
+        "piecewise_threshold",
+        "bounded_affine_with_bias",
+        "finance_threshold_policy",
+        "simple_risk_score",
+        "looped_numeric_counter",
+    }.issubset(ids)
+    assert len(DEFAULT_BENCHMARK_TASKS) >= 7
+    by_id = {t.id: t for t in DEFAULT_BENCHMARK_TASKS}
+    assert by_id["exact_linear_with_intercept"].evaluation_mode == "predict_rows"
+    assert by_id["bounded_affine_with_bias"].evaluation_mode == "predict_rows"
+    assert by_id["looped_numeric_counter"].evaluation_mode == "compile_only"
 
 
 def test_benchmark_task_predict_rows_requires_rows():
@@ -121,15 +132,21 @@ def test_run_benchmark_draft_only_and_search_with_dispatch():
     t = DEFAULT_BENCHMARK_TASKS[1]
     dr = run_benchmark_draft_only(ex, t)
     assert dr.compile_ok and dr.metric_ok
+    assert dr.producing_backend_name == "benchmark_dispatch"
+    assert dr.backend_kind == "expert_backend"
+    assert dr.winner_origin == "model_draft"
     sr = run_benchmark_search(ex, t, max_iterations=2)
     assert sr.compile_ok and sr.iterations_run == 1
+    assert sr.producing_backend_name == "benchmark_dispatch"
+    assert sr.backend_kind == "expert_backend"
+    assert sr.winner_origin == "model_draft"
 
 
 def test_run_benchmark_suite_dict_roundtrip():
     ex = BenchmarkDispatchExpert()
     suite = run_benchmark_suite(ex, tasks=DEFAULT_BENCHMARK_TASKS, max_iterations=2)
     assert suite.draft_summary and suite.search_summary
-    assert suite.draft_summary.task_count == 3
+    assert suite.draft_summary.task_count == len(DEFAULT_BENCHMARK_TASKS)
     assert suite.run_draft and suite.run_search
     d = benchmark_suite_to_dict(suite)
     assert d["schema_version"] == BENCHMARK_SUITE_SCHEMA_VERSION
@@ -138,6 +155,21 @@ def test_run_benchmark_suite_dict_roundtrip():
     json.dumps(d)
     assert d["draft_summary"]["compile_success_rate"] == 1.0
     assert d["search_summary"]["metric_success_rate"] == 1.0
+    first = d["tasks"][0]
+    assert first["draft_only"]["producing_backend_name"]
+    assert first["draft_only"]["backend_kind"] in {"fast_path", "expert_backend"}
+    assert first["draft_only"]["winner_origin"] in {
+        "deterministic_inference",
+        "model_draft",
+        "model_repair",
+    }
+    assert first["search"]["producing_backend_name"]
+    assert first["search"]["backend_kind"] in {"fast_path", "expert_backend"}
+    assert first["search"]["winner_origin"] in {
+        "deterministic_inference",
+        "model_draft",
+        "model_repair",
+    }
 
 
 def test_run_benchmark_suite_requires_draft_or_search():
@@ -175,7 +207,7 @@ def test_run_benchmark_suite_search_only():
 
 def test_search_beats_draft_when_first_draft_broken():
     ex = BenchmarkDispatchExpert(broken_draft_by_task={"finance_threshold_policy": "y = ++++ ;\n"})
-    fin = DEFAULT_BENCHMARK_TASKS[0]
+    fin = next(t for t in DEFAULT_BENCHMARK_TASKS if t.id == "finance_threshold_policy")
     suite = run_benchmark_suite(ex, tasks=(fin,), max_iterations=3)
     cmp = suite.tasks[0]
     assert cmp.draft_only.compile_ok is False
@@ -187,7 +219,11 @@ def test_benchmark_tasks_from_json_dict_and_bundled_path():
     path = default_benchmark_tasks_json_path()
     assert path.is_file()
     tasks = load_benchmark_tasks_json_path(path)
-    assert len(tasks) == 1 and tasks[0].id == "risk_from_json_fixture"
+    tids = {t.id for t in tasks}
+    assert "risk_from_json_fixture" in tids
+    assert "exact_linear_with_intercept_json" in tids
+    assert "bounded_affine_with_bias_json" in tids
+    assert len(tasks) >= 5
     raw = json.loads(path.read_text(encoding="utf-8"))
     assert raw["schema_version"] == 1
     same = benchmark_tasks_from_json_dict(raw)
@@ -211,10 +247,18 @@ def test_draft_context_extras_reach_expert():
             return super().repair_program(request)
 
     ex = Spy(broken_draft_by_task={"simple_risk_score": "y = ++++ ;\n"})
-    t = DEFAULT_BENCHMARK_TASKS[1]
+    t = next(t for t in DEFAULT_BENCHMARK_TASKS if t.id == "simple_risk_score")
     run_benchmark_search(ex, t, max_iterations=3)
     assert captured, "repair should run"
     assert captured[0].get("benchmark_task_id") == "simple_risk_score"
+
+
+def test_search_winner_origin_is_model_repair_when_repair_wins():
+    ex = BenchmarkDispatchExpert(broken_draft_by_task={"simple_risk_score": "y = ++++ ;\n"})
+    t = next(t for t in DEFAULT_BENCHMARK_TASKS if t.id == "simple_risk_score")
+    rec = run_benchmark_search(ex, t, max_iterations=3)
+    assert rec.compile_ok is True
+    assert rec.winner_origin == "model_repair"
 
 
 def test_copilot_search_config_context_extras_merged():

@@ -69,6 +69,7 @@ SYNTAX_SUMMARY = """Syntax summary (this repo's `.ax` DSL):
 
 FORBIDDEN_SYNTAX_BLOCK = """Forbidden syntax (not in this grammar — do not emit):
 - Tokens: `:=`, `>=`, `<=`, `&&`, `||`, and the keyword `then`
+- Unsupported control-flow patterns: `if (cond) then ...`, `if (cond) then { ... }`, `then (...)`
 - Float format: do not use a lone trailing dot (e.g. `2.`) — use canonical decimals like `2.0`"""
 
 ALLOWED_SYNTAX_BLOCK = """Allowed syntax:
@@ -82,6 +83,16 @@ SYNTAX_BAD_GOOD_FEWSHOT = """Few-shot bad → good rewrites:
 1. `y := x * 2` → `y = x * 2.0;`
 2. `if (x >= 0 && x <= 1) { ... }` → use only `>`, `<`, `==`, `!=`, and/or `min`/`max` with nested `if`/`else` — not `&&`, `||`, `>=`, or `<=`
 3. `y = x + 2.;` → `y = x + 2.0;`"""
+
+CONTROL_FLOW_FEWSHOT = """Control-flow few-shot rewrites (grammar-supported only):
+1. `if (x == 0) then y = 0.0 else y = x;` →
+```ax
+if (x == 0) { y = 0.0; } else { y = x; }
+```
+2. `if (x < 0) then (y = 0.0) else (y = x)` →
+```ax
+if (x < 0) { y = 0.0; } else { y = x; }
+```"""
 
 DRAFT_FEWSHOT = """Tiny example (valid `.ax`):
 ```ax
@@ -236,6 +247,7 @@ def user_prompt_draft(goal: str, context: Mapping[str, Any]) -> str:
             f"{FORBIDDEN_SYNTAX_BLOCK}\n\n",
             f"{ALLOWED_SYNTAX_BLOCK}\n\n",
             f"{SYNTAX_BAD_GOOD_FEWSHOT}\n\n",
+            f"{CONTROL_FLOW_FEWSHOT}\n\n",
             f"{DRAFT_FEWSHOT}\n\n",
             "Respond with the complete `.ax` program only (fenced with `ax` if you use a fence).",
         ]
@@ -258,6 +270,7 @@ def user_prompt_repair(goal: str, current_program: str, error_report: str, conte
             f"{ALLOWED_SYNTAX_BLOCK}\n\n",
             f"{REPAIR_PARSE_ERROR_RULE}\n\n",
             f"{SYNTAX_BAD_GOOD_FEWSHOT}\n\n",
+            f"{CONTROL_FLOW_FEWSHOT}\n\n",
             f"{REPAIR_FEWSHOT}\n\n",
         ]
     )

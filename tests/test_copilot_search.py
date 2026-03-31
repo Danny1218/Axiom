@@ -25,8 +25,10 @@ from axiom.copilot.benchmarks import default_neg_mse_score_fn
 from axiom.copilot.search import (
     DEFAULT_METRIC_REPAIR_THRESHOLD,
     _is_better,
+    _try_affine_multi_input_fast_path,
     _try_bounded_affine2_fast_path,
     _try_linear_xy_fast_path,
+    _try_piecewise_threshold_identity_fast_path,
     is_exact_symbolic_examples_task,
     merge_completion_overrides_into_context,
 )
@@ -563,6 +565,57 @@ def test_linear_xy_fast_path_not_used_non_collinear():
     assert len(ex.draft_calls) == 1
 
 
+def test_piecewise_threshold_identity_fast_path_success():
+    ex = ScriptedExpert("SHOULD_NOT_DRAFT", [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="compute y = x when x > 0 else y = 0.0",
+        max_iterations=2,
+        mode="predict_rows",
+        example_input_rows=[{"x": -2.0}, {"x": -0.1}, {"x": 0.0}, {"x": 0.4}, {"x": 1.5}],
+        expected_rows=[{"y": 0.0}, {"y": 0.0}, {"y": 0.0}, {"y": 0.4}, {"y": 1.5}],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+        repair_valid_with_metrics=False,
+    )
+    out = run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 0
+    assert out.iterations[0].producing_expert["backend_name"] == "piecewise_threshold_identity_fast_path"
+    assert out.best_source.strip() == "if (x < 0.0) {\n    y = 0.0;\n} else {\n    y = x;\n}"
+    assert out.converged and out.best_evaluation.success
+
+
+def test_piecewise_threshold_identity_fast_path_ambiguous_returns_none():
+    cfg = CopilotSearchConfig(
+        expert=ScriptedExpert(GOOD_DOUBLE_AX, []),
+        goal="compute thresholded y from x",
+        max_iterations=1,
+        mode="predict_rows",
+        example_input_rows=[{"x": 0.0}, {"x": 0.5}, {"x": 2.0}],
+        expected_rows=[{"y": 0.0}, {"y": 0.5}, {"y": 2.0}],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+    )
+    assert _try_piecewise_threshold_identity_fast_path(cfg) is None
+
+
+def test_piecewise_threshold_identity_fast_path_falls_back_noisy():
+    ex = ScriptedExpert(GOOD_DOUBLE_AX, [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="compute thresholded y from x",
+        max_iterations=1,
+        mode="predict_rows",
+        example_input_rows=[{"x": -1.0}, {"x": 0.0}, {"x": 1.0}],
+        expected_rows=[{"y": 0.0}, {"y": 0.0}, {"y": 1.01}],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+    )
+    assert _try_piecewise_threshold_identity_fast_path(cfg) is None
+    run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 1
+
+
 def test_linear_xy_fast_path_affine_with_intercept():
     ex = ScriptedExpert("noop", [])
     cfg = CopilotSearchConfig(
@@ -692,3 +745,110 @@ def test_bounded_affine2_clamp_edges_validated_on_v3_subset():
     assert "max(0.0, min(1.0" in r.ax_source
     md = r.metadata
     assert md.get("a") == pytest.approx(0.7) and md.get("b") == pytest.approx(0.3)
+
+
+def test_affine_multi_input_fast_path_exact_three_input_success():
+    ex = ScriptedExpert("SHOULD_NOT_DRAFT", [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="compute weighted blend score",
+        max_iterations=2,
+        mode="predict_rows",
+        example_input_rows=[
+            {"a": 1.0, "b": 0.0, "c": 0.0},
+            {"a": 0.0, "b": 1.0, "c": 0.0},
+            {"a": 0.0, "b": 0.0, "c": 1.0},
+            {"a": 1.0, "b": 1.0, "c": 1.0},
+        ],
+        expected_rows=[
+            {"score": 0.5},
+            {"score": 0.3},
+            {"score": 0.2},
+            {"score": 1.0},
+        ],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+    )
+    out = run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 0
+    assert out.iterations[0].producing_expert["backend_name"] == "affine_multi_input_fast_path"
+    assert out.best_source.strip() == "score = 0.5 * a + 0.3 * b + 0.2 * c;"
+
+
+def test_affine_multi_input_fast_path_affine_with_bias_success():
+    r = _try_affine_multi_input_fast_path(
+        CopilotSearchConfig(
+            expert=ScriptedExpert(GOOD_AX, []),
+            goal="linear formula with bias",
+            max_iterations=1,
+            mode="predict_rows",
+            example_input_rows=[
+                {"a": 0.0, "b": 0.0, "c": 0.0},
+                {"a": 1.0, "b": 0.0, "c": 0.0},
+                {"a": 0.0, "b": 1.0, "c": 0.0},
+                {"a": 0.0, "b": 0.0, "c": 1.0},
+                {"a": 1.0, "b": 1.0, "c": 1.0},
+            ],
+            expected_rows=[
+                {"score": 0.1},
+                {"score": 0.6},
+                {"score": 0.4},
+                {"score": 0.3},
+                {"score": 1.1},
+            ],
+            score_fn=default_neg_mse_score_fn(),
+            score_sort_key="neg_mse",
+        )
+    )
+    assert r is not None
+    assert r.ax_source.strip() == "score = 0.5 * a + 0.3 * b + 0.2 * c + 0.1;"
+
+
+def test_affine_multi_input_fast_path_falls_back_when_noisy():
+    ex = ScriptedExpert("score = 0.0;\n", [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="compute weighted blend score",
+        max_iterations=2,
+        mode="predict_rows",
+        example_input_rows=[
+            {"a": 1.0, "b": 0.0, "c": 0.0},
+            {"a": 0.0, "b": 1.0, "c": 0.0},
+            {"a": 0.0, "b": 0.0, "c": 1.0},
+            {"a": 1.0, "b": 1.0, "c": 1.0},
+            {"a": 2.0, "b": 2.0, "c": 2.0},
+        ],
+        expected_rows=[
+            {"score": 0.5},
+            {"score": 0.3},
+            {"score": 0.2},
+            {"score": 1.001},
+            {"score": 2.0},
+        ],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+    )
+    run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 1
+
+
+def test_affine_multi_input_fast_path_fixture_emits_canonical_without_indexed_access():
+    p = Path(__file__).resolve().parent.parent / "examples" / "three_input_affine_fast_path.json"
+    data = json.loads(p.read_text(encoding="utf-8"))
+    ex_in = [dict(x["inputs"]) for x in data]
+    ex_out = [dict(x["expected"]) for x in data]
+    out = run_copilot_search(
+        CopilotSearchConfig(
+            expert=ScriptedExpert("SHOULD_NOT_DRAFT", []),
+            goal="score affine blend",
+            max_iterations=1,
+            mode="predict_rows",
+            example_input_rows=ex_in,
+            expected_rows=ex_out,
+            score_fn=default_neg_mse_score_fn(),
+            score_sort_key="neg_mse",
+        )
+    )
+    src = out.best_source.strip()
+    assert src == "score = 0.5 * a + 0.3 * b + 0.2 * c;"
+    assert "[0]" not in src and "[1]" not in src and "[2]" not in src

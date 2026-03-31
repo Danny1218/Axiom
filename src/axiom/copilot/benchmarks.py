@@ -120,6 +120,9 @@ class BenchmarkRunRecord:
     metric_ok: bool
     converged: Optional[bool] = None
     iterations_run: Optional[int] = None
+    producing_backend_name: str = ""
+    backend_kind: str = "expert_backend"
+    winner_origin: Literal["deterministic_inference", "model_draft", "model_repair"] = "model_draft"
 
 
 @dataclass
@@ -162,6 +165,8 @@ def run_benchmark_draft_only(expert: SemanticExpert, task: BenchmarkTask) -> Ben
     resp = expert.draft_program(ExpertDraftRequest(goal=task.goal, context=ctx))
     rep = _evaluate_for_task(task, resp.ax_source)
     co, mo = compile_success(rep), metric_success(task, rep)
+    backend_name = str(resp.backend_name or "")
+    is_fast = backend_name.endswith("_fast_path")
     return BenchmarkRunRecord(
         task_id=task.id,
         mode="draft_only",
@@ -169,6 +174,9 @@ def run_benchmark_draft_only(expert: SemanticExpert, task: BenchmarkTask) -> Ben
         evaluation=rep,
         compile_ok=co,
         metric_ok=mo,
+        producing_backend_name=backend_name,
+        backend_kind="fast_path" if is_fast else "expert_backend",
+        winner_origin="deterministic_inference" if is_fast else "model_draft",
     )
 
 
@@ -199,6 +207,18 @@ def run_benchmark_search(
     out = run_copilot_search(cfg)
     rep = out.best_evaluation
     co, mo = compile_success(rep), metric_success(task, rep)
+    win_rec = next((it for it in out.iterations if it.source == out.best_source), None)
+    win_meta = win_rec.producing_expert if win_rec is not None else {}
+    backend_name = str(win_meta.get("backend_name", ""))
+    expert_call = str(win_meta.get("expert_call", "draft"))
+    is_fast = backend_name.endswith("_fast_path")
+    winner_origin: Literal["deterministic_inference", "model_draft", "model_repair"]
+    if is_fast:
+        winner_origin = "deterministic_inference"
+    elif expert_call == "repair":
+        winner_origin = "model_repair"
+    else:
+        winner_origin = "model_draft"
     return BenchmarkRunRecord(
         task_id=task.id,
         mode="search",
@@ -208,6 +228,9 @@ def run_benchmark_search(
         metric_ok=mo,
         converged=out.converged,
         iterations_run=len(out.iterations),
+        producing_backend_name=backend_name,
+        backend_kind="fast_path" if is_fast else "expert_backend",
+        winner_origin=winner_origin,
     )
 
 
@@ -262,6 +285,9 @@ def _record_to_dict(rec: BenchmarkRunRecord) -> Dict[str, Any]:
         "metric_ok": rec.metric_ok,
         "converged": rec.converged,
         "iterations_run": rec.iterations_run,
+        "producing_backend_name": rec.producing_backend_name,
+        "backend_kind": rec.backend_kind,
+        "winner_origin": rec.winner_origin,
         "evaluation": {
             "success": ev.success,
             "compile_stage_reached": ev.compile_stage_reached,
@@ -306,6 +332,88 @@ def benchmark_suite_to_dict(result: BenchmarkSuiteResult) -> Dict[str, Any]:
 
 
 DEFAULT_BENCHMARK_TASKS: Tuple[BenchmarkTask, ...] = (
+    BenchmarkTask(
+        id="exact_linear_with_intercept",
+        title="Exact linear with intercept (fast-path expected)",
+        goal="Write .ax so y = 1.5 * x + 0.5 from input x.",
+        domain_context="Single-input exact symbolic mapping; fast-path expected before expert draft.",
+        evaluation_mode="predict_rows",
+        example_input_rows=(
+            {"x": -1.0},
+            {"x": 0.0},
+            {"x": 2.0},
+        ),
+        expected_rows=(
+            {"y": -1.0},
+            {"y": 0.5},
+            {"y": 3.5},
+        ),
+        score_sort_key="neg_mse",
+        metric_pass_min=("neg_mse", -1e-12),
+    ),
+    BenchmarkTask(
+        id="three_input_affine_blend",
+        title="Three-input affine blend (model backend expected)",
+        goal="Write .ax so score = 0.5 * a + 0.3 * b + 0.2 * c.",
+        domain_context="Three inputs; deterministic symbolic expression. Not covered by current fast-path shapes.",
+        evaluation_mode="predict_rows",
+        example_input_rows=(
+            {"a": 1.0, "b": 0.0, "c": 0.0},
+            {"a": 0.0, "b": 1.0, "c": 0.0},
+            {"a": 0.0, "b": 0.0, "c": 1.0},
+            {"a": 1.0, "b": 1.0, "c": 1.0},
+        ),
+        expected_rows=(
+            {"score": 0.5},
+            {"score": 0.3},
+            {"score": 0.2},
+            {"score": 1.0},
+        ),
+        score_sort_key="neg_mse",
+        metric_pass_min=("neg_mse", -1e-12),
+    ),
+    BenchmarkTask(
+        id="piecewise_threshold",
+        title="Piecewise threshold (model backend expected)",
+        goal="Write .ax: if x > 0 then y = x else y = 0.0.",
+        domain_context="Use if/else with supported comparisons; this path goes through normal expert draft/repair.",
+        evaluation_mode="predict_rows",
+        example_input_rows=(
+            {"x": -2.0},
+            {"x": 0.0},
+            {"x": 0.4},
+        ),
+        expected_rows=(
+            {"y": 0.0},
+            {"y": 0.0},
+            {"y": 0.4},
+        ),
+        score_sort_key="neg_mse",
+        metric_pass_min=("neg_mse", -1e-12),
+    ),
+    BenchmarkTask(
+        id="bounded_affine_with_bias",
+        title="Bounded affine with bias (fast-path expected)",
+        goal="Write .ax so risk_score = max(0.0, min(1.0, 0.6 * risk_a + 0.2 * risk_b + 0.1)).",
+        domain_context="Two-input bounded affine clamp; fast-path expected when examples are exact.",
+        evaluation_mode="predict_rows",
+        example_input_rows=(
+            {"risk_a": 0.0, "risk_b": 0.0},
+            {"risk_a": 1.0, "risk_b": 0.0},
+            {"risk_a": 0.0, "risk_b": 1.0},
+            {"risk_a": -1.0, "risk_b": 0.0},
+            {"risk_a": 2.0, "risk_b": 2.0},
+        ),
+        expected_rows=(
+            {"risk_score": 0.1},
+            {"risk_score": 0.7},
+            {"risk_score": 0.3},
+            {"risk_score": 0.0},
+            {"risk_score": 1.0},
+        ),
+        score_sort_key="neg_mse",
+        metric_pass_min=("neg_mse", -1e-12),
+    ),
     BenchmarkTask(
         id="finance_threshold_policy",
         title="Finance-style threshold policy",
@@ -355,6 +463,14 @@ DEFAULT_BENCHMARK_TASKS: Tuple[BenchmarkTask, ...] = (
 )
 
 _REFERENCE_AX_BY_TASK: Dict[str, str] = {
+    "exact_linear_with_intercept": "y = 1.5 * x + 0.5;\n",
+    "three_input_affine_blend": "score = 0.5 * a + 0.3 * b + 0.2 * c;\n",
+    "piecewise_threshold": "if (x > 0.0) {\n  y = x;\n} else {\n  y = 0.0;\n}\n",
+    "bounded_affine_with_bias": "risk_score = max(0.0, min(1.0, 0.6 * risk_a + 0.2 * risk_b + 0.1));\n",
+    "exact_linear_with_intercept_json": "y = 1.5 * x + 0.5;\n",
+    "three_input_affine_blend_json": "score = 0.5 * a + 0.3 * b + 0.2 * c;\n",
+    "piecewise_threshold_json": "if (x > 0.0) {\n  y = x;\n} else {\n  y = 0.0;\n}\n",
+    "bounded_affine_with_bias_json": "risk_score = max(0.0, min(1.0, 0.6 * risk_a + 0.2 * risk_b + 0.1));\n",
     "finance_threshold_policy": (
         "target_position = max(0.0, min(1.0, momentum * 0.5 + (1.0 - volatility) * 0.3));\n"
     ),
