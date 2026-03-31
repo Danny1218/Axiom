@@ -120,6 +120,13 @@ def build_iterations_document(config: CopilotSearchConfig, result: CopilotSearch
         "max_iterations_config": config.max_iterations,
         "iteration_count": len(result.iterations),
         "score_sort_key": config.score_sort_key,
+        "converged": result.converged,
+        "convergence_reason": result.convergence_reason,
+        "metric_repair": {
+            "enabled": result.metric_repair_enabled,
+            "threshold_effective": result.metric_repair_threshold_effective,
+            "metric_repair_if_below_config": config.metric_repair_if_below,
+        },
         "iterations": [iteration_entry_to_dict(rec) for rec in result.iterations],
     }
 
@@ -145,6 +152,12 @@ def build_search_report_document(config: CopilotSearchConfig, result: CopilotSea
         "domain_context": config.domain_context,
         "backend_name": _backend_name_from_result(result),
         "converged": result.converged,
+        "convergence_reason": result.convergence_reason,
+        "metric_repair": {
+            "enabled": result.metric_repair_enabled,
+            "threshold_effective": result.metric_repair_threshold_effective,
+            "metric_repair_if_below_config": config.metric_repair_if_below,
+        },
         "iteration_count": len(result.iterations),
         "evaluation_mode": config.mode,
         "max_iterations_config": config.max_iterations,

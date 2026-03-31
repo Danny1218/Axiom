@@ -154,6 +154,7 @@ def test_copilot_search_runs_with_stub_expert(tmp_path: Path, capsys, monkeypatc
             "3",
             "--examples-json",
             str(examples),
+            "--no-repair-valid-with-metrics",
             "--report-out",
             str(rep),
             "--out",
@@ -436,6 +437,85 @@ def test_default_predict_score_fn_higher_is_better():
     assert s["neg_mse"] == 0.0
     s2 = fn([{"y": 0.0}], [{"y": 1.0}])
     assert s2["neg_mse"] < 0.0
+
+
+def test_build_copilot_search_config_metric_repair_on_by_default_for_examples(tmp_path: Path):
+    from argparse import Namespace
+
+    ex_path = tmp_path / "ex.json"
+    ex_path.write_text(
+        json.dumps([{"inputs": {"x": 1.0}, "expected": {"y": 2.0}}]),
+        encoding="utf-8",
+    )
+    ns = Namespace(
+        goal="g",
+        context=None,
+        compile_only=False,
+        train_tabular=False,
+        tabular_json=None,
+        examples_json=ex_path,
+        iterations=3,
+        artifact_dir=None,
+        summarize_traces=False,
+        repair_valid_with_metrics=False,
+        no_repair_valid_with_metrics=False,
+        metric_repair_if_below=None,
+    )
+    cfg = cli_mod._build_copilot_search_config(ns, object())
+    assert cfg.mode == "predict_rows"
+    assert cfg.repair_valid_with_metrics is True
+
+
+def test_build_copilot_search_config_no_repair_valid_with_metrics(tmp_path: Path):
+    from argparse import Namespace
+
+    ex_path = tmp_path / "ex.json"
+    ex_path.write_text(
+        json.dumps([{"inputs": {"x": 1.0}, "expected": {"y": 2.0}}]),
+        encoding="utf-8",
+    )
+    ns = Namespace(
+        goal="g",
+        context=None,
+        compile_only=False,
+        train_tabular=False,
+        tabular_json=None,
+        examples_json=ex_path,
+        iterations=3,
+        artifact_dir=None,
+        summarize_traces=False,
+        repair_valid_with_metrics=False,
+        no_repair_valid_with_metrics=True,
+        metric_repair_if_below=None,
+    )
+    cfg = cli_mod._build_copilot_search_config(ns, object())
+    assert cfg.repair_valid_with_metrics is False
+
+
+def test_build_copilot_search_config_conflicting_repair_flags_exits(tmp_path: Path):
+    from argparse import Namespace
+
+    ex_path = tmp_path / "ex.json"
+    ex_path.write_text(
+        json.dumps([{"inputs": {"x": 1.0}, "expected": {"y": 2.0}}]),
+        encoding="utf-8",
+    )
+    ns = Namespace(
+        goal="g",
+        context=None,
+        compile_only=False,
+        train_tabular=False,
+        tabular_json=None,
+        examples_json=ex_path,
+        iterations=3,
+        artifact_dir=None,
+        summarize_traces=False,
+        repair_valid_with_metrics=True,
+        no_repair_valid_with_metrics=True,
+        metric_repair_if_below=None,
+    )
+    with pytest.raises(SystemExit, match="Cannot combine"):
+        cli_mod._build_copilot_search_config(ns, object())
 
 
 def test_serialize_evaluation_report_roundtrip_keys():

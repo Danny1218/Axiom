@@ -50,6 +50,10 @@ class SearchRequest(BaseModel):
     train_tabular: Optional[TrainTabularPayload] = None
     summarize_traces: bool = False
     artifact_dir: Optional[str] = None
+    repair_valid_with_metrics: Optional[bool] = None
+    """``None``: auto — enabled for ``examples`` / ``train_tabular`` modes; ``False`` / ``True`` override."""
+    metric_repair_if_below: Optional[float] = None
+    """Repair while the score sort key is below this; unset uses built-in default for ``neg_mse`` (see ``plan.md``)."""
 
     @model_validator(mode="after")
     def _train_tabular_exclusive(self) -> SearchRequest:
@@ -66,6 +70,9 @@ class SearchResponse(BaseModel):
     best_evaluation: Dict[str, Any]
     final_evaluation: Dict[str, Any]
     iterations: List[Dict[str, Any]]
+    convergence_reason: str = ""
+    metric_repair_enabled: bool = False
+    metric_repair_threshold_effective: Optional[float] = None
 
 
 class CopilotRunRequest(SearchRequest):
@@ -83,6 +90,9 @@ class CopilotRunResponse(BaseModel):
     best_evaluation: Dict[str, Any]
     final_evaluation: Dict[str, Any]
     iterations: List[Dict[str, Any]]
+    convergence_reason: str = ""
+    metric_repair_enabled: bool = False
+    metric_repair_threshold_effective: Optional[float] = None
     final_validation: Optional[Dict[str, Any]] = None
     semantic_summaries: Optional[Dict[str, Any]] = None
     artifact_dir: Optional[str] = None

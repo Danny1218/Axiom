@@ -18,7 +18,7 @@ from axiom.copilot import (
     run_copilot_search,
 )
 from axiom.copilot.benchmarks import default_neg_mse_score_fn
-from axiom.copilot.search import _is_better
+from axiom.copilot.search import DEFAULT_METRIC_REPAIR_THRESHOLD, _is_better
 from axiom.experts import (
     ExpertDraftRequest,
     ExpertDraftResponse,
@@ -31,6 +31,10 @@ BROKEN_AX = "y = ++++ ;"
 GOOD_AX = "y = neural([1.0, 2.0]);"
 LOW_Q_AX = "y = 1.0;"
 HIGH_Q_AX = "y = 0.5;"
+BAD_DOUBLE_AX = "y = x * 1.0;"
+GOOD_DOUBLE_AX = "y = x * 2.0;"
+EX_IN = [{"x": 1.0}]
+EX_EXP = [{"y": 2.0}]
 
 
 @pytest.fixture(autouse=True)
@@ -96,6 +100,7 @@ def test_compile_failure_then_repair_then_success():
     assert out.best_evaluation.success is True
     assert out.final_report.success is True
     assert out.converged is True
+    assert out.convergence_reason == "compile_success"
     assert len(ex.draft_calls) == 1
     assert ex.draft_calls[0].context["domain_context"] == "tabular"
     assert len(ex.repair_calls) == 1
@@ -123,6 +128,7 @@ def test_best_candidate_prefers_valid_over_invalid():
         expected_rows=[{"y": 0.5}],
         score_fn=lambda p, e: {"quality": 1.0 / (1.0 + abs(float(p[0]["y"]) - float(e[0]["y"])))},
         score_sort_key="quality",
+        repair_valid_with_metrics=False,
     )
     out = run_copilot_search(cfg)
     assert out.best_evaluation.success is True
@@ -155,6 +161,47 @@ def test_best_candidate_higher_score_wins():
     q1 = out.iterations[1].evaluation.metrics["quality"]
     assert q1 > q0
     assert out.best_evaluation.metrics["quality"] == q1
+    assert out.convergence_reason == "metric_threshold_met"
+
+
+def test_predict_rows_repairs_poor_neg_mse_until_symbolic_fix():
+    ex = ScriptedExpert(BAD_DOUBLE_AX, [GOOD_DOUBLE_AX])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="double x",
+        max_iterations=4,
+        mode="predict_rows",
+        example_input_rows=EX_IN,
+        expected_rows=EX_EXP,
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+        repair_valid_with_metrics=True,
+    )
+    out = run_copilot_search(cfg)
+    assert len(out.iterations) == 2
+    assert out.converged is True
+    assert out.convergence_reason == "metric_threshold_met"
+    assert out.metric_repair_threshold_effective == DEFAULT_METRIC_REPAIR_THRESHOLD
+    assert out.best_source.strip() == GOOD_DOUBLE_AX.strip()
+    assert len(ex.repair_calls) == 1
+
+
+def test_predict_rows_metric_budget_exhausted_when_still_poor():
+    ex = ScriptedExpert(BAD_DOUBLE_AX, [BAD_DOUBLE_AX])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="double x",
+        max_iterations=2,
+        mode="predict_rows",
+        example_input_rows=EX_IN,
+        expected_rows=EX_EXP,
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+        repair_valid_with_metrics=True,
+    )
+    out = run_copilot_search(cfg)
+    assert not out.converged
+    assert out.convergence_reason == "metric_budget_exhausted"
 
 
 def test_summarize_traces_calls_expert_and_sets_iteration_field():
@@ -170,6 +217,7 @@ def test_summarize_traces_calls_expert_and_sets_iteration_field():
     assert len(ex.summarize_calls) == 1
     assert ex.summarize_calls[0].goal == "emit neural y"
     assert out.iterations[0].semantic_trace_summary == "ok"
+    assert out.convergence_reason == "compile_success"
 
 
 def test_summarize_traces_expert_failure_still_completes_search():
@@ -195,6 +243,7 @@ def test_converged_false_when_still_failing_at_budget():
     cfg = CopilotSearchConfig(expert=ex, goal="x", max_iterations=2, mode="compile_only")
     out = run_copilot_search(cfg)
     assert out.converged is False
+    assert out.convergence_reason == "failure"
     assert out.final_report.success is False
     assert len(out.iterations) == 2
 
@@ -229,6 +278,7 @@ def test_train_tabular_search_success_and_draft_context():
         tabular_eval_expected_rows=[{"y": 2.0}],
         score_fn=default_neg_mse_score_fn(),
         score_sort_key="neg_mse",
+        repair_valid_with_metrics=False,
     )
     out = run_copilot_search(cfg)
     assert out.best_evaluation.success

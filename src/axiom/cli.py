@@ -592,22 +592,31 @@ def _build_copilot_search_config(args: argparse.Namespace, expert) -> Any:
         tab_params = pld.params
         tab_eval_exp = list(pld.eval_expected_rows)
 
+    if getattr(args, "repair_valid_with_metrics", False) and getattr(args, "no_repair_valid_with_metrics", False):
+        raise SystemExit("Cannot combine --repair-valid-with-metrics with --no-repair-valid-with-metrics.")
+
     if args.compile_only:
         mode: str = "compile_only"
         score_fn = None
         sort_key = None
+        repair_valid = False
     elif train_tab:
         mode = "train_tabular"
         score_fn = _default_predict_score_fn()
         sort_key = "neg_mse"
+        repair_valid = not bool(getattr(args, "no_repair_valid_with_metrics", False))
     elif example_in is not None:
         mode = "predict_rows"
         score_fn = _default_predict_score_fn()
         sort_key = "neg_mse"
+        repair_valid = not bool(getattr(args, "no_repair_valid_with_metrics", False))
     else:
         mode = "compile_only"
         score_fn = None
         sort_key = None
+        repair_valid = False
+
+    metric_below = getattr(args, "metric_repair_if_below", None)
 
     summarize = bool(getattr(args, "summarize_traces", False))
     return CopilotSearchConfig(
@@ -628,6 +637,8 @@ def _build_copilot_search_config(args: argparse.Namespace, expert) -> Any:
         tabular_target_var=tab_target,
         tabular_train_params=tab_params,
         tabular_eval_expected_rows=tab_eval_exp,
+        repair_valid_with_metrics=repair_valid,
+        metric_repair_if_below=float(metric_below) if metric_below is not None else None,
     )
 
 
@@ -673,6 +684,11 @@ def _cmd_copilot_search(args: argparse.Namespace) -> None:
     if args.report_out is not None:
         payload = {
             "converged": result.converged,
+            "convergence_reason": result.convergence_reason,
+            "metric_repair": {
+                "enabled": result.metric_repair_enabled,
+                "threshold_effective": result.metric_repair_threshold_effective,
+            },
             "best_source": result.best_source,
             "best_evaluation": _serialize_evaluation_report(result.best_evaluation),
             "final_report": _serialize_evaluation_report(result.final_report),
@@ -722,8 +738,8 @@ def _cmd_copilot_run(args: argparse.Namespace) -> None:
     fv = result.final_validation
     fv_ok = fv.success if fv is not None else None
     print(
-        f"{prefix} converged={sr.converged} best_eval_ok={sr.best_evaluation.success} "
-        f"final_validation_ok={fv_ok}",
+        f"{prefix} converged={sr.converged} convergence_reason={sr.convergence_reason!r} "
+        f"best_eval_ok={sr.best_evaluation.success} final_validation_ok={fv_ok}",
         file=sys.stderr,
     )
     if fv is not None and not fv.success:
@@ -913,6 +929,23 @@ def _add_copilot_search_loop_args(p: argparse.ArgumentParser) -> None:
         "--summarize-traces",
         action="store_true",
         help="After each iteration, call the expert summarize_trace API (optional; extra latency).",
+    )
+    p.add_argument(
+        "--repair-valid-with-metrics",
+        action="store_true",
+        help="Force metric-driven repair after a successful compile (default: on for --examples-json / --train-tabular).",
+    )
+    p.add_argument(
+        "--no-repair-valid-with-metrics",
+        action="store_true",
+        help="Stop after the first successful compile even if the metric is poor (disables metric-driven repair).",
+    )
+    p.add_argument(
+        "--metric-repair-if-below",
+        type=float,
+        default=None,
+        metavar="FLOAT",
+        help="Repair while the score sort key is strictly below this (built-in neg_mse default: -1e-9).",
     )
 
 

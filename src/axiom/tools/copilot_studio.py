@@ -143,6 +143,7 @@ def run_studio_search(
     else:
         raise ValueError(f"Unknown evaluation_mode: {evaluation_mode!r}")
 
+    repair_valid = mode in ("predict_rows", "train_tabular")
     cfg = CopilotSearchConfig(
         expert=expert,
         goal=goal.strip(),
@@ -160,6 +161,8 @@ def run_studio_search(
         tabular_target_var=tab_target,
         tabular_train_params=tab_params,
         tabular_eval_expected_rows=tab_eval_exp,
+        repair_valid_with_metrics=repair_valid,
+        metric_repair_if_below=None,
     )
     return cfg, run_copilot_search(cfg)
 

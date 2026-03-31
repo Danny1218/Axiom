@@ -81,6 +81,8 @@ def test_pipeline_summary_json_shape(tmp_path: Path) -> None:
     doc = copilot_pipeline_summary_dict(result, artifact_dir_resolved=result.artifact_dir)
     assert doc["disclaimer"] == PIPELINE_DISCLAIMER
     assert doc["converged"] is True
+    assert doc["convergence_reason"] == "compile_success"
+    assert doc["metric_repair"]["enabled"] is False
     assert doc["best_evaluation"]["success"] is True
     assert doc["final_validation"]["success"] is True
     json.dumps(doc)

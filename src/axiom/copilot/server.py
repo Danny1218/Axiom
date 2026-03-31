@@ -62,6 +62,15 @@ def _copilot_payload_from_train_tabular(section: TrainTabularPayload):
     return parse_tabular_json_dict(d)
 
 
+def _repair_valid_from_body(body: SearchRequest, mode: str) -> bool:
+    if mode == "compile_only":
+        return False
+    v = body.repair_valid_with_metrics
+    if v is not None:
+        return bool(v)
+    return mode in ("predict_rows", "train_tabular")
+
+
 def _search_config_from_request(body: SearchRequest, exp: SemanticExpert) -> CopilotSearchConfig:
     example_in: Optional[List[Dict[str, Any]]] = None
     example_exp: Optional[List[Dict[str, Any]]] = None
@@ -118,6 +127,8 @@ def _search_config_from_request(body: SearchRequest, exp: SemanticExpert) -> Cop
         tabular_target_var=tab_target,
         tabular_train_params=tab_params,
         tabular_eval_expected_rows=tab_eval_exp,
+        repair_valid_with_metrics=_repair_valid_from_body(body, mode),
+        metric_repair_if_below=body.metric_repair_if_below,
     )
 
 
@@ -143,6 +154,9 @@ def _serialize_search_response(result: CopilotSearchResult, cfg: CopilotSearchCo
         best_evaluation=evaluation_report_to_dict(result.best_evaluation),
         final_evaluation=evaluation_report_to_dict(result.final_report),
         iterations=iters,
+        convergence_reason=result.convergence_reason,
+        metric_repair_enabled=result.metric_repair_enabled,
+        metric_repair_threshold_effective=result.metric_repair_threshold_effective,
     )
 
 
@@ -216,6 +230,7 @@ def create_app(expert: SemanticExpert):
             artifact_dir_resolved=result.artifact_dir,
             summarize_traces=bool(body.summarize_traces),
         )
+        mr = doc.get("metric_repair") or {}
         return CopilotRunResponse(
             disclaimer=str(doc["disclaimer"]),
             converged=bool(doc["converged"]),
@@ -223,6 +238,9 @@ def create_app(expert: SemanticExpert):
             best_evaluation=dict(doc["best_evaluation"]),
             final_evaluation=dict(doc["final_evaluation"]),
             iterations=list(doc["iterations"]),
+            convergence_reason=str(doc.get("convergence_reason", "")),
+            metric_repair_enabled=bool(mr.get("enabled", False)),
+            metric_repair_threshold_effective=mr.get("threshold_effective"),
             final_validation=dict(doc["final_validation"]) if doc.get("final_validation") is not None else None,
             semantic_summaries=dict(doc["semantic_summaries"]) if doc.get("semantic_summaries") else None,
             artifact_dir=doc.get("artifact_dir"),

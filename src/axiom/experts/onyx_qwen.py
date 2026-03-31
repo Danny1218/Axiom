@@ -73,31 +73,110 @@ Good:
 score = max(a, b);
 ```"""
 
+EXAMPLES_SEMANTICS_BLOCK = """Example-driven semantics (when `example_input_rows` / `expected_outputs` are present):
+- Return a SINGLE general `.ax` program — not one statement block per example row.
+- Prefer direct symbolic arithmetic over `neural(...)` when the mapping is exact and simple.
+- Use the actual variable names from the examples (e.g. `x`, `y`).
+- Do NOT emit row-indexed variables like `x_0`, `x_1`, `y_0`, `y_1`.
+- Do NOT unroll one line per example row.
+- Do NOT use `output(...)` — it is not valid in this DSL.
+- The program must work for arbitrary future inputs, not only the provided examples.
+- The program must satisfy every provided example: matching inputs must produce the expected outputs.
+- Do not ignore input variables; each output must follow from the inputs for that row.
+- Do not return a constant placeholder unless it matches all examples simultaneously.
+
+Unrolling bad → good:
+Bad:
+x_0 = 1.0;
+y_0 = x_0 * 2.0;
+x_1 = 2.5;
+y_1 = x_1 * 2.0;
+Good:
+y = x * 2.0;
+
+Constant shortcut bad → good:
+Bad: `x = 5.0; y = x;`
+Good: `y = x * 2.0;`"""
+
+REPAIR_UNROLL_COLLAPSE_BLOCK = """Repair focus — unrolled or invalid I/O:
+The current program uses row-indexed names (`x_0`, `y_1`, …) and/or `output(...)`. Collapse it into ONE reusable program over the real input/output names from the goal and examples (e.g. `x`, `y`). `output(...)` is invalid in this DSL — use assignments to named variables only.
+Bad: `y_0 = x_0 * 2; ... output(y_0, y_1)`
+Good: `y = x * 2.0;`"""
+
+_INDEXED_VAR_PATTERN = re.compile(r"\b[a-zA-Z_][a-zA-Z0-9]*_\d+\b")
+_OUTPUT_CALL_PATTERN = re.compile(r"\boutput\s*\(", re.IGNORECASE)
+
+
+def _program_has_indexed_variables(source: str) -> bool:
+    return bool(_INDEXED_VAR_PATTERN.search(source))
+
+
+def _program_has_output_call(source: str) -> bool:
+    return bool(_OUTPUT_CALL_PATTERN.search(source))
+
+
+def _pattern_warnings(ax: str) -> dict[str, Any]:
+    """Metadata flags for likely per-row unrolling or invalid ``output(...)`` (source kept intact)."""
+    out: dict[str, Any] = {}
+    if _program_has_indexed_variables(ax):
+        out["indexed_variable_warning"] = True
+    if _program_has_output_call(ax):
+        out["output_call_warning"] = True
+    return out
+
+
+def _append_repair_unroll_hints_if_needed(parts: list[str], current_program: str) -> None:
+    if _program_has_indexed_variables(current_program) or _program_has_output_call(current_program):
+        parts.append(REPAIR_UNROLL_COLLAPSE_BLOCK + "\n\n")
+
+
+def _context_has_examples_driven_semantics(context: Mapping[str, Any]) -> bool:
+    eo = context.get("expected_outputs")
+    ei = context.get("example_input_rows")
+    return (isinstance(eo, list) and len(eo) > 0) or (isinstance(ei, list) and len(ei) > 0)
+
+
+def _append_examples_semantics_if_needed(parts: list[str], context: Mapping[str, Any]) -> None:
+    if _context_has_examples_driven_semantics(context):
+        parts.append(EXAMPLES_SEMANTICS_BLOCK)
+
 
 def _context_json(context: Mapping[str, Any]) -> str:
     return json.dumps(dict(context), sort_keys=True, separators=(",", ":"), default=str)
 
 
 def user_prompt_draft(goal: str, context: Mapping[str, Any]) -> str:
-    return (
-        f"Goal:\n{goal}\n\n"
-        f"Context (JSON, sorted keys):\n{_context_json(context)}\n\n"
-        f"{SYNTAX_SUMMARY}\n\n"
-        f"{DRAFT_FEWSHOT}\n\n"
-        "Respond with the complete `.ax` program only (fenced with `ax` if you use a fence)."
+    parts = [
+        f"Goal:\n{goal}\n\n",
+        f"Context (JSON, sorted keys):\n{_context_json(context)}\n\n",
+    ]
+    _append_examples_semantics_if_needed(parts, context)
+    parts.extend(
+        [
+            f"{SYNTAX_SUMMARY}\n\n",
+            f"{DRAFT_FEWSHOT}\n\n",
+            "Respond with the complete `.ax` program only (fenced with `ax` if you use a fence).",
+        ]
     )
+    return "".join(parts)
 
 
 def user_prompt_repair(goal: str, current_program: str, error_report: str, context: Mapping[str, Any]) -> str:
-    return (
-        f"Goal:\n{goal}\n\n"
-        f"Error report:\n{error_report}\n\n"
-        f"Context (JSON, sorted keys):\n{_context_json(context)}\n\n"
-        f"{SYNTAX_SUMMARY}\n\n"
-        f"{REPAIR_FEWSHOT}\n\n"
-        f"Current program:\n```ax\n{current_program.rstrip()}\n```\n\n"
-        "Return the corrected full `.ax` program only (fenced with `ax` if you must)."
+    parts = [
+        f"Goal:\n{goal}\n\n",
+        f"Error report:\n{error_report}\n\n",
+        f"Context (JSON, sorted keys):\n{_context_json(context)}\n\n",
+    ]
+    _append_examples_semantics_if_needed(parts, context)
+    parts.extend([f"{SYNTAX_SUMMARY}\n\n", f"{REPAIR_FEWSHOT}\n\n"])
+    _append_repair_unroll_hints_if_needed(parts, current_program)
+    parts.extend(
+        [
+            f"Current program:\n```ax\n{current_program.rstrip()}\n```\n\n",
+            "Return the corrected full `.ax` program only (fenced with `ax` if you must).",
+        ]
     )
+    return "".join(parts)
 
 
 def user_prompt_trace_summary(
@@ -133,6 +212,12 @@ def _remove_skipped_fence_blocks(text: str) -> str:
     return "".join(out)
 
 _PRINT_CALL = re.compile(r"\bprint\s*\(", re.IGNORECASE)
+
+_STRAY_LANG_TAGS = frozenset({"ax", "axiom", "javascript", "js"})
+
+
+def _is_stray_lang_tag_line(line: str) -> bool:
+    return line.strip().lower() in _STRAY_LANG_TAGS
 
 
 class AxSplitResult(NamedTuple):
@@ -175,6 +260,27 @@ def _line_code_score(line: str) -> int:
     return score
 
 
+def _rest_looks_code_like(rest: list[str]) -> bool:
+    if not rest:
+        return False
+    for ln in rest:
+        if _line_code_score(ln) > 0:
+            return True
+    blob = "\n".join(rest)
+    return "=" in blob and ";" in blob
+
+
+def _finalize_extracted_source(ax: str, extraction: dict[str, Any]) -> str:
+    """Strip a lone first-line language tag (``ax`` / ``js`` / …) when the remainder is code-like; set counts."""
+    lines = ax.splitlines()
+    if lines and _is_stray_lang_tag_line(lines[0]) and len(lines) > 1 and _rest_looks_code_like(lines[1:]):
+        extraction["stripped_language_tag"] = lines[0].strip().lower()
+        lines = lines[1:]
+        ax = "\n".join(lines).strip()
+    extraction["code_line_count"] = len([ln for ln in ax.splitlines() if ln.strip()])
+    return ax
+
+
 def _best_code_run(lines: list[str]) -> tuple[int, int] | None:
     """Return (start, end) line indices of best contiguous run of code-like lines (end exclusive)."""
     scores = [_line_code_score(l) for l in lines]
@@ -207,6 +313,13 @@ def _score_fence_body(body: str) -> int:
     return sum(_line_code_score(l) for l in ls[a:b])
 
 
+def _split_ax_result(ax: str, explanation: Optional[str], extraction: dict[str, Any], raw: str) -> AxSplitResult:
+    extraction.update(_forbidden_flags(ax, raw))
+    ax = _finalize_extracted_source(ax, extraction)
+    extraction.update(_pattern_warnings(ax))
+    return AxSplitResult(ax, explanation, extraction)
+
+
 def split_ax_and_prose(raw: str) -> AxSplitResult:
     """Extract `.ax` from model output: prefer fenced ``ax``, then best non-Macaulay fence, then code-like lines."""
     text = raw.strip()
@@ -219,8 +332,7 @@ def split_ax_and_prose(raw: str) -> AxSplitResult:
         prose_parts = [p for p in (before, after) if p]
         explanation = "\n\n".join(prose_parts) if prose_parts else None
         extraction["extraction_mode"] = "fenced_ax"
-        extraction.update(_forbidden_flags(ax, raw))
-        return AxSplitResult(ax, explanation, extraction)
+        return _split_ax_result(ax, explanation, extraction, raw)
 
     best_body: str | None = None
     best_score = -1
@@ -242,25 +354,33 @@ def split_ax_and_prose(raw: str) -> AxSplitResult:
         prose_parts = [p for p in (before, after) if p]
         explanation = "\n\n".join(prose_parts) if prose_parts else None
         extraction["extraction_mode"] = "fenced_non_ax"
-        extraction.update(_forbidden_flags(best_body, raw))
-        return AxSplitResult(best_body, explanation, extraction)
+        return _split_ax_result(best_body, explanation, extraction, raw)
 
     heur_text = _remove_skipped_fence_blocks(text)
-    lines = heur_text.splitlines()
-    run = _best_code_run(lines)
+    lines0 = heur_text.splitlines()
+    prose_prefix = ""
+    heur_lines = lines0
+    if len(lines0) >= 2 and _is_stray_lang_tag_line(lines0[0]) and _rest_looks_code_like(lines0[1:]):
+        prose_prefix = lines0[0].strip()
+        heur_lines = lines0[1:]
+        extraction["stripped_language_tag"] = prose_prefix
+
+    run = _best_code_run(heur_lines)
     if run is None:
-        extraction.update(_forbidden_flags(text, raw))
-        return AxSplitResult(text.strip(), None, extraction)
+        ax_plain = text.strip()
+        extraction["extraction_mode"] = "plain_fallback"
+        return _split_ax_result(ax_plain, None, extraction, raw)
 
     a, b = run
-    ax = "\n".join(lines[a:b]).strip()
-    prose_before = "\n".join(lines[:a]).strip()
-    prose_after = "\n".join(lines[b:]).strip()
+    ax = "\n".join(heur_lines[a:b]).strip()
+    prose_before = "\n".join(heur_lines[:a]).strip()
+    prose_after = "\n".join(heur_lines[b:]).strip()
+    if prose_prefix:
+        prose_before = "\n\n".join(p for p in (prose_prefix, prose_before) if p)
     prose_parts = [p for p in (prose_before, prose_after) if p]
     explanation = "\n\n".join(prose_parts) if prose_parts else None
     extraction["extraction_mode"] = "heuristic_lines"
-    extraction.update(_forbidden_flags(ax, raw))
-    return AxSplitResult(ax, explanation, extraction)
+    return _split_ax_result(ax, explanation, extraction, raw)
 
 
 class OnyxQwenError(Exception):
@@ -405,6 +525,8 @@ __all__ = [
     "AxSplitResult",
     "BACKEND_NAME",
     "DRAFT_FEWSHOT",
+    "EXAMPLES_SEMANTICS_BLOCK",
+    "REPAIR_UNROLL_COLLAPSE_BLOCK",
     "OnyxQwenBackend",
     "OnyxQwenError",
     "OnyxQwenHTTPError",

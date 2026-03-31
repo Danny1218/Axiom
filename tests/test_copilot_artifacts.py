@@ -105,6 +105,9 @@ def test_persist_copilot_artifacts_writes_three_files(tmp_path: Path):
     assert sr["schema_version"] == COPILOT_ARTIFACT_SCHEMA_VERSION
     assert sr["kind"] == "axiom.copilot.search_report"
     assert sr["converged"] is True
+    assert sr["convergence_reason"] == "compile_success"
+    assert sr["metric_repair"]["enabled"] is False
+    assert sr["metric_repair"]["threshold_effective"] is None
     assert sr["failures_metrics_summary"]["best"]["success"] is True
     assert sr["artifact_files"]["best_ax"] == BEST_AX_NAME
     assert sr["semantic_summaries"]["enabled"] is False

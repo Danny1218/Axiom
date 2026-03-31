@@ -19,6 +19,7 @@ from axiom.copilot.artifacts import (
     persist_copilot_artifacts,
 )
 from axiom.copilot.search import (
+    DEFAULT_METRIC_REPAIR_THRESHOLD,
     CopilotIterationRecord,
     CopilotSearchConfig,
     CopilotSearchResult,
@@ -57,6 +58,7 @@ __all__ = [
     "BenchmarkTask",
     "COPILOT_ARTIFACT_SCHEMA_VERSION",
     "DEFAULT_BENCHMARK_TASKS",
+    "DEFAULT_METRIC_REPAIR_THRESHOLD",
     "CopilotIterationRecord",
     "CopilotSearchConfig",
     "CopilotSearchResult",

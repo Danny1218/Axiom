@@ -95,6 +95,9 @@ def test_search_compile_only_converges(client):
     assert r.status_code == 200
     data = r.json()
     assert data["converged"] is True
+    assert data["convergence_reason"] == "compile_success"
+    assert data["metric_repair_enabled"] is False
+    assert data["metric_repair_threshold_effective"] is None
     assert "neural" in data["best_source"]
     assert data["best_evaluation"]["success"] is True
     assert len(data["iterations"]) >= 1
@@ -110,6 +113,7 @@ def test_search_with_examples_predict_rows(client):
             "max_iterations": 2,
             "compile_only": False,
             "examples": [{"inputs": {"x": 0.0}, "expected": {"y": 1.0}}],
+            "repair_valid_with_metrics": False,
         },
     )
     assert r.status_code == 200
@@ -127,6 +131,7 @@ def test_search_train_tabular(client):
             "goal": "linear",
             "max_iterations": 1,
             "compile_only": False,
+            "repair_valid_with_metrics": False,
             "train_tabular": {
                 "target_var": "y",
                 "train_rows": train,
@@ -262,6 +267,7 @@ def test_run_pipeline_returns_disclaimer_and_final_validation(client):
     d = r.json()
     assert "disclaimer" in d and "not" in d["disclaimer"].lower()
     assert d["converged"] is True
+    assert d.get("convergence_reason") == "compile_success"
     assert d["final_validation"] is not None
     assert d["final_validation"]["success"] is True
     assert "neural" in d["best_source"]

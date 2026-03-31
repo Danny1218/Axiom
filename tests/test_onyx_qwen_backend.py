@@ -11,6 +11,8 @@ import requests
 
 from axiom.experts.base import ExpertDraftRequest, ExpertRepairRequest, ExpertTraceSummaryRequest, SemanticExpert
 from axiom.experts.onyx_qwen import (
+    EXAMPLES_SEMANTICS_BLOCK,
+    REPAIR_UNROLL_COLLAPSE_BLOCK,
     OnyxQwenBackend,
     OnyxQwenHTTPError,
     OnyxQwenParseError,
@@ -134,6 +136,80 @@ def test_user_prompt_repair_is_deterministic():
     b = user_prompt_repair("g", "x = 1.0;", "err", {"a": 2, "b": 1})
     assert a == b
     assert "Syntax summary" in a and "Few-shot repair" in a
+
+
+def test_user_prompt_repair_includes_examples_semantics_when_expected_outputs():
+    ctx = {"expected_outputs": [{"y": 2.0}], "example_input_rows": [{"x": 1.0}]}
+    p = user_prompt_repair("goal", "bad", "err", ctx)
+    assert "Example-driven semantics" in p
+    assert EXAMPLES_SEMANTICS_BLOCK.splitlines()[0] in p
+    assert "y = x * 2.0" in p and "x = 5.0" in p
+    assert "SINGLE general" in p
+    assert "x_0" in p and "output(" in p
+
+
+def test_user_prompt_draft_includes_examples_semantics_when_rows_present():
+    ctx = {"example_input_rows": [{"x": 1.0}], "expected_outputs": []}
+    p = user_prompt_draft("goal", ctx)
+    assert "Example-driven semantics" in p
+    assert "Do NOT emit row-indexed variables" in p
+    assert "Prefer direct symbolic arithmetic" in p
+
+
+def test_user_prompt_no_examples_block_when_empty_lists():
+    p = user_prompt_repair("g", "x=1;", "e", {"expected_outputs": [], "example_input_rows": []})
+    assert "Example-driven semantics" not in p
+    assert "Repair focus" not in p
+
+
+def test_user_prompt_repair_includes_unroll_collapse_when_indexed_names():
+    p = user_prompt_repair("g", "y_0 = x_0 * 2.0;", "e", {})
+    assert REPAIR_UNROLL_COLLAPSE_BLOCK.splitlines()[0] in p
+    assert "Collapse" in p
+
+
+def test_user_prompt_repair_includes_unroll_collapse_when_output_call():
+    p = user_prompt_repair("g", "y = 1.0;\noutput(y);", "e", {})
+    assert "Repair focus" in p
+    assert "output(...)" in p or "output(`" in p
+
+
+def test_user_prompt_repair_unroll_hint_is_deterministic():
+    a = user_prompt_repair("g", "y_0 = x_0;", "e", {"b": 1, "a": 2})
+    b = user_prompt_repair("g", "y_0 = x_0;", "e", {"a": 2, "b": 1})
+    assert a == b
+
+
+def test_split_ax_metadata_indexed_and_output_warnings():
+    r = split_ax_and_prose("```ax\ny_0 = x_0 * 2.0;\noutput(z);\n```")
+    assert r.extraction.get("indexed_variable_warning") is True
+    assert r.extraction.get("output_call_warning") is True
+    assert "output(z)" in r.ax_source
+
+
+def test_split_ax_strips_leading_ax_line_inside_fence():
+    r = split_ax_and_prose("```ax\nax\ny = x * 2.0;\n```")
+    assert r.ax_source.strip() == "y = x * 2.0;"
+    assert r.extraction.get("stripped_language_tag") == "ax"
+    assert r.extraction.get("code_line_count") == 1
+
+
+def test_split_ax_bare_javascript_line_then_code():
+    r = split_ax_and_prose("javascript\ny = x * 2.0;\n")
+    assert r.ax_source.strip() == "y = x * 2.0;"
+    assert r.extraction.get("stripped_language_tag") == "javascript"
+    assert r.extraction.get("extraction_mode") == "heuristic_lines"
+
+
+def test_draft_metadata_code_line_count_after_strip():
+    def fake_post(url, json=None, headers=None, timeout=None):
+        return _ok_response("```ax\nax\na = 1.0;\nb = 2.0;\n```")
+
+    b = OnyxQwenBackend("http://h", "m", _post=fake_post)
+    out = b.draft_program(ExpertDraftRequest("g"))
+    assert out.ax_source.strip() == "a = 1.0;\nb = 2.0;"
+    assert out.metadata.get("stripped_language_tag") == "ax"
+    assert out.metadata.get("code_line_count") == 2
 
 
 def test_forbidden_tokens_in_metadata_from_draft():

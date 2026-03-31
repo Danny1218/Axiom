@@ -50,6 +50,11 @@ def copilot_pipeline_summary_dict(
     out: Dict[str, Any] = {
         "disclaimer": PIPELINE_DISCLAIMER,
         "converged": sr.converged,
+        "convergence_reason": sr.convergence_reason,
+        "metric_repair": {
+            "enabled": sr.metric_repair_enabled,
+            "threshold_effective": sr.metric_repair_threshold_effective,
+        },
         "best_source": sr.best_source,
         "best_evaluation": evaluation_report_to_dict(sr.best_evaluation),
         "final_evaluation": evaluation_report_to_dict(sr.final_report),

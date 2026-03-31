@@ -21,6 +21,9 @@ from axiom.experts.base import ExpertDraftRequest, ExpertRepairRequest, Semantic
 
 ExpertRequestPayload = Dict[str, Any]
 
+# Default stop threshold for built-in ``neg_mse`` (higher is better; 0 ≈ perfect). Repair while score < this.
+DEFAULT_METRIC_REPAIR_THRESHOLD = -1e-9
+
 
 def build_draft_context(
     *,
@@ -129,7 +132,10 @@ class CopilotSearchConfig:
     ] = None
     score_sort_key: Optional[str] = None
     repair_valid_with_metrics: bool = False
+    """When True, keep repairing successful programs whose metric is below :attr:`metric_repair_if_below` (effective)."""
     metric_repair_if_below: Optional[float] = None
+    """If set, repair while the sort key is strictly below this. If unset and ``score_sort_key`` is ``neg_mse``, use
+    :data:`DEFAULT_METRIC_REPAIR_THRESHOLD`."""
     predictions_sample_limit: int = 3
     include_trace_snippet: bool = True
     # If True, after each evaluation call expert.summarize_trace (extra latency; failures are ignored).
@@ -167,6 +173,10 @@ class CopilotSearchResult:
     final_report: ProgramEvaluationReport
     converged: bool
     iterations: List[CopilotIterationRecord] = field(default_factory=list)
+    metric_repair_enabled: bool = False
+    metric_repair_threshold_effective: Optional[float] = None
+    convergence_reason: str = ""
+    """One of: ``metric_threshold_met``, ``metric_budget_exhausted``, ``compile_success``, ``failure``."""
 
 
 def _repair_payload_dict(req: ExpertRepairRequest) -> ExpertRequestPayload:
@@ -232,14 +242,25 @@ def _is_better(
     return False
 
 
+def _effective_metric_threshold(config: CopilotSearchConfig) -> Optional[float]:
+    """Threshold for ``v < thr`` ⇒ keep repairing (``neg_mse`` defaults to :data:`DEFAULT_METRIC_REPAIR_THRESHOLD`)."""
+    if not config.repair_valid_with_metrics:
+        return None
+    if config.metric_repair_if_below is not None:
+        return float(config.metric_repair_if_below)
+    if config.score_sort_key == "neg_mse":
+        return DEFAULT_METRIC_REPAIR_THRESHOLD
+    return None
+
+
 def _needs_metric_repair(config: CopilotSearchConfig, report: ProgramEvaluationReport) -> bool:
     if not report.success or not config.repair_valid_with_metrics:
         return False
     if not report.metrics and not report.program_metrics:
         return False
-    thr = config.metric_repair_if_below
+    thr = _effective_metric_threshold(config)
     if thr is None:
-        return True
+        return False
     v = _metric_value(report, config.score_sort_key)
     return v is not None and v < thr
 
@@ -285,6 +306,8 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
 
     final_report: Optional[ProgramEvaluationReport] = None
     converged = False
+    convergence_reason = "failure"
+    metric_thr_eff = _effective_metric_threshold(config)
 
     need_trace = config.include_trace_snippet or config.summarize_traces
 
@@ -366,7 +389,20 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
             provenance_meta = expert_response_to_dict(repair_resp, "repair")
         else:
             if report.success:
-                converged = True
+                converged = not need_metric_repair
+                if need_metric_repair:
+                    convergence_reason = "metric_budget_exhausted"
+                elif (
+                    config.repair_valid_with_metrics
+                    and config.mode in ("predict_rows", "train_tabular")
+                    and bool(report.metrics)
+                ):
+                    convergence_reason = "metric_threshold_met"
+                else:
+                    convergence_reason = "compile_success"
+            else:
+                converged = False
+                convergence_reason = "failure"
 
         iterations.append(
             CopilotIterationRecord(
@@ -391,6 +427,9 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
         final_report=final_report,
         converged=converged,
         iterations=iterations,
+        metric_repair_enabled=bool(config.repair_valid_with_metrics),
+        metric_repair_threshold_effective=metric_thr_eff,
+        convergence_reason=convergence_reason,
     )
     if config.artifact_dir is not None:
         persist_copilot_artifacts(config, result, config.artifact_dir)
