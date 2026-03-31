@@ -8,6 +8,7 @@ from axiom.copilot.models import (
     ProgramFailure,
     ProgramMetric,
     ProgramValidationReport,
+    TrainTabularParams,
 )
 from axiom.copilot.artifacts import (
     COPILOT_ARTIFACT_SCHEMA_VERSION,
@@ -65,6 +66,7 @@ __all__ = [
     "ProgramFailure",
     "ProgramMetric",
     "ProgramValidationReport",
+    "TrainTabularParams",
     "build_draft_context",
     "build_iterations_document",
     "build_repair_context",

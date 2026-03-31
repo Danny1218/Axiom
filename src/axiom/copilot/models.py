@@ -9,6 +9,16 @@ EvaluationMode = Literal["compile_only", "predict_rows", "train_tabular"]
 
 
 @dataclass(frozen=True)
+class TrainTabularParams:
+    """Hyperparameters for :func:`~axiom.copilot.evaluator.evaluate_program` ``mode=\"train_tabular\"``."""
+
+    epochs: int = 30
+    learning_rate: float = 0.01
+    weight_decay: float = 0.0
+    batch_size: int = 32
+
+
+@dataclass(frozen=True)
 class ProgramCandidate:
     """In-memory ``.ax`` source (no filesystem required)."""
 

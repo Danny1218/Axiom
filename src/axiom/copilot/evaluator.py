@@ -15,7 +15,9 @@ from axiom.copilot.models import (
     ProgramFailure,
     ProgramMetric,
     ProgramValidationReport,
+    TrainTabularParams,
 )
+from axiom.copilot.train_tabular import run_train_tabular
 from axiom.engine.block_executor import InterpretedBlock
 
 CompileStage = str  # "none" | "parse" | "ir" | "block" | "predict"
@@ -93,16 +95,24 @@ def evaluate_program(
     score_fn: Optional[Callable[[List[Dict[str, Any]], List[Dict[str, Any]]], Dict[str, float]]] = None,
     predictions_sample_limit: int = 3,
     include_trace_snippet: bool = True,
+    train_rows: Optional[Sequence[Dict[str, Any]]] = None,
+    eval_rows: Optional[Sequence[Dict[str, Any]]] = None,
+    target_var: Optional[str] = None,
+    train_tabular_params: Optional[TrainTabularParams] = None,
 ) -> ProgramEvaluationReport:
     """Validate and optionally run batched ``predict`` with an optional ``score_fn``.
 
     * ``compile_only`` — same as :func:`validate_program` (no predict).
     * ``predict_rows`` — requires non-empty ``input_rows``; uses :class:`~axiom.api.AxiomModel`.
-    * ``train_tabular`` — **not implemented**; returns ``success=False`` with a structured failure
-      (no second training stack; use the normal ``axiom train`` / trainer APIs for real training).
+    * ``train_tabular`` — compile to :class:`~axiom.engine.block_executor.InterpretedBlock`, build trunk
+      tensors from numeric row dicts (ABI-aware, target column blinded like :class:`~axiom.engine.dataloader.AxiomDataset`),
+      run a small in-process Adam loop on neural parameters, then report ``train_mse`` / ``eval_mse`` on the
+      supervised ABI column ``target_var``. Scalar regression target only (ABI width 1). Purely symbolic
+      programs (no trainable params) still run forward on eval with a warning and no optimizer steps.
+      Optional ``score_fn`` scores full eval predictions vs ``expected_rows`` (same length as ``eval_rows``).
 
     ``score_fn(predictions, expected) -> dict[str, float]`` runs only when both ``expected_rows`` and
-    ``score_fn`` are provided; lengths must match ``input_rows``.
+    ``score_fn`` are provided; lengths must match ``input_rows`` (predict) or ``eval_rows`` (train_tabular).
     """
     source = candidate.source
     failures: List[ProgramFailure] = []
@@ -111,28 +121,6 @@ def evaluate_program(
     program_metrics: List[ProgramMetric] = []
     predictions_sample: Optional[List[Dict[str, Any]]] = None
     trace_snippet: Optional[Dict[str, Any]] = None
-
-    if mode == "train_tabular":
-        return ProgramEvaluationReport(
-            success=False,
-            source=source,
-            compile_stage_reached="none",
-            mode=mode,
-            failures=[
-                ProgramFailure(
-                    stage="train",
-                    kind="unsupported",
-                    message=(
-                        "train_tabular is not implemented in the copilot harness; "
-                        "use compile_only or predict_rows, or call EvolutionaryTrainer / axiom train directly."
-                    ),
-                    detail="NotImplemented",
-                )
-            ],
-            warnings=warnings,
-            metrics=metrics,
-            program_metrics=program_metrics,
-        )
 
     stage, block, compile_failures, compile_warnings = _try_compile(source, max_unroll=max_unroll)
     failures.extend(compile_failures)
@@ -148,6 +136,55 @@ def evaluate_program(
             warnings=warnings,
             metrics=metrics,
             program_metrics=program_metrics,
+        )
+
+    if mode == "train_tabular":
+        tv = (target_var or "").strip()
+        if not tv:
+            failures.append(
+                ProgramFailure(
+                    stage="train",
+                    kind="value",
+                    message="train_tabular requires a non-empty target_var (ABI output name to supervise).",
+                    detail="ValueError",
+                )
+            )
+            return ProgramEvaluationReport(
+                success=False,
+                source=source,
+                compile_stage_reached=stage,
+                mode=mode,
+                failures=failures,
+                warnings=list(compile_warnings),
+                metrics=metrics,
+                program_metrics=program_metrics,
+            )
+        ttp = train_tabular_params or TrainTabularParams()
+        tout = run_train_tabular(
+            block,
+            train_rows=list(train_rows) if train_rows is not None else [],
+            eval_rows=list(eval_rows) if eval_rows is not None else [],
+            target_var=tv,
+            epochs=ttp.epochs,
+            learning_rate=ttp.learning_rate,
+            weight_decay=ttp.weight_decay,
+            batch_size=ttp.batch_size,
+            predictions_sample_limit=predictions_sample_limit,
+            include_trace_snippet=include_trace_snippet,
+            score_fn=score_fn,
+            expected_rows=list(expected_rows) if expected_rows is not None else None,
+        )
+        return ProgramEvaluationReport(
+            success=not tout.failures,
+            source=source,
+            compile_stage_reached=tout.compile_stage_reached,
+            mode=mode,
+            failures=tout.failures,
+            warnings=list(compile_warnings) + tout.warnings,
+            metrics=tout.metrics,
+            program_metrics=tout.program_metrics,
+            predictions_sample=tout.predictions_sample,
+            trace_snippet=tout.trace_snippet,
         )
 
     if mode == "compile_only":

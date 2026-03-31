@@ -136,6 +136,8 @@ Omit **`--summarize-traces`** to skip the extra expert round-trips.
 
 **Benchmark harness (library, no CLI):** `axiom.copilot.benchmarks` defines a few tiny NL tasks (`DEFAULT_BENCHMARK_TASKS`), runs **`run_benchmark_draft_only`** vs **`run_benchmark_search`**, and emits JSON via **`benchmark_suite_to_dict`** — useful for regression checks with a stub expert (`BenchmarkDispatchExpert`) or a real backend. Extra tasks can be loaded from **`axiom/copilot/fixtures/benchmark_tasks.json`**.
 
+**In-memory tabular training (library API):** **`evaluate_program(..., mode="train_tabular")`** trains a compiled **`InterpretedBlock`** on **`train_rows`** with Adam (numeric dict rows, ABI-aware trunk fill, **`target_var`** column blinded in inputs like **`AxiomDataset`**), reports **`train_mse`** / **`eval_mse`** on **`eval_rows`**, optional **`TrainTabularParams`** (**`epochs`**, **`learning_rate`**, **`weight_decay`**, **`batch_size`**) and **`max_unroll`**. Purely symbolic programs get a **`no_trainable_parameters`** warning and eval metrics only—no subprocess and not a replacement for full **`axiom train`**.
+
 ---
 
 ## `axiom serve`

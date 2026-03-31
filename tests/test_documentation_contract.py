@@ -48,6 +48,7 @@ def test_readme_documents_copilot_cli():
     assert "artifact-dir" in text and "iterations.json" in text and "search_report.json" in text
     assert "copilot-studio" in text and "Copilot Studio" in text
     assert "copilot-serve" in text and "AXIOM_COPILOT_API_KEY" in text
+    assert "train_tabular" in text and "TrainTabularParams" in text
 
 
 def test_readme_from_compile_to_production_story():

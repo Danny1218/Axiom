@@ -11,6 +11,7 @@ from axiom.copilot import (
     ProgramFailure,
     ProgramMetric,
     ProgramValidationReport,
+    TrainTabularParams,
     evaluate_program,
     validate_program,
 )
@@ -67,11 +68,27 @@ def test_evaluate_compile_only_matches_validate():
     assert len(e.failures) == len(v.failures)
 
 
-def test_train_tabular_not_implemented():
+def test_train_tabular_requires_target_var():
     r = evaluate_program(ProgramCandidate(GOOD_AX), mode="train_tabular")
     assert r.success is False
     assert r.mode == "train_tabular"
-    assert any(f.stage == "train" and f.kind == "unsupported" for f in r.failures)
+    assert any("target_var" in f.message.lower() for f in r.failures)
+
+
+def test_train_tabular_smoke_with_params():
+    rows = [{"x": 0.5, "y": 1.0}, {"x": 1.0, "y": 2.0}]
+    r = evaluate_program(
+        ProgramCandidate("y = neural([x]);"),
+        mode="train_tabular",
+        target_var="y",
+        train_rows=rows,
+        eval_rows=rows,
+        train_tabular_params=TrainTabularParams(epochs=5, batch_size=2),
+        include_trace_snippet=False,
+    )
+    assert r.success
+    assert r.compile_stage_reached == "train"
+    assert "eval_mse" in r.metrics
 
 
 def test_predict_rows_batch_score_fn():
