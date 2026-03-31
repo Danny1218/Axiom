@@ -64,6 +64,11 @@ def evaluation_report_to_dict(rep: ProgramEvaluationReport) -> Dict[str, Any]:
     }
     if rep.row_comparisons is not None:
         d["row_comparisons"] = json_safe(rep.row_comparisons)
+    d["ranking_penalty"] = float(rep.ranking_penalty)
+    if rep.adjusted_sort_score is not None:
+        d["adjusted_sort_score"] = float(rep.adjusted_sort_score)
+    if rep.ranking_penalty_breakdown:
+        d["ranking_penalty_breakdown"] = json_safe(dict(rep.ranking_penalty_breakdown))
     return d
 
 
@@ -105,6 +110,11 @@ def iteration_entry_to_dict(rec: CopilotIterationRecord) -> Dict[str, Any]:
     }
     if ev.row_comparisons is not None:
         row["row_comparisons"] = json_safe(ev.row_comparisons)
+    row["ranking_penalty"] = float(ev.ranking_penalty)
+    if ev.adjusted_sort_score is not None:
+        row["adjusted_sort_score"] = float(ev.adjusted_sort_score)
+    if ev.ranking_penalty_breakdown:
+        row["ranking_penalty_breakdown"] = json_safe(dict(ev.ranking_penalty_breakdown))
     return row
 
 

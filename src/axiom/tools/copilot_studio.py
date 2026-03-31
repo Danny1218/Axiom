@@ -13,7 +13,13 @@ import os
 from typing import Any, Dict, List, Optional, Tuple
 
 from axiom.copilot.artifacts import build_iterations_document, build_search_report_document
-from axiom.copilot.search import CopilotSearchConfig, CopilotSearchResult, build_draft_context, run_copilot_search
+from axiom.copilot.search import (
+    CopilotSearchConfig,
+    CopilotSearchResult,
+    build_draft_context,
+    merge_completion_overrides_into_context,
+    run_copilot_search,
+)
 from axiom.copilot.tabular_json import parse_tabular_json_text
 from axiom.experts.base import ExpertDraftRequest, ExpertDraftResponse
 
@@ -84,12 +90,33 @@ def build_studio_expert(base_url: str, model: str, api_key: Optional[str] = None
     return OnyxQwenBackend(url, m, api_key=key)
 
 
-def run_studio_draft(goal: str, context: Optional[str], expert: Any) -> ExpertDraftResponse:
-    ctx = build_draft_context(
-        domain_context=(context or "").strip() or None,
-        example_input_rows=None,
-        expected_rows=None,
+def _studio_completion_overrides_from_text(
+    temperature_text: Optional[str],
+    top_p_text: Optional[str],
+) -> Optional[Dict[str, Any]]:
+    out: Dict[str, Any] = {}
+    if temperature_text and str(temperature_text).strip():
+        out["temperature"] = float(str(temperature_text).strip())
+    if top_p_text and str(top_p_text).strip():
+        out["top_p"] = float(str(top_p_text).strip())
+    return out if out else None
+
+
+def run_studio_draft(
+    goal: str,
+    context: Optional[str],
+    expert: Any,
+    *,
+    completion_overrides: Optional[Dict[str, Any]] = None,
+) -> ExpertDraftResponse:
+    ctx = dict(
+        build_draft_context(
+            domain_context=(context or "").strip() or None,
+            example_input_rows=None,
+            expected_rows=None,
+        )
     )
+    ctx = merge_completion_overrides_into_context(ctx, completion_overrides)
     return expert.draft_program(ExpertDraftRequest(goal=goal.strip(), context=ctx))
 
 
@@ -103,6 +130,7 @@ def run_studio_search(
     examples_text: Optional[str] = None,
     tabular_text: Optional[str] = None,
     summarize_traces: bool = False,
+    completion_overrides: Optional[Dict[str, Any]] = None,
 ) -> Tuple[CopilotSearchConfig, CopilotSearchResult]:
     """Run search. ``evaluation_mode`` is ``compile_only`` | ``predict_rows`` | ``train_tabular``."""
     em = (evaluation_mode or "compile_only").strip()
@@ -163,6 +191,7 @@ def run_studio_search(
         tabular_eval_expected_rows=tab_eval_exp,
         repair_valid_with_metrics=repair_valid,
         metric_repair_if_below=None,
+        completion_overrides=completion_overrides,
     )
     return cfg, run_copilot_search(cfg)
 
@@ -224,6 +253,9 @@ def main() -> None:
         expert_model = st.text_input("Model id", placeholder="qwen-7b-chat", key="expert_model")
         expert_key = st.text_input("API key (optional)", type="password", key="expert_key")
         st.caption("If key is empty, `AXIOM_EXPERT_API_KEY` is used when set.")
+        st.caption("Sampling (optional — Onyx backend)")
+        temp_override = st.text_input("Temperature", placeholder="omit for backend default", key="st_temperature")
+        top_p_override = st.text_input("Top-p", placeholder="omit for backend default", key="st_top_p")
 
     st.subheader("Task")
     goal = st.text_area("Goal", placeholder="Describe the .ax program you want.", height=100, key="goal")
@@ -268,7 +300,8 @@ def main() -> None:
         else:
             try:
                 expert = build_studio_expert(expert_url, expert_model, expert_key or None)
-                resp = run_studio_draft(goal, context or None, expert)
+                ovr = _studio_completion_overrides_from_text(temp_override, top_p_override)
+                resp = run_studio_draft(goal, context or None, expert, completion_overrides=ovr)
                 st.session_state.draft_ax = resp.ax_source
                 st.session_state.draft_explanation = resp.explanation
                 st.session_state.draft_error = None
@@ -293,6 +326,7 @@ def main() -> None:
         else:
             try:
                 expert = build_studio_expert(expert_url, expert_model, expert_key or None)
+                ovr = _studio_completion_overrides_from_text(temp_override, top_p_override)
                 cfg, res = run_studio_search(
                     goal,
                     context or None,
@@ -302,6 +336,7 @@ def main() -> None:
                     examples_text=examples_text if eval_mode == "predict_rows" else None,
                     tabular_text=tabular_text if eval_mode == "train_tabular" else None,
                     summarize_traces=summarize_traces,
+                    completion_overrides=ovr,
                 )
                 st.session_state.search_cfg = cfg
                 st.session_state.search_result = res

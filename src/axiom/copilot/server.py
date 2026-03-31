@@ -23,7 +23,12 @@ from axiom.copilot.api_models import (
 from axiom.copilot.artifacts import evaluation_report_to_dict, json_safe
 from axiom.copilot.benchmarks import benchmark_suite_to_dict, benchmark_tasks_from_json_dict, run_benchmark_suite
 from axiom.copilot.pipeline import CopilotPipelineConfig, copilot_pipeline_summary_dict, run_copilot_pipeline
-from axiom.copilot.search import CopilotSearchConfig, CopilotSearchResult, build_draft_context, run_copilot_search
+from axiom.copilot.search import (
+    CopilotSearchConfig,
+    CopilotSearchResult,
+    build_draft_context,
+    run_copilot_search,
+)
 from axiom.copilot.tabular_json import parse_tabular_json_dict
 from axiom.experts.base import ExpertDraftRequest, ExpertTraceSummaryRequest, SemanticExpert
 
@@ -60,6 +65,15 @@ def _copilot_payload_from_train_tabular(section: TrainTabularPayload):
         "batch_size": section.batch_size,
     }
     return parse_tabular_json_dict(d)
+
+
+def _completion_overrides_from_body(body: SearchRequest) -> Optional[Dict[str, Any]]:
+    out: Dict[str, Any] = {}
+    if body.temperature is not None:
+        out["temperature"] = float(body.temperature)
+    if body.top_p is not None:
+        out["top_p"] = float(body.top_p)
+    return out if out else None
 
 
 def _repair_valid_from_body(body: SearchRequest, mode: str) -> bool:
@@ -129,6 +143,7 @@ def _search_config_from_request(body: SearchRequest, exp: SemanticExpert) -> Cop
         tabular_eval_expected_rows=tab_eval_exp,
         repair_valid_with_metrics=_repair_valid_from_body(body, mode),
         metric_repair_if_below=body.metric_repair_if_below,
+        completion_overrides=_completion_overrides_from_body(body),
     )
 
 
@@ -223,6 +238,7 @@ def create_app(expert: SemanticExpert):
             best_ax_path=None,
             summary_json_path=None,
             final_validate=bool(body.final_validate),
+            restarts=int(body.restarts),
         )
         result = run_copilot_pipeline(pcfg)
         doc = copilot_pipeline_summary_dict(
@@ -231,6 +247,7 @@ def create_app(expert: SemanticExpert):
             summarize_traces=bool(body.summarize_traces),
         )
         mr = doc.get("metric_repair") or {}
+        rs = doc.get("restarts") or {}
         return CopilotRunResponse(
             disclaimer=str(doc["disclaimer"]),
             converged=bool(doc["converged"]),
@@ -244,6 +261,9 @@ def create_app(expert: SemanticExpert):
             final_validation=dict(doc["final_validation"]) if doc.get("final_validation") is not None else None,
             semantic_summaries=dict(doc["semantic_summaries"]) if doc.get("semantic_summaries") else None,
             artifact_dir=doc.get("artifact_dir"),
+            restarts_total=int(rs.get("total", 1)),
+            winning_restart_index=int(rs.get("winning_index", 0)),
+            per_restart_summaries=list(rs.get("per_restart") or []),
         )
 
     @app.post("/benchmarks/run", response_model=BenchmarkRunResponse, dependencies=[Depends(verify_copilot_api_key)])

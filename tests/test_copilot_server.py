@@ -9,8 +9,9 @@ import pytest
 pytest.importorskip("fastapi")
 
 from axiom.copilot.artifacts import BEST_AX_NAME
+from axiom.copilot.api_models import SearchRequest
 from axiom.copilot.benchmarks import BenchmarkDispatchExpert
-from axiom.copilot.server import create_app
+from axiom.copilot.server import _search_config_from_request, create_app
 from axiom.experts.base import (
     ExpertDraftRequest,
     ExpertDraftResponse,
@@ -240,6 +241,14 @@ def test_malformed_json(client):
     c, _ = client
     r = c.post("/draft", content=b"not-json", headers={"Content-Type": "application/json"})
     assert r.status_code == 422
+
+
+def test_search_config_from_request_completion_overrides():
+    cfg = _search_config_from_request(
+        SearchRequest(goal="g", max_iterations=1, compile_only=True, temperature=0.12, top_p=0.88),
+        _FakeCopilotExpert(),
+    )
+    assert cfg.completion_overrides == {"temperature": 0.12, "top_p": 0.88}
 
 
 def test_search_writes_artifact_dir(tmp_path: Path, monkeypatch):

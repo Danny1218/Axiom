@@ -260,3 +260,16 @@ def test_predict_rows_row_comparison_limit_zero():
     )
     assert r.success
     assert r.row_comparisons is None
+
+
+def test_predict_rows_warns_suspicious_numeric_literal():
+    r = evaluate_program(
+        ProgramCandidate("y = 03 * x;\n"),
+        mode="predict_rows",
+        input_rows=[{"x": 1.0}],
+        expected_rows=[{"y": 3.0}],
+        score_fn=default_neg_mse_score_fn(),
+        include_trace_snippet=False,
+    )
+    assert r.success
+    assert any("suspicious_numeric_literal_warning" in w for w in r.warnings)

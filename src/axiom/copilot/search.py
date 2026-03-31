@@ -19,6 +19,7 @@ from axiom.copilot.models import (
 )
 from axiom.copilot.summarize import safe_summarize_evaluation
 from axiom.experts.base import ExpertDraftRequest, ExpertRepairRequest, SemanticExpert
+from axiom.experts.onyx_qwen import COMPLETION_OVERRIDES_CONTEXT_KEY, ax_source_metadata_flags
 
 ExpertRequestPayload = Dict[str, Any]
 
@@ -30,6 +31,16 @@ _GOAL_SYMBOLIC_MATH_HINT = re.compile(
     r"risk_score|linear|weighted|blend|double\b|mapping|polynomial)",
     re.I,
 )
+_GOAL_EXACT_SYMBOLIC_EXTRA = re.compile(
+    r"(max\s*\(|min\s*\(|clamp|affine|weighted\s+(sum|blend)|risk_score)",
+    re.I,
+)
+
+# Penalties subtracted from raw sort metric (higher-is-better, e.g. ``neg_mse``).
+_PENALTY_NEURAL_EXACT = 2.0
+_PENALTY_INDEXED = 0.25
+_PENALTY_OUTPUT = 0.25
+_PENALTY_SUSPICIOUS_NUM = 0.25
 
 
 def _goal_suggests_symbolic_math(goal: str) -> bool:
@@ -42,6 +53,55 @@ def _goal_suggests_symbolic_math(goal: str) -> bool:
     if len(g) <= 220 and re.search(r"[0-9]\s*[\*\+\-]\s*[0-9]|=\s*max|=\s*min|\*\s*x\b", g):
         return True
     return False
+
+
+def is_exact_symbolic_examples_task(config: CopilotSearchConfig) -> bool:
+    """predict_rows + expected rows + goal looks like affine/clamp/small math (not a policy)."""
+    if config.mode != "predict_rows" or not config.expected_rows:
+        return False
+    g = config.goal or ""
+    if _goal_suggests_symbolic_math(g):
+        return True
+    if len(g) <= 500 and _GOAL_EXACT_SYMBOLIC_EXTRA.search(g):
+        return True
+    return False
+
+
+def _compute_ranking_penalty(source: str, exact_symbolic_task: bool) -> tuple[float, Dict[str, float]]:
+    flags = ax_source_metadata_flags(source)
+    bd: Dict[str, float] = {}
+    total = 0.0
+    if exact_symbolic_task and flags.get("uses_neural"):
+        bd["neural_on_exact_symbolic"] = _PENALTY_NEURAL_EXACT
+        total += _PENALTY_NEURAL_EXACT
+    if flags.get("indexed_variable_warning"):
+        bd["indexed_variable_warning"] = _PENALTY_INDEXED
+        total += _PENALTY_INDEXED
+    if flags.get("output_call_warning"):
+        bd["output_call_warning"] = _PENALTY_OUTPUT
+        total += _PENALTY_OUTPUT
+    if flags.get("suspicious_numeric_literal_warning"):
+        bd["suspicious_numeric_literal_warning"] = _PENALTY_SUSPICIOUS_NUM
+        total += _PENALTY_SUSPICIOUS_NUM
+    return total, bd
+
+
+def _enrich_report_ranking(report: ProgramEvaluationReport, source: str, config: CopilotSearchConfig) -> None:
+    """Mutates ``report`` with penalty + adjusted score (candidate selection only)."""
+    if config.mode != "predict_rows":
+        report.ranking_penalty = 0.0
+        report.ranking_penalty_breakdown = {}
+        report.adjusted_sort_score = None
+        return
+    exact = is_exact_symbolic_examples_task(config)
+    total, bd = _compute_ranking_penalty(source, exact)
+    report.ranking_penalty = total
+    report.ranking_penalty_breakdown = bd
+    raw = _metric_value(report, config.score_sort_key)
+    if raw is not None:
+        report.adjusted_sort_score = raw - total
+    else:
+        report.adjusted_sort_score = None
 
 
 def build_draft_context(
@@ -132,7 +192,8 @@ def build_repair_error_report(
             "## Symbolic mapping hint\n"
             "This task is defined by explicit input/output examples with numeric targets. "
             "Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be "
-            "written exactly; `neural(...)` remains allowed if you need it.\n\n"
+            "written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed "
+            "symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n"
         )
     parts.append(
         "## Instructions\n"
@@ -157,6 +218,25 @@ def build_repair_context(
     }
     if train_tabular_meta:
         out["train_tabular"] = dict(train_tabular_meta)
+    return out
+
+
+def merge_completion_overrides_into_context(
+    ctx: Dict[str, Any],
+    overrides: Optional[Mapping[str, Any]],
+) -> Dict[str, Any]:
+    """Merge ``temperature`` / ``top_p`` (etc.) into :data:`~axiom.experts.onyx_qwen.COMPLETION_OVERRIDES_CONTEXT_KEY`.
+
+    Stripped from the user JSON prompt by :class:`~axiom.experts.onyx_qwen.OnyxQwenBackend` before building prompts.
+    """
+    if not overrides:
+        return ctx
+    out = dict(ctx)
+    merged = dict(out.get(COMPLETION_OVERRIDES_CONTEXT_KEY) or {})
+    for k, v in overrides.items():
+        if v is not None:
+            merged[str(k)] = v
+    out[COMPLETION_OVERRIDES_CONTEXT_KEY] = merged
     return out
 
 
@@ -192,6 +272,8 @@ class CopilotSearchConfig:
     repair_context_extras: Dict[str, Any] = field(default_factory=dict)
     #: predict_rows: max rows in :attr:`ProgramEvaluationReport.row_comparisons` (0 = disable).
     row_comparison_limit: int = 32
+    #: OpenAI-style ``temperature`` / ``top_p`` for expert draft+repair (Onyx backend only; merged into context key).
+    completion_overrides: Optional[Dict[str, Any]] = None
     # When mode == "train_tabular": merged row dicts (inputs ∪ expected) + target + params + expected for scoring.
     tabular_train_rows: Optional[Sequence[Mapping[str, Any]]] = None
     tabular_eval_rows: Optional[Sequence[Mapping[str, Any]]] = None
@@ -264,6 +346,16 @@ def _score_for_sort(
     return _metric_value(report, sort_key)
 
 
+def _sort_primary_value(
+    report: ProgramEvaluationReport,
+    sort_key: Optional[str],
+) -> Optional[float]:
+    """Prefer :attr:`ProgramEvaluationReport.adjusted_sort_score` when set (Phase 78)."""
+    if report.adjusted_sort_score is not None:
+        return report.adjusted_sort_score
+    return _score_for_sort(report, sort_key)
+
+
 def _is_better(
     cand: ProgramEvaluationReport,
     best: Optional[ProgramEvaluationReport],
@@ -278,8 +370,8 @@ def _is_better(
         return False
     if not c_ok and not b_ok:
         return False
-    cs = _score_for_sort(cand, sort_key)
-    bs = _score_for_sort(best, sort_key)
+    cs = _sort_primary_value(cand, sort_key)
+    bs = _sort_primary_value(best, sort_key)
     if cs is not None and bs is not None:
         return cs > bs
     if cs is not None and bs is None:
@@ -309,7 +401,9 @@ def _needs_metric_repair(config: CopilotSearchConfig, report: ProgramEvaluationR
     if thr is None:
         return False
     v = _metric_value(report, config.score_sort_key)
-    return v is not None and v < thr
+    if v is None or v >= thr:
+        return False
+    return True
 
 
 def _train_tabular_meta(config: CopilotSearchConfig) -> Optional[Dict[str, Any]]:
@@ -339,6 +433,9 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
     )
     if config.draft_context_extras:
         ctx = {**ctx, **dict(config.draft_context_extras)}
+    if is_exact_symbolic_examples_task(config):
+        ctx["exact_symbolic_examples_task"] = True
+    ctx = merge_completion_overrides_into_context(ctx, config.completion_overrides)
     draft_req = ExpertDraftRequest(goal=config.goal, context=ctx)
     draft_resp = config.expert.draft_program(draft_req)
     current = draft_resp.ax_source
@@ -389,6 +486,7 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
                 include_trace_snippet=need_trace,
                 row_comparison_limit=config.row_comparison_limit,
             )
+        _enrich_report_ranking(report, source_evaluated, config)
         final_report = report
 
         sem_summary: Optional[str] = None
@@ -414,7 +512,7 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
             sym_hint = (
                 config.mode == "predict_rows"
                 and bool(config.expected_rows)
-                and _goal_suggests_symbolic_math(config.goal)
+                and is_exact_symbolic_examples_task(config)
             )
             err_full = build_repair_error_report(
                 goal=config.goal,
@@ -431,6 +529,9 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
             )
             if config.repair_context_extras:
                 repair_ctx = {**repair_ctx, **dict(config.repair_context_extras)}
+            if is_exact_symbolic_examples_task(config):
+                repair_ctx["exact_symbolic_examples_task"] = True
+            repair_ctx = merge_completion_overrides_into_context(repair_ctx, config.completion_overrides)
             repair_req = ExpertRepairRequest(
                 goal=config.goal,
                 current_program=source_evaluated,

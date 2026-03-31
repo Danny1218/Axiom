@@ -71,3 +71,7 @@ class ProgramEvaluationReport:
     trace_snippet: Optional[Dict[str, Any]] = None
     #: predict_rows only: worst-first rows (inputs / predicted / expected / abs_error per target).
     row_comparisons: Optional[List[Dict[str, Any]]] = None
+    #: Internal ranking only (raw :attr:`metrics` unchanged). Higher is better when using ``neg_mse``-style sort keys.
+    ranking_penalty: float = 0.0
+    ranking_penalty_breakdown: Dict[str, float] = field(default_factory=dict)
+    adjusted_sort_score: Optional[float] = None

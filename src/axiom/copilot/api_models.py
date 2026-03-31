@@ -54,6 +54,10 @@ class SearchRequest(BaseModel):
     """``None``: auto — enabled for ``examples`` / ``train_tabular`` modes; ``False`` / ``True`` override."""
     metric_repair_if_below: Optional[float] = None
     """Repair while the score sort key is below this; unset uses built-in default for ``neg_mse`` (see ``plan.md``)."""
+    temperature: Optional[float] = Field(default=None, ge=0.0, le=2.0)
+    """Optional OpenAI-style sampling temperature for expert draft/repair (Onyx backend)."""
+    top_p: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    """Optional nucleus sampling ``top_p`` for expert draft/repair (Onyx backend)."""
 
     @model_validator(mode="after")
     def _train_tabular_exclusive(self) -> SearchRequest:
@@ -79,6 +83,8 @@ class CopilotRunRequest(SearchRequest):
     """Same evaluation surface as :class:`SearchRequest` plus optional final compile-only pass."""
 
     final_validate: bool = True
+    restarts: int = Field(default=1, ge=1, le=64)
+    """Run this many independent full searches; pipeline keeps the overall best (Phase 80)."""
 
 
 class CopilotRunResponse(BaseModel):
@@ -96,6 +102,9 @@ class CopilotRunResponse(BaseModel):
     final_validation: Optional[Dict[str, Any]] = None
     semantic_summaries: Optional[Dict[str, Any]] = None
     artifact_dir: Optional[str] = None
+    restarts_total: int = 1
+    winning_restart_index: int = 0
+    per_restart_summaries: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class SummarizeRequest(BaseModel):

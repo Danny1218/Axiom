@@ -29,6 +29,8 @@ from axiom.copilot.search import (
     format_failures_for_repair,
     format_metrics_for_repair,
     format_row_mismatches_for_repair,
+    is_exact_symbolic_examples_task,
+    merge_completion_overrides_into_context,
     run_copilot_search,
 )
 from axiom.copilot.benchmarks import (
@@ -82,6 +84,8 @@ __all__ = [
     "format_failures_for_repair",
     "format_metrics_for_repair",
     "format_row_mismatches_for_repair",
+    "is_exact_symbolic_examples_task",
+    "merge_completion_overrides_into_context",
     "persist_copilot_artifacts",
     "run_benchmark_draft_only",
     "run_benchmark_search",

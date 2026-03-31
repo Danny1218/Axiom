@@ -19,6 +19,7 @@ from axiom.copilot.models import (
 )
 from axiom.copilot.train_tabular import run_train_tabular
 from axiom.engine.block_executor import InterpretedBlock
+from axiom.experts.onyx_qwen import ax_source_metadata_flags
 
 CompileStage = str  # "none" | "parse" | "ir" | "block" | "predict"
 
@@ -351,6 +352,12 @@ def evaluate_program(
                 program_metrics = [ProgramMetric(name=k, value=v) for k, v in metrics.items()]
             except Exception as e:
                 failures.append(_failure("predict", "metric", e))
+
+    if ax_source_metadata_flags(source).get("suspicious_numeric_literal_warning"):
+        warnings.append(
+            "suspicious_numeric_literal_warning: source may contain leading-zero integers (e.g. `03`) "
+            "or malformed decimals — prefer `0.3` style literals."
+        )
 
     success = not failures
     return ProgramEvaluationReport(

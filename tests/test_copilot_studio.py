@@ -106,10 +106,29 @@ def test_build_studio_expert_requires_fields():
         cs.build_studio_expert("http://x", "")
 
 
+def test_studio_completion_overrides_from_text():
+    assert cs._studio_completion_overrides_from_text("0.2", None) == {"temperature": 0.2}
+    assert cs._studio_completion_overrides_from_text(None, "0.95") == {"top_p": 0.95}
+    assert cs._studio_completion_overrides_from_text("", "") is None
+
+
 def test_run_studio_draft():
     ex = _ScriptedExpert()
     r = cs.run_studio_draft("goal text", "ctx", ex)
     assert "++++" in r.ax_source
+
+
+def test_run_studio_search_completion_overrides_on_config():
+    ex = _ScriptedExpert()
+    cfg, _ = cs.run_studio_search(
+        "g",
+        None,
+        ex,
+        1,
+        evaluation_mode="compile_only",
+        completion_overrides={"temperature": 0.2, "top_p": 0.9},
+    )
+    assert cfg.completion_overrides == {"temperature": 0.2, "top_p": 0.9}
 
 
 def test_run_studio_search_compile_only():
@@ -202,7 +221,7 @@ def test_main_with_mock_streamlit(monkeypatch):
 
     fake = MagicMock()
     fake.session_state = ss
-    fake.text_input.side_effect = ["http://127.0.0.1/v1/", "m", ""]
+    fake.text_input.side_effect = ["http://127.0.0.1/v1/", "m", "", "", ""]
     fake.text_area.side_effect = ["my goal", "", "[]"]
     fake.number_input.return_value = 8
     fake.checkbox.return_value = False

@@ -21,7 +21,12 @@ from axiom.copilot import (
 )
 from axiom.copilot.artifacts import evaluation_report_to_dict
 from axiom.copilot.benchmarks import default_neg_mse_score_fn
-from axiom.copilot.search import DEFAULT_METRIC_REPAIR_THRESHOLD, _is_better
+from axiom.copilot.search import (
+    DEFAULT_METRIC_REPAIR_THRESHOLD,
+    _is_better,
+    is_exact_symbolic_examples_task,
+    merge_completion_overrides_into_context,
+)
 from axiom.experts import (
     ExpertDraftRequest,
     ExpertDraftResponse,
@@ -367,3 +372,89 @@ def test_is_better_ordering():
     assert _is_better(ok_low, ok, "q") is False
     assert _is_better(ok, bad, "q") is True
     assert _is_better(bad, ok, "q") is False
+
+
+def test_is_better_uses_adjusted_sort_score_when_set():
+    """Neural can look better on raw metric but lose after anti-neural penalty."""
+    neural_like = ProgramEvaluationReport(
+        success=True,
+        source="n",
+        compile_stage_reached="predict",
+        mode="predict_rows",
+        metrics={"neg_mse": -0.001},
+        adjusted_sort_score=-2.001,
+    )
+    symbolic = ProgramEvaluationReport(
+        success=True,
+        source="s",
+        compile_stage_reached="predict",
+        mode="predict_rows",
+        metrics={"neg_mse": -0.5},
+        adjusted_sort_score=-0.5,
+    )
+    assert _is_better(symbolic, neural_like, "neg_mse") is True
+    assert _is_better(neural_like, symbolic, "neg_mse") is False
+
+
+def test_is_exact_symbolic_examples_task_detects_clamp_goal():
+    cfg = CopilotSearchConfig(
+        expert=ScriptedExpert(GOOD_AX, []),
+        goal="Write .ax that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));",
+        max_iterations=1,
+        mode="predict_rows",
+        example_input_rows=[{"risk_a": 1.0}],
+        expected_rows=[{"risk_score": 0.7}],
+    )
+    assert is_exact_symbolic_examples_task(cfg) is True
+
+
+def test_merge_completion_overrides_into_context():
+    from axiom.experts.onyx_qwen import COMPLETION_OVERRIDES_CONTEXT_KEY
+
+    base = {"domain_context": "x"}
+    m = merge_completion_overrides_into_context(base, {"temperature": 0.3})
+    assert m[COMPLETION_OVERRIDES_CONTEXT_KEY] == {"temperature": 0.3}
+    assert base.get(COMPLETION_OVERRIDES_CONTEXT_KEY) is None
+
+
+def test_run_copilot_search_threads_completion_overrides_to_draft_and_repair():
+    from axiom.experts.onyx_qwen import COMPLETION_OVERRIDES_CONTEXT_KEY
+
+    ex = ScriptedExpert(BROKEN_AX, [GOOD_DOUBLE_AX])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="double x",
+        max_iterations=2,
+        mode="predict_rows",
+        example_input_rows=EX_IN,
+        expected_rows=EX_EXP,
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+        repair_valid_with_metrics=False,
+        completion_overrides={"temperature": 0.2, "top_p": 0.95},
+    )
+    run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 1 and len(ex.repair_calls) == 1
+    want = {"temperature": 0.2, "top_p": 0.95}
+    assert ex.draft_calls[0].context.get(COMPLETION_OVERRIDES_CONTEXT_KEY) == want
+    assert ex.repair_calls[0].context.get(COMPLETION_OVERRIDES_CONTEXT_KEY) == want
+
+
+def test_run_copilot_search_omitted_overrides_leaves_context_without_key():
+    from axiom.experts.onyx_qwen import COMPLETION_OVERRIDES_CONTEXT_KEY
+
+    ex = ScriptedExpert(GOOD_DOUBLE_AX, [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="double x",
+        max_iterations=1,
+        mode="predict_rows",
+        example_input_rows=EX_IN,
+        expected_rows=EX_EXP,
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+        repair_valid_with_metrics=False,
+        completion_overrides=None,
+    )
+    run_copilot_search(cfg)
+    assert COMPLETION_OVERRIDES_CONTEXT_KEY not in ex.draft_calls[0].context
