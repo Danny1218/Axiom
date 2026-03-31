@@ -44,7 +44,8 @@ def test_readme_documents_gateway_optional():
 
 def test_readme_documents_copilot_cli():
     text = (_root() / "readme.md").read_text(encoding="utf-8")
-    assert "copilot-draft" in text and "copilot-search" in text and "copilot-run" in text and "[copilot]" in text
+    assert "copilot-draft" in text and "copilot-doctor" in text
+    assert "copilot-search" in text and "copilot-run" in text and "[copilot]" in text
     assert "Semantic copilot" in text and "inputs" in text and "expected" in text
     assert "artifact-dir" in text and "iterations.json" in text and "search_report.json" in text
     assert "copilot-studio" in text and "Copilot Studio" in text
@@ -166,6 +167,7 @@ def test_array_literal_and_indexing_ir():
         ["export-onnx", "--help"],
         ["gateway-serve", "--help"],
         ["copilot-draft", "--help"],
+        ["copilot-doctor", "--help"],
         ["copilot-search", "--help"],
         ["copilot-studio", "--help"],
         ["copilot-serve", "--help"],
@@ -193,7 +195,7 @@ def test_cli_source_wires_documented_train_features():
     assert "export-onnx" in src and "export_bundle_to_onnx" in src
     assert "gateway-serve" in src and "create_gateway_app" in src
     assert "Glass Box requires" in src and ".[inspect]" in src
-    assert "copilot-draft" in src and "copilot-search" in src and "copilot-benchmark" in src
+    assert "copilot-draft" in src and "copilot-doctor" in src and "copilot-search" in src and "copilot-benchmark" in src
     assert "copilot-run" in src and "_cmd_copilot_run" in src
     assert "_make_copilot_expert" in src and "_cmd_copilot_benchmark" in src
     assert "--train-tabular" in src and "--tabular-json" in src

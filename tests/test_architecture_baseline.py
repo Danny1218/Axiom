@@ -28,6 +28,7 @@ def test_plan_documents_semantic_copilot_roadmap():
     assert "## Next target (semantic copilot" in plan
     assert "Phase 58" in plan and "experts" in plan.lower()
     assert "Phase 60" in plan and "copilot" in plan.lower()
+    assert "Phase 81" in plan and "copilot-doctor" in plan
     assert "Phase 61" in plan and "copilot-draft" in plan
     assert "Phase 62" in plan and "artifacts" in plan.lower()
     assert "Phase 63" in plan and "copilot-studio" in plan
@@ -55,6 +56,7 @@ def test_cli_subcommands_stable():
         "gateway-serve",
         "serve",
         "copilot-draft",
+        "copilot-doctor",
         "copilot-search",
         "copilot-studio",
         "copilot-serve",

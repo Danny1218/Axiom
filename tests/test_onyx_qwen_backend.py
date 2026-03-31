@@ -11,9 +11,13 @@ import requests
 
 from axiom.experts.base import ExpertDraftRequest, ExpertRepairRequest, ExpertTraceSummaryRequest, SemanticExpert
 from axiom.experts.onyx_qwen import (
+    COMPLETION_OVERRIDES_CONTEXT_KEY,
     EXAMPLES_SEMANTICS_BLOCK,
+    EXACT_SYMBOLIC_MATH_BLOCK,
+    REPAIR_NEURAL_TO_SYMBOLIC_BLOCK,
     REPAIR_UNROLL_COLLAPSE_BLOCK,
     OnyxQwenBackend,
+    ax_source_metadata_flags,
     OnyxQwenHTTPError,
     OnyxQwenParseError,
     OnyxQwenTimeoutError,
@@ -156,6 +160,36 @@ def test_user_prompt_draft_includes_examples_semantics_when_rows_present():
     assert "Prefer direct symbolic arithmetic" in p
 
 
+def test_user_prompt_draft_includes_exact_symbolic_block_when_flag_and_examples():
+    ctx = {
+        "example_input_rows": [{"x": 1.0}],
+        "expected_outputs": [{"y": 2.0}],
+        "exact_symbolic_examples_task": True,
+    }
+    p = user_prompt_draft("risk_score = max(0, min(1, x));", ctx)
+    assert EXACT_SYMBOLIC_MATH_BLOCK.splitlines()[0] in p
+    assert "Do NOT" in p and "neural" in p.lower()
+
+
+def test_user_prompt_repair_includes_neural_to_symbolic_when_neural_and_examples():
+    ctx = {"expected_outputs": [{"y": 1.0}], "example_input_rows": [{}], "exact_symbolic_examples_task": True}
+    p = user_prompt_repair("goal", 'y = neural([1.0], "liquid");\n', "err", ctx)
+    assert REPAIR_NEURAL_TO_SYMBOLIC_BLOCK.splitlines()[0] in p
+    assert "0.7 * risk_a" in p or "risk_score = max(min" in p
+
+
+def test_ax_source_metadata_flags_neural_and_suspicious_numeric():
+    src = 'risk_score = neural([0.7*risk_a, 03*risk_b], "liquid");\n'
+    m = ax_source_metadata_flags(src)
+    assert m.get("uses_neural") is True
+    assert m.get("suspicious_numeric_literal_warning") is True
+
+
+def test_split_ax_metadata_suspicious_numeric_literal():
+    r = split_ax_and_prose("```ax\ny = 03 * x;\n```")
+    assert r.extraction.get("suspicious_numeric_literal_warning") is True
+
+
 def test_user_prompt_no_examples_block_when_empty_lists():
     p = user_prompt_repair("g", "x=1;", "e", {"expected_outputs": [], "example_input_rows": []})
     assert "Example-driven semantics" not in p
@@ -239,6 +273,26 @@ def test_successful_draft():
     assert calls[0]["json"]["model"] == "qwen-turbo"
     assert "minimal constant" in calls[0]["json"]["messages"][1]["content"]
     assert SYSTEM_DRAFT in calls[0]["json"]["messages"][0]["content"]
+
+
+def test_draft_completion_overrides_merged_and_stripped_from_user_json():
+    calls: list[dict] = []
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        calls.append(json)
+        return _ok_response("```ax\ny = 1.0;\n```")
+
+    b = OnyxQwenBackend("http://h", "m", _post=fake_post)
+    b.draft_program(
+        ExpertDraftRequest(
+            "goal-text",
+            context={COMPLETION_OVERRIDES_CONTEXT_KEY: {"temperature": 0}, "extra": 1},
+        )
+    )
+    assert calls[0].get("temperature") == 0
+    user = calls[0]["messages"][1]["content"]
+    assert COMPLETION_OVERRIDES_CONTEXT_KEY not in user
+    assert "extra" in user
 
 
 def test_successful_repair():
@@ -385,3 +439,10 @@ def test_custom_chat_path_url():
         ExpertDraftRequest("g")
     )
     assert got["url"] == "http://host/prefix/openai/v1/chat"
+
+
+def test_build_onyx_qwen_expert_accepts_timeout():
+    from axiom.copilot.backend import build_onyx_qwen_expert
+
+    b = build_onyx_qwen_expert(url="http://h", model="m", timeout=41.25)
+    assert b._timeout == 41.25

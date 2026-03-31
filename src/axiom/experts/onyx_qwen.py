@@ -24,6 +24,9 @@ except ImportError:
 
 BACKEND_NAME = "onyx_qwen"
 
+# Merged into OpenAI-style chat ``payload`` for ``draft_program`` only; stripped from user context JSON.
+COMPLETION_OVERRIDES_CONTEXT_KEY = "_onyx_completion_overrides"
+
 # --- Deterministic prompt templates (edit here only) ---
 
 SYSTEM_DRAFT = (
@@ -103,8 +106,37 @@ The current program uses row-indexed names (`x_0`, `y_1`, …) and/or `output(..
 Bad: `y_0 = x_0 * 2; ... output(y_0, y_1)`
 Good: `y = x * 2.0;`"""
 
+EXACT_SYMBOLIC_MATH_BLOCK = """Exact symbolic mapping (small example-driven math / affine / clamp tasks):
+- Prefer **direct symbolic arithmetic** using `+`, `-`, `*`, `/`, `min`, `max`, and numeric literals.
+- **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically from the examples.
+- For affine blends and clamp-to-[0,1] style behavior, write explicit `max`, `min`, and arithmetic — not a learned head.
+- Avoid malformed numerics: use `0.3` not `03` or ambiguous multi-dot literals."""
+
+REPAIR_NEURAL_TO_SYMBOLIC_BLOCK = """Repair focus — replace `neural(...)` with symbolic arithmetic (examples suggest an exact formula):
+The current program uses `neural(...)`. When the goal and examples define a closed-form mapping (blend, clamp, affine), **replace** the `neural(...)` call with explicit `max` / `min` / arithmetic on the input variables.
+Bad: `risk_score = neural([0.7*risk_a, 0.3*risk_b], "liquid");`
+Good: `risk_score = max(min(0.7 * risk_a + 0.3 * risk_b, 1.0), 0.0);`"""
+
 _INDEXED_VAR_PATTERN = re.compile(r"\b[a-zA-Z_][a-zA-Z0-9]*_\d+\b")
 _OUTPUT_CALL_PATTERN = re.compile(r"\boutput\s*\(", re.IGNORECASE)
+_NEURAL_CALL_PATTERN = re.compile(r"\bneural\s*\(", re.IGNORECASE)
+# Leading-zero integer literals like ``03`` (often invalid / typo); not ``0.3``.
+_LEADING_ZERO_INT_LITERAL = re.compile(r"(?<![0-9.])0[0-9]+\b")
+# Malformed multi-dot numbers (e.g. ``1.0.0``).
+_MALFORMED_DECIMAL_PATTERN = re.compile(r"\d+\.\d+\.\d+")
+
+
+def _program_has_neural(source: str) -> bool:
+    return bool(_NEURAL_CALL_PATTERN.search(source))
+
+
+def _suspicious_numeric_literals(source: str) -> bool:
+    """Heuristic: likely-invalid numeric tokens (do not rewrite source here)."""
+    if _LEADING_ZERO_INT_LITERAL.search(source):
+        return True
+    if _MALFORMED_DECIMAL_PATTERN.search(source):
+        return True
+    return False
 
 
 def _program_has_indexed_variables(source: str) -> bool:
@@ -122,12 +154,38 @@ def _pattern_warnings(ax: str) -> dict[str, Any]:
         out["indexed_variable_warning"] = True
     if _program_has_output_call(ax):
         out["output_call_warning"] = True
+    if _suspicious_numeric_literals(ax):
+        out["suspicious_numeric_literal_warning"] = True
     return out
+
+
+def ax_source_metadata_flags(source: str) -> dict[str, Any]:
+    """Public: pattern warnings + ``uses_neural`` for copilot ranking (JSON-serializable flags)."""
+    m = dict(_pattern_warnings(source))
+    if _program_has_neural(source):
+        m["uses_neural"] = True
+    return m
 
 
 def _append_repair_unroll_hints_if_needed(parts: list[str], current_program: str) -> None:
     if _program_has_indexed_variables(current_program) or _program_has_output_call(current_program):
         parts.append(REPAIR_UNROLL_COLLAPSE_BLOCK + "\n\n")
+
+
+def _append_repair_neural_to_symbolic_if_needed(parts: list[str], current_program: str, context: Mapping[str, Any]) -> None:
+    if not _context_has_examples_driven_semantics(context):
+        return
+    if not _program_has_neural(current_program):
+        return
+    parts.append(REPAIR_NEURAL_TO_SYMBOLIC_BLOCK + "\n\n")
+
+
+def _append_exact_symbolic_math_if_needed(parts: list[str], context: Mapping[str, Any]) -> None:
+    if not context.get("exact_symbolic_examples_task"):
+        return
+    if not _context_has_examples_driven_semantics(context):
+        return
+    parts.append(EXACT_SYMBOLIC_MATH_BLOCK + "\n\n")
 
 
 def _context_has_examples_driven_semantics(context: Mapping[str, Any]) -> bool:
@@ -151,6 +209,7 @@ def user_prompt_draft(goal: str, context: Mapping[str, Any]) -> str:
         f"Context (JSON, sorted keys):\n{_context_json(context)}\n\n",
     ]
     _append_examples_semantics_if_needed(parts, context)
+    _append_exact_symbolic_math_if_needed(parts, context)
     parts.extend(
         [
             f"{SYNTAX_SUMMARY}\n\n",
@@ -168,8 +227,10 @@ def user_prompt_repair(goal: str, current_program: str, error_report: str, conte
         f"Context (JSON, sorted keys):\n{_context_json(context)}\n\n",
     ]
     _append_examples_semantics_if_needed(parts, context)
+    _append_exact_symbolic_math_if_needed(parts, context)
     parts.extend([f"{SYNTAX_SUMMARY}\n\n", f"{REPAIR_FEWSHOT}\n\n"])
     _append_repair_unroll_hints_if_needed(parts, current_program)
+    _append_repair_neural_to_symbolic_if_needed(parts, current_program, context)
     parts.extend(
         [
             f"Current program:\n```ax\n{current_program.rstrip()}\n```\n\n",
@@ -451,7 +512,7 @@ class OnyxQwenBackend:
             )
         return requests.post
 
-    def _chat(self, system: str, user: str) -> str:
+    def _chat(self, system: str, user: str, *, completion_overrides: Optional[dict[str, Any]] = None) -> str:
         post = self._resolve_post()
 
         payload: dict[str, Any] = {
@@ -461,6 +522,10 @@ class OnyxQwenBackend:
                 {"role": "user", "content": user},
             ],
         }
+        if completion_overrides:
+            for k, v in completion_overrides.items():
+                if k != "messages" and k != "model":
+                    payload[k] = v
         try:
             r = post(
                 self._chat_url,
@@ -490,7 +555,14 @@ class OnyxQwenBackend:
         return {"model": self._model, "raw_chars": len(raw), **split.extraction}
 
     def draft_program(self, request: ExpertDraftRequest) -> ExpertDraftResponse:
-        raw = self._chat(SYSTEM_DRAFT, user_prompt_draft(request.goal, request.context))
+        ctx = dict(request.context) if isinstance(request.context, Mapping) else {}
+        co = ctx.pop(COMPLETION_OVERRIDES_CONTEXT_KEY, None)
+        overrides = co if isinstance(co, dict) else None
+        raw = self._chat(
+            SYSTEM_DRAFT,
+            user_prompt_draft(request.goal, ctx),
+            completion_overrides=overrides,
+        )
         split = split_ax_and_prose(raw)
         return ExpertDraftResponse(
             ax_source=split.ax_source,
@@ -524,9 +596,13 @@ class OnyxQwenBackend:
 __all__ = [
     "AxSplitResult",
     "BACKEND_NAME",
+    "COMPLETION_OVERRIDES_CONTEXT_KEY",
     "DRAFT_FEWSHOT",
     "EXAMPLES_SEMANTICS_BLOCK",
+    "EXACT_SYMBOLIC_MATH_BLOCK",
+    "REPAIR_NEURAL_TO_SYMBOLIC_BLOCK",
     "REPAIR_UNROLL_COLLAPSE_BLOCK",
+    "ax_source_metadata_flags",
     "OnyxQwenBackend",
     "OnyxQwenError",
     "OnyxQwenHTTPError",

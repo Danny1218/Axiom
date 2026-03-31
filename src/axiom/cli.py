@@ -481,9 +481,16 @@ def _make_copilot_expert(args: argparse.Namespace):
     key = args.expert_api_key
     if key is None or str(key).strip() == "":
         key = os.environ.get("AXIOM_EXPERT_API_KEY")
+    tout = getattr(args, "expert_timeout", None)
+    if tout is not None:
+        tout = float(tout)
     try:
         return build_copilot_expert(
-            args.backend, expert_url=url, expert_model=model, expert_api_key=key
+            args.backend,
+            expert_url=url,
+            expert_model=model,
+            expert_api_key=key,
+            timeout=tout,
         )
     except ValueError as e:
         raise SystemExit(str(e)) from e
@@ -642,6 +649,81 @@ def _build_copilot_search_config(args: argparse.Namespace, expert) -> Any:
     )
 
 
+_COPILOT_DOCTOR_DEFAULT_GOAL = (
+    "Write a valid Axiom .ax program in this repo's DSL that computes y = x * 2.0;"
+)
+
+
+def _cmd_copilot_doctor(args: argparse.Namespace) -> None:
+    from axiom.copilot.evaluator import validate_program
+    from axiom.copilot.models import ProgramCandidate
+    from axiom.copilot.search import build_draft_context
+    from axiom.experts.base import ExpertDraftRequest
+    from axiom.experts.onyx_qwen import COMPLETION_OVERRIDES_CONTEXT_KEY, OnyxQwenError, ax_source_metadata_flags
+
+    expert = _make_copilot_expert(args)
+    ctx = dict(
+        build_draft_context(
+            domain_context=None,
+            example_input_rows=None,
+            expected_rows=None,
+        )
+    )
+    ctx[COMPLETION_OVERRIDES_CONTEXT_KEY] = {"temperature": 0}
+
+    try:
+        resp = expert.draft_program(ExpertDraftRequest(goal=args.goal, context=ctx))
+    except OnyxQwenError as e:
+        print(f"connection: fail ({type(e).__name__}: {e})", file=sys.stderr)
+        raise SystemExit(1) from e
+
+    meta = dict(resp.metadata)
+    raw_len = int(meta.get("raw_chars", 0))
+    ax = resp.ax_source
+    preview = ax.replace("\n", "\\n")
+    if len(preview) > 100:
+        preview = preview[:97] + "..."
+
+    print("connection: ok")
+    print(f"raw_chars: {raw_len}")
+    print(f"ax_source: {len(ax)} chars, preview: {preview}")
+
+    rep = validate_program(ProgramCandidate(source=ax))
+    parse_ok = not any(f.stage == "parse" for f in rep.failures)
+    ir_ok = not any(f.stage == "ir" for f in rep.failures)
+    block_ok = rep.success
+    print(f"parse: {'ok' if parse_ok else 'fail'}")
+    print(f"ir: {'ok' if ir_ok else 'fail'}")
+    print(f"block: {'ok' if block_ok else 'fail'}")
+
+    warn_keys = (
+        "assign_colon_eq",
+        "print_call",
+        "indexed_variable_warning",
+        "output_call_warning",
+        "suspicious_numeric_literal_warning",
+    )
+    forbidden = list(meta.get("forbidden_tokens_detected") or [])
+    active: list[str] = []
+    if "assign_colon_eq" in forbidden:
+        active.append("assign_colon_eq")
+    if "print_call" in forbidden:
+        active.append("print_call")
+    for k in ("indexed_variable_warning", "output_call_warning", "suspicious_numeric_literal_warning"):
+        if meta.get(k):
+            active.append(k)
+    if active:
+        print("anti_pattern: " + ", ".join(active))
+    else:
+        print("anti_pattern: (none)")
+
+    flags = ax_source_metadata_flags(ax)
+    print(f"neural: {'yes' if flags.get('uses_neural') else 'no'}")
+
+    if not rep.success:
+        raise SystemExit(1)
+
+
 def _cmd_copilot_draft(args: argparse.Namespace) -> None:
     from axiom.copilot.search import build_draft_context
     from axiom.experts.base import ExpertDraftRequest
@@ -726,11 +808,13 @@ def _cmd_copilot_run(args: argparse.Namespace) -> None:
     expert = _make_copilot_expert(args)
     cfg = _build_copilot_search_config(args, expert)
     summarize = bool(getattr(args, "summarize_traces", False))
+    restarts = max(1, int(getattr(args, "restarts", 1)))
     pcfg = CopilotPipelineConfig(
         search=cfg,
         best_ax_path=args.out,
         summary_json_path=getattr(args, "summary_out", None),
         final_validate=not bool(getattr(args, "no_final_validate", False)),
+        restarts=restarts,
     )
     result = run_copilot_pipeline(pcfg)
     sr = result.search_result
@@ -739,7 +823,12 @@ def _cmd_copilot_run(args: argparse.Namespace) -> None:
     fv_ok = fv.success if fv is not None else None
     print(
         f"{prefix} converged={sr.converged} convergence_reason={sr.convergence_reason!r} "
-        f"best_eval_ok={sr.best_evaluation.success} final_validation_ok={fv_ok}",
+        f"best_eval_ok={sr.best_evaluation.success} final_validation_ok={fv_ok}"
+        + (
+            f" restarts={result.restarts} winning_restart_index={result.winning_restart_index}"
+            if result.restarts > 1
+            else ""
+        ),
         file=sys.stderr,
     )
     if fv is not None and not fv.success:
@@ -952,7 +1041,7 @@ def _add_copilot_search_loop_args(p: argparse.ArgumentParser) -> None:
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(
         prog="axiom",
-        description="Axiom neural compiler CLI (train, predict, copilot-draft, copilot-search, copilot-run, copilot-benchmark, copilot-serve, copilot-studio, lock-bundle, export-onnx, inspect, serve, gateway-serve).",
+        description="Axiom neural compiler CLI (train, predict, copilot-draft, copilot-doctor, copilot-search, copilot-run, copilot-benchmark, copilot-serve, copilot-studio, lock-bundle, export-onnx, inspect, serve, gateway-serve).",
     )
     sub = ap.add_subparsers(dest="cmd", required=True)
 
@@ -1182,6 +1271,50 @@ def main(argv: list[str] | None = None) -> None:
     _add_copilot_backend_args(p_cd)
     p_cd.set_defaults(_handler=_cmd_copilot_draft)
 
+    p_cdoc = sub.add_parser(
+        "copilot-doctor",
+        help="Smoke-test expert HTTP + one deterministic draft + parse/IR/block (requires pip install -e \".[copilot]\").",
+    )
+    p_cdoc.add_argument(
+        "--backend",
+        choices=["onyx-qwen"],
+        required=True,
+        help="Semantic expert implementation (requires [copilot] / requests).",
+    )
+    p_cdoc.add_argument(
+        "--goal",
+        type=str,
+        default=_COPILOT_DOCTOR_DEFAULT_GOAL,
+        help="NL goal for the single draft request (default: double-x smoke goal).",
+    )
+    p_cdoc.add_argument(
+        "--expert-url",
+        type=str,
+        required=True,
+        help="Base URL for chat/completions (e.g. https://api.example.com/v1/).",
+    )
+    p_cdoc.add_argument(
+        "--expert-model",
+        type=str,
+        required=True,
+        help="Remote model id (passed through to the chat API).",
+    )
+    p_cdoc.add_argument(
+        "--expert-api-key",
+        type=str,
+        default=None,
+        help="Optional API key (else AXIOM_EXPERT_API_KEY).",
+    )
+    p_cdoc.add_argument(
+        "--timeout",
+        type=float,
+        default=None,
+        dest="expert_timeout",
+        metavar="SEC",
+        help="Per-request HTTP timeout in seconds (default: 120).",
+    )
+    p_cdoc.set_defaults(_handler=_cmd_copilot_doctor)
+
     p_cs = sub.add_parser(
         "copilot-search",
         help="Draft / evaluate / repair loop with an expert until success or iteration budget (see Phase 60).",
@@ -1213,6 +1346,13 @@ def main(argv: list[str] | None = None) -> None:
         "--no-final-validate",
         action="store_true",
         help="Skip the extra compile-only pass on the champion source after search.",
+    )
+    p_cr.add_argument(
+        "--restarts",
+        type=int,
+        default=1,
+        metavar="N",
+        help="Run N independent searches and keep the overall best (default: 1). With --artifact-dir, use restart_0 … restart_{N-1} subdirs when N>1.",
     )
     p_cr.set_defaults(_handler=_cmd_copilot_run)
 
@@ -1277,6 +1417,9 @@ def main(argv: list[str] | None = None) -> None:
         handler(args)
         return
     if handler is _cmd_copilot_draft:
+        handler(args)
+        return
+    if handler is _cmd_copilot_doctor:
         handler(args)
         return
     if handler is _cmd_copilot_search:
