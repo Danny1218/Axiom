@@ -559,29 +559,10 @@ def _serialize_evaluation_report(rep: Any) -> dict:
     return evaluation_report_to_dict(rep)
 
 
-def _cmd_copilot_draft(args: argparse.Namespace) -> None:
-    from axiom.copilot.search import build_draft_context
-    from axiom.experts.base import ExpertDraftRequest
+def _build_copilot_search_config(args: argparse.Namespace, expert) -> Any:
+    """Shared by ``copilot-search`` and ``copilot-run`` (same evaluation modes and artifacts)."""
+    from axiom.copilot.search import CopilotSearchConfig
 
-    expert = _make_copilot_expert(args)
-    ctx = build_draft_context(
-        domain_context=args.context,
-        example_input_rows=None,
-        expected_rows=None,
-    )
-    resp = expert.draft_program(ExpertDraftRequest(goal=args.goal, context=ctx))
-    ax = resp.ax_source.rstrip() + "\n"
-    print(ax, end="")
-    if args.out is not None:
-        args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(ax, encoding="utf-8")
-        print(f"Wrote {args.out}", file=sys.stderr)
-
-
-def _cmd_copilot_search(args: argparse.Namespace) -> None:
-    from axiom.copilot.search import CopilotSearchConfig, run_copilot_search
-
-    expert = _make_copilot_expert(args)
     train_tab = bool(getattr(args, "train_tabular", False))
     tab_path = getattr(args, "tabular_json", None)
     if train_tab and args.compile_only:
@@ -629,7 +610,7 @@ def _cmd_copilot_search(args: argparse.Namespace) -> None:
         sort_key = None
 
     summarize = bool(getattr(args, "summarize_traces", False))
-    cfg = CopilotSearchConfig(
+    return CopilotSearchConfig(
         expert=expert,
         goal=args.goal,
         domain_context=args.context,
@@ -648,6 +629,33 @@ def _cmd_copilot_search(args: argparse.Namespace) -> None:
         tabular_train_params=tab_params,
         tabular_eval_expected_rows=tab_eval_exp,
     )
+
+
+def _cmd_copilot_draft(args: argparse.Namespace) -> None:
+    from axiom.copilot.search import build_draft_context
+    from axiom.experts.base import ExpertDraftRequest
+
+    expert = _make_copilot_expert(args)
+    ctx = build_draft_context(
+        domain_context=args.context,
+        example_input_rows=None,
+        expected_rows=None,
+    )
+    resp = expert.draft_program(ExpertDraftRequest(goal=args.goal, context=ctx))
+    ax = resp.ax_source.rstrip() + "\n"
+    print(ax, end="")
+    if args.out is not None:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(ax, encoding="utf-8")
+        print(f"Wrote {args.out}", file=sys.stderr)
+
+
+def _cmd_copilot_search(args: argparse.Namespace) -> None:
+    from axiom.copilot.search import run_copilot_search
+
+    expert = _make_copilot_expert(args)
+    cfg = _build_copilot_search_config(args, expert)
+    summarize = bool(getattr(args, "summarize_traces", False))
     result = run_copilot_search(cfg)
 
     for rec in result.iterations:
@@ -694,6 +702,60 @@ def _cmd_copilot_search(args: argparse.Namespace) -> None:
         print(f"Wrote report to {args.report_out}", file=sys.stderr)
     if args.artifact_dir is not None:
         print(f"Wrote artifact bundle to {args.artifact_dir.resolve()}", file=sys.stderr)
+
+
+def _cmd_copilot_run(args: argparse.Namespace) -> None:
+    from axiom.copilot.pipeline import CopilotPipelineConfig, copilot_pipeline_summary_dict, run_copilot_pipeline
+
+    expert = _make_copilot_expert(args)
+    cfg = _build_copilot_search_config(args, expert)
+    summarize = bool(getattr(args, "summarize_traces", False))
+    pcfg = CopilotPipelineConfig(
+        search=cfg,
+        best_ax_path=args.out,
+        summary_json_path=getattr(args, "summary_out", None),
+        final_validate=not bool(getattr(args, "no_final_validate", False)),
+    )
+    result = run_copilot_pipeline(pcfg)
+    sr = result.search_result
+    prefix = "[copilot-run]"
+    fv = result.final_validation
+    fv_ok = fv.success if fv is not None else None
+    print(
+        f"{prefix} converged={sr.converged} best_eval_ok={sr.best_evaluation.success} "
+        f"final_validation_ok={fv_ok}",
+        file=sys.stderr,
+    )
+    if fv is not None and not fv.success:
+        print(
+            f"{prefix} FINAL VALIDATION FAILED: compile_stage_reached={fv.compile_stage_reached!r} "
+            f"failures={len(fv.failures)} (champion source did not re-compile cleanly).",
+            file=sys.stderr,
+        )
+        for f in fv.failures:
+            print(f"{prefix}   [{f.stage}/{f.kind}] {f.message}", file=sys.stderr)
+    for rec in sr.iterations:
+        ev = rec.evaluation
+        print(
+            f"{prefix} [iter {rec.index}] success={ev.success} stage={ev.compile_stage_reached!r} "
+            f"metrics={dict(ev.metrics)}",
+            file=sys.stderr,
+        )
+    print(sr.best_source.rstrip() + "\n", end="")
+    if args.out is not None:
+        print(f"Wrote best program to {args.out}", file=sys.stderr)
+    summ_path = getattr(args, "summary_out", None)
+    if summ_path is not None:
+        doc = copilot_pipeline_summary_dict(
+            result,
+            artifact_dir_resolved=result.artifact_dir,
+            summarize_traces=summarize,
+        )
+        summ_path.parent.mkdir(parents=True, exist_ok=True)
+        summ_path.write_text(json.dumps(doc, indent=2), encoding="utf-8")
+        print(f"Wrote pipeline summary to {summ_path}", file=sys.stderr)
+    if cfg.artifact_dir is not None:
+        print(f"Wrote artifact bundle to {cfg.artifact_dir.resolve()}", file=sys.stderr)
 
 
 def _print_copilot_benchmark_summary(doc: dict) -> None:
@@ -809,10 +871,55 @@ def _add_copilot_backend_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--out", type=Path, default=None, help="Optional path to write the best/latest .ax source.")
 
 
+def _add_copilot_search_loop_args(p: argparse.ArgumentParser) -> None:
+    """Draft→repair search options (shared by ``copilot-search`` and ``copilot-run``)."""
+    p.add_argument(
+        "--iterations",
+        type=int,
+        default=8,
+        metavar="N",
+        help="Maximum evaluation rounds (default: 8).",
+    )
+    p.add_argument(
+        "--examples-json",
+        type=Path,
+        default=None,
+        help='Optional JSON file: [{"inputs":{...},"expected":{...}}, ...] for predict_rows scoring.',
+    )
+    p.add_argument(
+        "--train-tabular",
+        action="store_true",
+        help="Evaluate candidates with in-memory train+eval (requires --tabular-json; see tabular_json module).",
+    )
+    p.add_argument(
+        "--tabular-json",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="JSON object: target_var, train_rows, eval_rows (rows: inputs+expected), optional epochs/lr/weight_decay/batch_size.",
+    )
+    p.add_argument(
+        "--compile-only",
+        action="store_true",
+        help="Validate with compile_only (ignore --examples-json for execution).",
+    )
+    p.add_argument(
+        "--artifact-dir",
+        type=Path,
+        default=None,
+        help="Write reproducible bundle: best.ax, iterations.json, search_report.json (creates dir).",
+    )
+    p.add_argument(
+        "--summarize-traces",
+        action="store_true",
+        help="After each iteration, call the expert summarize_trace API (optional; extra latency).",
+    )
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(
         prog="axiom",
-        description="Axiom neural compiler CLI (train, predict, copilot-draft, copilot-search, copilot-benchmark, copilot-serve, copilot-studio, lock-bundle, export-onnx, inspect, serve, gateway-serve).",
+        description="Axiom neural compiler CLI (train, predict, copilot-draft, copilot-search, copilot-run, copilot-benchmark, copilot-serve, copilot-studio, lock-bundle, export-onnx, inspect, serve, gateway-serve).",
     )
     sub = ap.add_subparsers(dest="cmd", required=True)
 
@@ -887,7 +994,7 @@ def main(argv: list[str] | None = None) -> None:
 
     p_copilot_serve = sub.add_parser(
         "copilot-serve",
-        help='HTTP copilot API: /draft, /search, /summarize (needs pip install -e ".[serve,copilot]").',
+        help='HTTP copilot API: /draft, /search, /run, /summarize, /benchmarks/run (needs pip install -e ".[serve,copilot]").',
     )
     p_copilot_serve.add_argument(
         "--backend",
@@ -1047,54 +1154,34 @@ def main(argv: list[str] | None = None) -> None:
         help="Draft / evaluate / repair loop with an expert until success or iteration budget (see Phase 60).",
     )
     _add_copilot_backend_args(p_cs)
-    p_cs.add_argument(
-        "--iterations",
-        type=int,
-        default=8,
-        metavar="N",
-        help="Maximum evaluation rounds (default: 8).",
-    )
-    p_cs.add_argument(
-        "--examples-json",
-        type=Path,
-        default=None,
-        help='Optional JSON file: [{"inputs":{...},"expected":{...}}, ...] for predict_rows scoring.',
-    )
-    p_cs.add_argument(
-        "--train-tabular",
-        action="store_true",
-        help="Evaluate candidates with in-memory train+eval (requires --tabular-json; see tabular_json module).",
-    )
-    p_cs.add_argument(
-        "--tabular-json",
-        type=Path,
-        default=None,
-        metavar="PATH",
-        help="JSON object: target_var, train_rows, eval_rows (rows: inputs+expected), optional epochs/lr/weight_decay/batch_size.",
-    )
-    p_cs.add_argument(
-        "--compile-only",
-        action="store_true",
-        help="Validate with compile_only (ignore --examples-json for execution).",
-    )
+    _add_copilot_search_loop_args(p_cs)
     p_cs.add_argument(
         "--report-out",
         type=Path,
         default=None,
         help="Write structured JSON (iterations, metrics, sources) to this path.",
     )
-    p_cs.add_argument(
-        "--artifact-dir",
+    p_cs.set_defaults(_handler=_cmd_copilot_search)
+
+    p_cr = sub.add_parser(
+        "copilot-run",
+        help="End-to-end NL→.ax pipeline: search + optional artifact bundle + pipeline summary JSON + final compile check (Phase 71).",
+    )
+    _add_copilot_backend_args(p_cr)
+    _add_copilot_search_loop_args(p_cr)
+    p_cr.add_argument(
+        "--summary-out",
         type=Path,
         default=None,
-        help="Write reproducible bundle: best.ax, iterations.json, search_report.json (creates dir).",
+        metavar="PATH",
+        help="Write pipeline summary JSON (disclaimer, iterations, evaluations, final_validation).",
     )
-    p_cs.add_argument(
-        "--summarize-traces",
+    p_cr.add_argument(
+        "--no-final-validate",
         action="store_true",
-        help="After each iteration, call the expert summarize_trace API (optional; extra latency).",
+        help="Skip the extra compile-only pass on the champion source after search.",
     )
-    p_cs.set_defaults(_handler=_cmd_copilot_search)
+    p_cr.set_defaults(_handler=_cmd_copilot_run)
 
     p_cb = sub.add_parser(
         "copilot-benchmark",
@@ -1160,6 +1247,9 @@ def main(argv: list[str] | None = None) -> None:
         handler(args)
         return
     if handler is _cmd_copilot_search:
+        handler(args)
+        return
+    if handler is _cmd_copilot_run:
         handler(args)
         return
     if handler is _cmd_copilot_benchmark:

@@ -70,7 +70,7 @@ Optional extras:
 | **`[lock]`** | Genetic lock on **`.axb`** neural weights (`axiom lock-bundle`) |
 | **`[export]`** | ONNX export (`axiom export-onnx`) |
 | **`[gateway]`** | Policy gateway HTTP + examples (`requests`, Streamlit, overlaps `[serve]` on FastAPI) |
-| **`[copilot]`** | Semantic copilot CLI (`axiom copilot-draft`, `axiom copilot-search`) — `requests` for Onyx/Qwen-style chat APIs |
+| **`[copilot]`** | Semantic copilot CLI (`axiom copilot-draft`, `axiom copilot-search`, `axiom copilot-run`) — `requests` for Onyx/Qwen-style chat APIs |
 | **`[dev]`** | Run the test suite (`pytest` + Glass Box deps for `inspect` / `glass_box` tests) |
 
 Run tests locally:
@@ -90,7 +90,7 @@ python -m pytest tests -q
 4. **Secure** — Optional **`pip install -e ".[lock]"`**, then **`axiom lock-bundle`** encrypts neural weights; **`AXIOM_BUNDLE_SECRET`** / device unlock at load time.  
 5. **Export** — Optional **`pip install -e ".[export]"`**, then **`axiom export-onnx`** for inference-only ONNX (no **`explain`** parity).  
 6. **Policy gateway** — Optional **`pip install -e ".[gateway]"`**, then **`axiom gateway-serve`** for **`POST /gateway/chat`** (scan + explain + allow/deny + optional downstream forward).
-7. **Semantic copilot** — Optional **`pip install -e ".[copilot]"`**, then **`axiom copilot-draft`** / **`axiom copilot-search`** to draft and repair **`.ax`** programs via an OpenAI-compatible chat endpoint (e.g. Onyx + Qwen).
+7. **Semantic copilot** — Optional **`pip install -e ".[copilot]"`**, then **`axiom copilot-draft`** / **`axiom copilot-search`** / **`axiom copilot-run`** to draft, repair, or run the full “goal → best **`.ax`** + reports” pipeline via an OpenAI-compatible chat endpoint (e.g. Onyx + Qwen).
 
 ---
 
@@ -100,11 +100,13 @@ Install **`[copilot]`** so `requests` is available. Pass **`--expert-url`** (API
 
 **Reproducible runs:** **`axiom copilot-search --artifact-dir path/to/run/`** writes a fixed bundle — **`best.ax`**, **`iterations.json`** (per-iteration source, metrics, failure summaries, expert **`metadata`**, optional **`semantic_trace_summary`**), **`search_report.json`** (run header + **`failures_metrics_summary`** + sibling **`semantic_summaries`** when summarization ran) — only when that flag is set (no silent writes).
 
+**End-to-end pipeline (Phase 71):** **`axiom copilot-run`** runs the same draft→evaluate→repair loop as **`copilot-search`**, then optionally writes a **pipeline summary JSON** (**`--summary-out`**) with a short **disclaimer** (this path does **not** train **`.axb`** or export ONNX), runs an extra **compile-only** pass on the champion source by default (disable with **`--no-final-validate`**), and prints explicit **stderr** lines if that final validation fails. Use **`--artifact-dir`**, **`--out`**, and the same mode flags as search (**`--compile-only`**, **`--examples-json`**, **`--train-tabular`** / **`--tabular-json`**, **`--summarize-traces`**).
+
 **Trace summaries (optional):** pass **`--summarize-traces`** on **`copilot-search`** to call the expert’s **`summarize_trace`** after each iteration (natural-language narration of explain trace + metrics + failures). Default is off; if the call fails, search still completes and the summary field is empty. Scalar metrics stay in **`metrics`**; prose lives in **`semantic_trace_summary`** / **`semantic_summaries`** only.
 
 **Copilot Studio (optional UI):** install **`[inspect]`** and **`[copilot]`** (`pip install -e ".[inspect,copilot]"`), then run **`axiom copilot-studio`**. It opens a separate Streamlit app from Glass Box (`axiom inspect`): enter expert URL / model / API key, goal, optional context, iteration limit, optional **Summarize traces**, search mode **`compile_only`** / **`predict_rows`** / **`train_tabular`** (plus JSON text areas for row examples or tabular train/eval), then use **Draft once** or **Run search** — nothing calls the network until you click. You get tables for iteration summaries, expandable eval/metrics/failure JSON, and download buttons for **`draft.ax`**, **`best.ax`**, and **`copilot_report.json`**.
 
-**Copilot HTTP server (Phase 67+):** headless FastAPI app for **`/draft`**, **`/search`**, **`/benchmarks/run`**, **`/summarize`**, and **`/health`** — not **`axiom serve`** (bundles) and not the policy gateway. **`POST /search`** accepts optional **`train_tabular`** (target + train/eval row lists + optional Adam hyperparameters); it cannot be combined with **`compile_only`** or **`examples`** in the same request. Install **`pip install -e ".[serve,copilot]"`**, then e.g. **`axiom copilot-serve --expert-url https://your-host/v1/ --expert-model qwen-7b --port 8020`**. Optional **`AXIOM_COPILOT_API_KEY`**: when set, POST routes require **`Authorization: Bearer …`** or **`X-API-Key`** (health stays open). Downstream chat auth for the expert remains **`AXIOM_EXPERT_API_KEY`** / **`--expert-api-key`** as for the CLI.
+**Copilot HTTP server (Phase 67+):** headless FastAPI app for **`/draft`**, **`/search`**, **`/run`** (Phase 71 — same body shape as **`/search`** plus optional **`final_validate`**, response includes **`disclaimer`** and **`final_validation`**), **`/benchmarks/run`**, **`/summarize`**, and **`/health`** — not **`axiom serve`** (bundles) and not the policy gateway. **`POST /search`** accepts optional **`train_tabular`** (target + train/eval row lists + optional Adam hyperparameters); it cannot be combined with **`compile_only`** or **`examples`** in the same request. Install **`pip install -e ".[serve,copilot]"`**, then e.g. **`axiom copilot-serve --expert-url https://your-host/v1/ --expert-model qwen-7b --port 8020`**. Optional **`AXIOM_COPILOT_API_KEY`**: when set, POST routes require **`Authorization: Bearer …`** or **`X-API-Key`** (health stays open). Downstream chat auth for the expert remains **`AXIOM_EXPERT_API_KEY`** / **`--expert-api-key`** as for the CLI.
 
 **Draft** (goal → single program):
 
@@ -135,6 +137,15 @@ axiom copilot-search --backend onyx-qwen --goal "Output y from defaults" `
 ```
 
 Omit **`--summarize-traces`** to skip the extra expert round-trips.
+
+**Pipeline (goal → best `.ax` + summary JSON + optional artifact dir):**
+
+```powershell
+axiom copilot-run --backend onyx-qwen --goal "Small policy on x" `
+  --expert-url "https://api.example.com/v1/" --expert-model "qwen-7b" `
+  --iterations 5 --compile-only `
+  --artifact-dir ./copilot_e2e --summary-out pipeline_summary.json --out best.ax
+```
 
 **Benchmark harness:** `axiom.copilot.benchmarks` defines tiny NL tasks (`DEFAULT_BENCHMARK_TASKS`), compares draft-only vs full search, and serializes with **`benchmark_suite_to_dict`**. **CLI:** **`axiom copilot-benchmark`** (expert flags like other copilot commands; optional **`--task-json`**, **`--out`**, **`--draft-only`** or **`--search`**, **`--max-iterations`**). **HTTP:** with **`pip install -e ".[serve,copilot]"`**, **`POST /benchmarks/run`** on the copilot server accepts optional inline **`tasks`**, **`max_iterations`**, **`draft_only`**, **`search_only`**; response wraps the same JSON document under **`suite`**. Extra tasks can be loaded from **`axiom/copilot/fixtures/benchmark_tasks.json`** or your own file matching that schema.
 

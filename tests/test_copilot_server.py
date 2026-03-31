@@ -205,6 +205,13 @@ def test_auth_bearer_required_when_env_set(monkeypatch, client):
     app = create_app(_FakeCopilotExpert())
     c2 = TestClient(app)
     assert c2.post("/draft", json={"goal": "a"}).status_code == 401
+    assert (
+        c2.post(
+            "/run",
+            json={"goal": "a", "max_iterations": 1, "compile_only": True},
+        ).status_code
+        == 401
+    )
     r = c2.post(
         "/draft",
         json={"goal": "a"},
@@ -243,6 +250,52 @@ def test_search_writes_artifact_dir(tmp_path: Path, monkeypatch):
     assert r.status_code == 200
     assert (Path(ad) / "best.ax").is_file()
     assert (Path(ad) / "iterations.json").is_file()
+
+
+def test_run_pipeline_returns_disclaimer_and_final_validation(client):
+    c, _ = client
+    r = c.post(
+        "/run",
+        json={"goal": "trivial", "max_iterations": 2, "compile_only": True},
+    )
+    assert r.status_code == 200
+    d = r.json()
+    assert "disclaimer" in d and "not" in d["disclaimer"].lower()
+    assert d["converged"] is True
+    assert d["final_validation"] is not None
+    assert d["final_validation"]["success"] is True
+    assert "neural" in d["best_source"]
+
+
+def test_run_skips_final_validation_when_disabled(client):
+    c, _ = client
+    r = c.post(
+        "/run",
+        json={
+            "goal": "trivial",
+            "max_iterations": 1,
+            "compile_only": True,
+            "final_validate": False,
+        },
+    )
+    assert r.status_code == 200
+    assert r.json()["final_validation"] is None
+
+
+def test_run_writes_artifact_dir(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("AXIOM_COPILOT_API_KEY", raising=False)
+    from fastapi.testclient import TestClient
+
+    app = create_app(_FakeCopilotExpert())
+    c = TestClient(app)
+    ad = str(tmp_path / "run_art")
+    r = c.post(
+        "/run",
+        json={"goal": "t", "max_iterations": 1, "compile_only": True, "artifact_dir": ad},
+    )
+    assert r.status_code == 200
+    assert Path(r.json()["artifact_dir"]) == Path(ad).resolve()
+    assert (Path(ad) / "best.ax").is_file()
 
 
 def test_create_app_import_error_message():

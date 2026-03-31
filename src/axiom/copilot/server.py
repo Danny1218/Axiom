@@ -10,6 +10,8 @@ from axiom.copilot.api_models import (
     BenchmarkRunRequest,
     BenchmarkRunResponse,
     CopilotHealthResponse,
+    CopilotRunRequest,
+    CopilotRunResponse,
     DraftRequest,
     DraftResponse,
     SearchRequest,
@@ -20,6 +22,7 @@ from axiom.copilot.api_models import (
 )
 from axiom.copilot.artifacts import evaluation_report_to_dict, json_safe
 from axiom.copilot.benchmarks import benchmark_suite_to_dict, benchmark_tasks_from_json_dict, run_benchmark_suite
+from axiom.copilot.pipeline import CopilotPipelineConfig, copilot_pipeline_summary_dict, run_copilot_pipeline
 from axiom.copilot.search import CopilotSearchConfig, CopilotSearchResult, build_draft_context, run_copilot_search
 from axiom.copilot.tabular_json import parse_tabular_json_dict
 from axiom.experts.base import ExpertDraftRequest, ExpertTraceSummaryRequest, SemanticExpert
@@ -57,6 +60,65 @@ def _copilot_payload_from_train_tabular(section: TrainTabularPayload):
         "batch_size": section.batch_size,
     }
     return parse_tabular_json_dict(d)
+
+
+def _search_config_from_request(body: SearchRequest, exp: SemanticExpert) -> CopilotSearchConfig:
+    example_in: Optional[List[Dict[str, Any]]] = None
+    example_exp: Optional[List[Dict[str, Any]]] = None
+    if body.examples:
+        example_in = [dict(x.inputs) for x in body.examples]
+        example_exp = [dict(x.expected) for x in body.examples]
+
+    tab_train: Optional[List[Dict[str, Any]]] = None
+    tab_eval: Optional[List[Dict[str, Any]]] = None
+    tab_target: Optional[str] = None
+    tab_params = None
+    tab_eval_exp: Optional[List[Dict[str, Any]]] = None
+    if body.train_tabular is not None:
+        pld = _copilot_payload_from_train_tabular(body.train_tabular)
+        tab_train = list(pld.train_rows)
+        tab_eval = list(pld.eval_rows)
+        tab_target = pld.target_var
+        tab_params = pld.params
+        tab_eval_exp = list(pld.eval_expected_rows)
+
+    if body.compile_only:
+        mode: str = "compile_only"
+        score_fn = None
+        sort_key = None
+    elif body.train_tabular is not None:
+        mode = "train_tabular"
+        score_fn = _default_neg_mse_score_fn()
+        sort_key = "neg_mse"
+    elif example_in is not None:
+        mode = "predict_rows"
+        score_fn = _default_neg_mse_score_fn()
+        sort_key = "neg_mse"
+    else:
+        mode = "compile_only"
+        score_fn = None
+        sort_key = None
+
+    summarize = bool(body.summarize_traces)
+    return CopilotSearchConfig(
+        expert=exp,
+        goal=body.goal.strip(),
+        domain_context=body.domain_context,
+        example_input_rows=example_in,
+        expected_rows=example_exp,
+        max_iterations=int(body.max_iterations),
+        mode=mode,  # type: ignore[arg-type]
+        score_fn=score_fn,
+        score_sort_key=sort_key,
+        include_trace_snippet=summarize,
+        summarize_traces=summarize,
+        artifact_dir=Path(body.artifact_dir).resolve() if body.artifact_dir else None,
+        tabular_train_rows=tab_train,
+        tabular_eval_rows=tab_eval,
+        tabular_target_var=tab_target,
+        tabular_train_params=tab_params,
+        tabular_eval_expected_rows=tab_eval_exp,
+    )
 
 
 def _serialize_search_response(result: CopilotSearchResult, cfg: CopilotSearchConfig) -> SearchResponse:
@@ -135,64 +197,36 @@ def create_app(expert: SemanticExpert):
 
     @app.post("/search", response_model=SearchResponse, dependencies=[Depends(verify_copilot_api_key)])
     def search(body: SearchRequest, exp: SemanticExpert = Depends(get_expert)) -> SearchResponse:
-        example_in: Optional[List[Dict[str, Any]]] = None
-        example_exp: Optional[List[Dict[str, Any]]] = None
-        if body.examples:
-            example_in = [dict(x.inputs) for x in body.examples]
-            example_exp = [dict(x.expected) for x in body.examples]
-
-        tab_train: Optional[List[Dict[str, Any]]] = None
-        tab_eval: Optional[List[Dict[str, Any]]] = None
-        tab_target: Optional[str] = None
-        tab_params = None
-        tab_eval_exp: Optional[List[Dict[str, Any]]] = None
-        if body.train_tabular is not None:
-            pld = _copilot_payload_from_train_tabular(body.train_tabular)
-            tab_train = list(pld.train_rows)
-            tab_eval = list(pld.eval_rows)
-            tab_target = pld.target_var
-            tab_params = pld.params
-            tab_eval_exp = list(pld.eval_expected_rows)
-
-        if body.compile_only:
-            mode: str = "compile_only"
-            score_fn = None
-            sort_key = None
-        elif body.train_tabular is not None:
-            mode = "train_tabular"
-            score_fn = _default_neg_mse_score_fn()
-            sort_key = "neg_mse"
-        elif example_in is not None:
-            mode = "predict_rows"
-            score_fn = _default_neg_mse_score_fn()
-            sort_key = "neg_mse"
-        else:
-            mode = "compile_only"
-            score_fn = None
-            sort_key = None
-
-        summarize = bool(body.summarize_traces)
-        cfg = CopilotSearchConfig(
-            expert=exp,
-            goal=body.goal.strip(),
-            domain_context=body.domain_context,
-            example_input_rows=example_in,
-            expected_rows=example_exp,
-            max_iterations=int(body.max_iterations),
-            mode=mode,  # type: ignore[arg-type]
-            score_fn=score_fn,
-            score_sort_key=sort_key,
-            include_trace_snippet=summarize,
-            summarize_traces=summarize,
-            artifact_dir=Path(body.artifact_dir).resolve() if body.artifact_dir else None,
-            tabular_train_rows=tab_train,
-            tabular_eval_rows=tab_eval,
-            tabular_target_var=tab_target,
-            tabular_train_params=tab_params,
-            tabular_eval_expected_rows=tab_eval_exp,
-        )
+        cfg = _search_config_from_request(body, exp)
         result = run_copilot_search(cfg)
         return _serialize_search_response(result, cfg)
+
+    @app.post("/run", response_model=CopilotRunResponse, dependencies=[Depends(verify_copilot_api_key)])
+    def run_pipeline(body: CopilotRunRequest, exp: SemanticExpert = Depends(get_expert)) -> CopilotRunResponse:
+        cfg = _search_config_from_request(body, exp)
+        pcfg = CopilotPipelineConfig(
+            search=cfg,
+            best_ax_path=None,
+            summary_json_path=None,
+            final_validate=bool(body.final_validate),
+        )
+        result = run_copilot_pipeline(pcfg)
+        doc = copilot_pipeline_summary_dict(
+            result,
+            artifact_dir_resolved=result.artifact_dir,
+            summarize_traces=bool(body.summarize_traces),
+        )
+        return CopilotRunResponse(
+            disclaimer=str(doc["disclaimer"]),
+            converged=bool(doc["converged"]),
+            best_source=str(doc["best_source"]),
+            best_evaluation=dict(doc["best_evaluation"]),
+            final_evaluation=dict(doc["final_evaluation"]),
+            iterations=list(doc["iterations"]),
+            final_validation=dict(doc["final_validation"]) if doc.get("final_validation") is not None else None,
+            semantic_summaries=dict(doc["semantic_summaries"]) if doc.get("semantic_summaries") else None,
+            artifact_dir=doc.get("artifact_dir"),
+        )
 
     @app.post("/benchmarks/run", response_model=BenchmarkRunResponse, dependencies=[Depends(verify_copilot_api_key)])
     def benchmarks_run(body: BenchmarkRunRequest, exp: SemanticExpert = Depends(get_expert)) -> BenchmarkRunResponse:

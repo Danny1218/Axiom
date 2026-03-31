@@ -15,7 +15,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List
 
-from axiom.copilot.models import ProgramEvaluationReport
+from axiom.copilot.models import ProgramEvaluationReport, ProgramValidationReport
 from axiom.copilot.search import CopilotIterationRecord, CopilotSearchConfig, CopilotSearchResult
 from axiom.experts.base import ExpertDraftResponse
 
@@ -61,6 +61,19 @@ def evaluation_report_to_dict(rep: ProgramEvaluationReport) -> Dict[str, Any]:
         "warnings": list(rep.warnings),
         "metrics": dict(rep.metrics),
         "program_metrics": [{"name": m.name, "value": m.value} for m in rep.program_metrics],
+    }
+
+
+def validation_report_to_dict(rep: ProgramValidationReport) -> Dict[str, Any]:
+    """Stable :class:`ProgramValidationReport` JSON shape (final compile-only pass)."""
+    return {
+        "success": rep.success,
+        "compile_stage_reached": rep.compile_stage_reached,
+        "failures": [
+            {"stage": f.stage, "kind": f.kind, "message": f.message, "detail": f.detail}
+            for f in rep.failures
+        ],
+        "warnings": list(rep.warnings),
     }
 
 
@@ -195,6 +208,7 @@ __all__ = [
     "build_iterations_document",
     "build_search_report_document",
     "evaluation_report_to_dict",
+    "validation_report_to_dict",
     "expert_response_to_dict",
     "iteration_entry_to_dict",
     "json_safe",

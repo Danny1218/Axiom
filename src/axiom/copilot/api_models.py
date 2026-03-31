@@ -68,6 +68,26 @@ class SearchResponse(BaseModel):
     iterations: List[Dict[str, Any]]
 
 
+class CopilotRunRequest(SearchRequest):
+    """Same evaluation surface as :class:`SearchRequest` plus optional final compile-only pass."""
+
+    final_validate: bool = True
+
+
+class CopilotRunResponse(BaseModel):
+    """Pipeline output: search traces + optional ``final_validation`` + honesty ``disclaimer``."""
+
+    disclaimer: str
+    converged: bool
+    best_source: str
+    best_evaluation: Dict[str, Any]
+    final_evaluation: Dict[str, Any]
+    iterations: List[Dict[str, Any]]
+    final_validation: Optional[Dict[str, Any]] = None
+    semantic_summaries: Optional[Dict[str, Any]] = None
+    artifact_dir: Optional[str] = None
+
+
 class SummarizeRequest(BaseModel):
     goal: str
     program: str
