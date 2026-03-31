@@ -1,0 +1,70 @@
+[
+  {
+    "inputs": { "risk_a": 0.0, "risk_b": 0.0 },
+    "expected": { "risk_score": 0.0 }
+  },
+  {
+    "inputs": { "risk_a": 1.0, "risk_b": 0.0 },
+    "expected": { "risk_score": 0.7 }
+  },
+  {
+    "inputs": { "risk_a": 0.0, "risk_b": 1.0 },
+    "expected": { "risk_score": 0.3 }
+  },
+  {
+    "inputs": { "risk_a": 0.5, "risk_b": 0.0 },
+    "expected": { "risk_score": 0.35 }
+  },
+  {
+    "inputs": { "risk_a": 0.0, "risk_b": 0.5 },
+    "expected": { "risk_score": 0.15 }
+  },
+  {
+    "inputs": { "risk_a": 0.2, "risk_b": 0.4 },
+    "expected": { "risk_score": 0.26 }
+  },
+  {
+    "inputs": { "risk_a": 0.5, "risk_b": 0.5 },
+    "expected": { "risk_score": 0.5 }
+  },
+  {
+    "inputs": { "risk_a": 0.1, "risk_b": 0.7 },
+    "expected": { "risk_score": 0.28 }
+  },
+  {
+    "inputs": { "risk_a": 0.3, "risk_b": 0.1 },
+    "expected": { "risk_score": 0.24 }
+  },
+  {
+    "inputs": { "risk_a": 0.1, "risk_b": 0.1 },
+    "expected": { "risk_score": 0.1 }
+  },
+  {
+    "inputs": { "risk_a": 1.0, "risk_b": 1.0 },
+    "expected": { "risk_score": 1.0 }
+  },
+  {
+    "inputs": { "risk_a": -1.0, "risk_b": 0.0 },
+    "expected": { "risk_score": 0.0 }
+  },
+  {
+    "inputs": { "risk_a": -0.5, "risk_b": 1.0 },
+    "expected": { "risk_score": 0.0 }
+  },
+  {
+    "inputs": { "risk_a": 2.0, "risk_b": 0.0 },
+    "expected": { "risk_score": 1.0 }
+  },
+  {
+    "inputs": { "risk_a": 1.5, "risk_b": 0.0 },
+    "expected": { "risk_score": 1.0 }
+  },
+  {
+    "inputs": { "risk_a": 0.0, "risk_b": 2.0 },
+    "expected": { "risk_score": 0.6 }
+  },
+  {
+    "inputs": { "risk_a": 0.0, "risk_b": 3.5 },
+    "expected": { "risk_score": 1.0 }
+  }
+]

@@ -28,6 +28,7 @@ from axiom.copilot.search import (
     build_repair_error_report,
     format_failures_for_repair,
     format_metrics_for_repair,
+    format_row_mismatches_for_repair,
     run_copilot_search,
 )
 from axiom.copilot.benchmarks import (
@@ -80,6 +81,7 @@ __all__ = [
     "expert_response_to_dict",
     "format_failures_for_repair",
     "format_metrics_for_repair",
+    "format_row_mismatches_for_repair",
     "persist_copilot_artifacts",
     "run_benchmark_draft_only",
     "run_benchmark_search",

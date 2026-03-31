@@ -49,7 +49,7 @@ def expert_response_to_dict(resp: ExpertDraftResponse, expert_call: str) -> Dict
 
 def evaluation_report_to_dict(rep: ProgramEvaluationReport) -> Dict[str, Any]:
     """Stable :class:`ProgramEvaluationReport` JSON shape (shared with CLI reporting)."""
-    return {
+    d: Dict[str, Any] = {
         "success": rep.success,
         "source": rep.source,
         "compile_stage_reached": rep.compile_stage_reached,
@@ -62,6 +62,9 @@ def evaluation_report_to_dict(rep: ProgramEvaluationReport) -> Dict[str, Any]:
         "metrics": dict(rep.metrics),
         "program_metrics": [{"name": m.name, "value": m.value} for m in rep.program_metrics],
     }
+    if rep.row_comparisons is not None:
+        d["row_comparisons"] = json_safe(rep.row_comparisons)
+    return d
 
 
 def validation_report_to_dict(rep: ProgramValidationReport) -> Dict[str, Any]:
@@ -86,7 +89,7 @@ def _failure_summaries(rep: ProgramEvaluationReport) -> List[Dict[str, Any]]:
 
 def iteration_entry_to_dict(rec: CopilotIterationRecord) -> Dict[str, Any]:
     ev = rec.evaluation
-    return {
+    row: Dict[str, Any] = {
         "index": rec.index,
         "candidate_source": rec.source,
         "success": ev.success,
@@ -100,6 +103,9 @@ def iteration_entry_to_dict(rec: CopilotIterationRecord) -> Dict[str, Any]:
         "outgoing_repair_error_report": rec.outgoing_repair_error_report,
         "semantic_trace_summary": rec.semantic_trace_summary,
     }
+    if ev.row_comparisons is not None:
+        row["row_comparisons"] = json_safe(ev.row_comparisons)
+    return row
 
 
 def _backend_name_from_result(result: CopilotSearchResult) -> str:

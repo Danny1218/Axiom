@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from axiom.compiler.parser import reset_parser
@@ -17,6 +19,7 @@ from axiom.copilot import (
     format_metrics_for_repair,
     run_copilot_search,
 )
+from axiom.copilot.artifacts import evaluation_report_to_dict
 from axiom.copilot.benchmarks import default_neg_mse_score_fn
 from axiom.copilot.search import DEFAULT_METRIC_REPAIR_THRESHOLD, _is_better
 from axiom.experts import (
@@ -33,6 +36,7 @@ LOW_Q_AX = "y = 1.0;"
 HIGH_Q_AX = "y = 0.5;"
 BAD_DOUBLE_AX = "y = x * 1.0;"
 GOOD_DOUBLE_AX = "y = x * 2.0;"
+CLOSE_DOUBLE_AX = "y = x * 1.0;\n"
 EX_IN = [{"x": 1.0}]
 EX_EXP = [{"y": 2.0}]
 
@@ -184,6 +188,35 @@ def test_predict_rows_repairs_poor_neg_mse_until_symbolic_fix():
     assert out.metric_repair_threshold_effective == DEFAULT_METRIC_REPAIR_THRESHOLD
     assert out.best_source.strip() == GOOD_DOUBLE_AX.strip()
     assert len(ex.repair_calls) == 1
+
+
+def test_repair_prompt_includes_row_mismatches_when_valid_but_wrong_metric():
+    """Valid program with wrong coefficients: repair prompt lists per-row predicted vs expected."""
+    ex = ScriptedExpert(CLOSE_DOUBLE_AX, [GOOD_DOUBLE_AX])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="Compute y = 2*x from examples",
+        max_iterations=2,
+        mode="predict_rows",
+        example_input_rows=EX_IN,
+        expected_rows=EX_EXP,
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+        repair_valid_with_metrics=True,
+    )
+    out = run_copilot_search(cfg)
+    assert len(ex.repair_calls) == 1
+    rep = ex.repair_calls[0].error_report
+    assert "## Row-wise mismatches" in rep
+    assert '"predicted"' in rep and '"expected"' in rep
+    assert '"abs_error"' in rep
+    assert "## Symbolic mapping hint" in rep
+    assert "symbolic arithmetic" in rep.lower()
+    ev0 = out.iterations[0].evaluation
+    assert ev0.row_comparisons
+    d = evaluation_report_to_dict(ev0)
+    json.dumps(d)
+    assert "row_comparisons" in d
 
 
 def test_predict_rows_metric_budget_exhausted_when_still_poor():

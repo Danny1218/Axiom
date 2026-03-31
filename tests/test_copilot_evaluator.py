@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from axiom.compiler.parser import reset_parser
@@ -15,6 +17,8 @@ from axiom.copilot import (
     evaluate_program,
     validate_program,
 )
+from axiom.copilot.artifacts import evaluation_report_to_dict
+from axiom.copilot.benchmarks import default_neg_mse_score_fn
 
 GOOD_AX = "y = neural([1.0, 2.0]);"
 
@@ -202,3 +206,57 @@ def test_evaluation_report_typing():
     )
     assert r.metrics == {}
     assert r.program_metrics == []
+    assert r.row_comparisons is None
+
+
+def test_predict_rows_row_comparisons_worst_first_and_json():
+    """y = x * 1.0 under-predicts doubling task; larger error row sorts first."""
+    src = "y = x * 1.0;\n"
+    inp = [{"x": 1.0}, {"x": 2.0}]
+    exp = [{"y": 2.0}, {"y": 4.0}]
+    r = evaluate_program(
+        ProgramCandidate(src),
+        mode="predict_rows",
+        input_rows=inp,
+        expected_rows=exp,
+        score_fn=default_neg_mse_score_fn(),
+        include_trace_snippet=False,
+    )
+    assert r.success and r.row_comparisons
+    assert len(r.row_comparisons) == 2
+    assert r.row_comparisons[0]["row_max_abs_error"] >= r.row_comparisons[1]["row_max_abs_error"]
+    assert r.row_comparisons[0]["expected"]["y"] == 4.0
+    d = evaluation_report_to_dict(r)
+    json.dumps(d)
+    assert "row_comparisons" in d and len(d["row_comparisons"]) == 2
+
+
+def test_predict_rows_row_comparison_limit_slices():
+    src = "y = x * 1.0;\n"
+    inp = [{"x": float(i)} for i in range(5)]
+    exp = [{"y": float(i * 2)} for i in range(5)]
+    r = evaluate_program(
+        ProgramCandidate(src),
+        mode="predict_rows",
+        input_rows=inp,
+        expected_rows=exp,
+        score_fn=default_neg_mse_score_fn(),
+        include_trace_snippet=False,
+        row_comparison_limit=2,
+    )
+    assert r.success and r.row_comparisons is not None
+    assert len(r.row_comparisons) == 2
+
+
+def test_predict_rows_row_comparison_limit_zero():
+    r = evaluate_program(
+        ProgramCandidate("y = x * 1.0;\n"),
+        mode="predict_rows",
+        input_rows=[{"x": 1.0}],
+        expected_rows=[{"y": 2.0}],
+        score_fn=default_neg_mse_score_fn(),
+        include_trace_snippet=False,
+        row_comparison_limit=0,
+    )
+    assert r.success
+    assert r.row_comparisons is None

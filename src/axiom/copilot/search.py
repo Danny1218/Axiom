@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
@@ -23,6 +24,24 @@ ExpertRequestPayload = Dict[str, Any]
 
 # Default stop threshold for built-in ``neg_mse`` (higher is better; 0 ≈ perfect). Repair while score < this.
 DEFAULT_METRIC_REPAIR_THRESHOLD = -1e-9
+
+_GOAL_SYMBOLIC_MATH_HINT = re.compile(
+    r"(compute|formula|symbolic|arithmetic|algebra|multiply|coefficient|exact|"
+    r"risk_score|linear|weighted|blend|double\b|mapping|polynomial)",
+    re.I,
+)
+
+
+def _goal_suggests_symbolic_math(goal: str) -> bool:
+    """Heuristic: user goal looks like an exact symbolic / numeric mapping (not a policy)."""
+    g = (goal or "").strip()
+    if not g:
+        return False
+    if _GOAL_SYMBOLIC_MATH_HINT.search(g):
+        return True
+    if len(g) <= 220 and re.search(r"[0-9]\s*[\*\+\-]\s*[0-9]|=\s*max|=\s*min|\*\s*x\b", g):
+        return True
+    return False
 
 
 def build_draft_context(
@@ -62,12 +81,28 @@ def format_metrics_for_repair(metrics: Mapping[str, float], program_metrics: Seq
     ) + "\n```\n"
 
 
+def format_row_mismatches_for_repair(row_comparisons: Sequence[Mapping[str, Any]]) -> str:
+    """Deterministic JSON block for repair prompts (worst rows first — see evaluator)."""
+    if not row_comparisons:
+        return ""
+    body = json.dumps([dict(r) for r in row_comparisons], indent=2, sort_keys=True)
+    return (
+        "## Row-wise mismatches\n\n"
+        "Ordered **worst-first** (by `row_max_abs_error`). "
+        "Use these concrete input/output deltas to fix coefficients or structure.\n\n"
+        "```json\n"
+        + body
+        + "\n```\n"
+    )
+
+
 def build_repair_error_report(
     *,
     goal: str,
     domain_context: Optional[str],
     current_ax: str,
     evaluation: ProgramEvaluationReport,
+    symbolic_exact_hint: bool = False,
 ) -> str:
     """Repair prompt: goal, context, current source, failures and/or metrics, fix instructions."""
     parts: List[str] = [
@@ -89,6 +124,16 @@ def build_repair_error_report(
     if evaluation.metrics or evaluation.program_metrics:
         parts.append(format_metrics_for_repair(evaluation.metrics, evaluation.program_metrics))
         parts.append("")
+    if evaluation.row_comparisons:
+        parts.append(format_row_mismatches_for_repair(evaluation.row_comparisons))
+        parts.append("")
+    if symbolic_exact_hint:
+        parts.append(
+            "## Symbolic mapping hint\n"
+            "This task is defined by explicit input/output examples with numeric targets. "
+            "Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be "
+            "written exactly; `neural(...)` remains allowed if you need it.\n\n"
+        )
     parts.append(
         "## Instructions\n"
         "Return a **corrected full** Axiom (.ax) program as plain source only "
@@ -145,6 +190,8 @@ class CopilotSearchConfig:
     # Merged into expert draft/repair JSON context (e.g. benchmark task ids); no effect on evaluation harness.
     draft_context_extras: Dict[str, Any] = field(default_factory=dict)
     repair_context_extras: Dict[str, Any] = field(default_factory=dict)
+    #: predict_rows: max rows in :attr:`ProgramEvaluationReport.row_comparisons` (0 = disable).
+    row_comparison_limit: int = 32
     # When mode == "train_tabular": merged row dicts (inputs ∪ expected) + target + params + expected for scoring.
     tabular_train_rows: Optional[Sequence[Mapping[str, Any]]] = None
     tabular_eval_rows: Optional[Sequence[Mapping[str, Any]]] = None
@@ -340,6 +387,7 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
                 score_fn=config.score_fn,
                 predictions_sample_limit=config.predictions_sample_limit,
                 include_trace_snippet=need_trace,
+                row_comparison_limit=config.row_comparison_limit,
             )
         final_report = report
 
@@ -363,11 +411,17 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
 
         err_full: Optional[str] = None
         if will_repair:
+            sym_hint = (
+                config.mode == "predict_rows"
+                and bool(config.expected_rows)
+                and _goal_suggests_symbolic_math(config.goal)
+            )
             err_full = build_repair_error_report(
                 goal=config.goal,
                 domain_context=config.domain_context,
                 current_ax=source_evaluated,
                 evaluation=report,
+                symbolic_exact_hint=sym_hint,
             )
             repair_ctx: Dict[str, Any] = build_repair_context(
                 example_input_rows=config.example_input_rows,

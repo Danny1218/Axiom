@@ -69,3 +69,5 @@ class ProgramEvaluationReport:
     program_metrics: List[ProgramMetric] = field(default_factory=list)
     predictions_sample: Optional[List[Dict[str, Any]]] = None
     trace_snippet: Optional[Dict[str, Any]] = None
+    #: predict_rows only: worst-first rows (inputs / predicted / expected / abs_error per target).
+    row_comparisons: Optional[List[Dict[str, Any]]] = None

@@ -24,6 +24,53 @@ CompileStage = str  # "none" | "parse" | "ir" | "block" | "predict"
 
 _MAX_ABI_VARS = 256
 
+# Max rows in :attr:`ProgramEvaluationReport.row_comparisons` (all rows if fewer; else worst-first slice).
+_DEFAULT_ROW_COMPARISON_LIMIT = 32
+
+
+def _compute_row_comparisons(
+    input_rows: List[Dict[str, Any]],
+    predictions: List[Dict[str, Any]],
+    expected_rows: List[Dict[str, Any]],
+    *,
+    limit: int,
+) -> List[Dict[str, Any]]:
+    """Build JSON-serializable per-row mismatch records; order worst-first by max absolute error."""
+    rows_out: List[Dict[str, Any]] = []
+    for i in range(len(input_rows)):
+        pred = predictions[i]
+        exp = expected_rows[i]
+        abs_err: Dict[str, Optional[float]] = {}
+        for k, exp_val in exp.items():
+            key = str(k)
+            if key not in pred:
+                abs_err[key] = None
+                continue
+            try:
+                dv = abs(float(pred[key]) - float(exp_val))
+                if dv != dv:  # NaN
+                    abs_err[key] = None
+                else:
+                    abs_err[key] = dv
+            except (TypeError, ValueError):
+                abs_err[key] = None
+        errs_finite = [v for v in abs_err.values() if isinstance(v, (int, float)) and v == v]
+        row_max = max(errs_finite) if errs_finite else 0.0
+        rows_out.append(
+            {
+                "inputs": dict(input_rows[i]),
+                "predicted": dict(pred),
+                "expected": dict(exp),
+                "abs_error": dict(sorted(abs_err.items())),
+                "row_max_abs_error": float(row_max),
+            }
+        )
+    rows_out.sort(key=lambda r: float(r["row_max_abs_error"]), reverse=True)
+    lim = max(0, int(limit))
+    if lim and len(rows_out) > lim:
+        rows_out = rows_out[:lim]
+    return rows_out
+
 
 def _failure(stage: str, kind: str, exc: BaseException) -> ProgramFailure:
     return ProgramFailure(
@@ -99,6 +146,7 @@ def evaluate_program(
     eval_rows: Optional[Sequence[Dict[str, Any]]] = None,
     target_var: Optional[str] = None,
     train_tabular_params: Optional[TrainTabularParams] = None,
+    row_comparison_limit: int = _DEFAULT_ROW_COMPARISON_LIMIT,
 ) -> ProgramEvaluationReport:
     """Validate and optionally run batched ``predict`` with an optional ``score_fn``.
 
@@ -113,6 +161,10 @@ def evaluate_program(
 
     ``score_fn(predictions, expected) -> dict[str, float]`` runs only when both ``expected_rows`` and
     ``score_fn`` are provided; lengths must match ``input_rows`` (predict) or ``eval_rows`` (train_tabular).
+
+    For ``predict_rows``, when ``expected_rows`` is set and matches ``input_rows`` length, ``row_comparisons``
+    lists up to ``row_comparison_limit`` rows (worst absolute-error first). Set ``row_comparison_limit`` to
+    ``0`` to omit.
     """
     source = candidate.source
     failures: List[ProgramFailure] = []
@@ -121,6 +173,7 @@ def evaluate_program(
     program_metrics: List[ProgramMetric] = []
     predictions_sample: Optional[List[Dict[str, Any]]] = None
     trace_snippet: Optional[Dict[str, Any]] = None
+    row_comparisons: Optional[List[Dict[str, Any]]] = None
 
     stage, block, compile_failures, compile_warnings = _try_compile(source, max_unroll=max_unroll)
     failures.extend(compile_failures)
@@ -253,39 +306,47 @@ def evaluate_program(
         except Exception as e:
             warnings.append(f"explain(first_row) skipped: {e}")
 
+    exp_list: Optional[List[Dict[str, Any]]] = None
+    if expected_rows is not None:
+        exp_list = [dict(r) for r in expected_rows]
+        if len(exp_list) != len(rows_list):
+            failures.append(
+                ProgramFailure(
+                    stage="predict",
+                    kind="value",
+                    message=(
+                        f"expected_rows length {len(exp_list)} != input_rows length {len(rows_list)}."
+                    ),
+                    detail="ValueError",
+                )
+            )
+            return ProgramEvaluationReport(
+                success=False,
+                source=source,
+                compile_stage_reached=stage,
+                mode=mode,
+                failures=failures,
+                warnings=warnings,
+                metrics=metrics,
+                program_metrics=program_metrics,
+                predictions_sample=predictions_sample,
+                trace_snippet=trace_snippet,
+                row_comparisons=None,
+            )
+        if row_comparison_limit > 0:
+            row_comparisons = _compute_row_comparisons(
+                rows_list,
+                preds_list_out,
+                exp_list,
+                limit=row_comparison_limit,
+            )
+
     if score_fn is not None:
-        if expected_rows is None:
+        if exp_list is None:
             warnings.append("score_fn provided but expected_rows is missing; skipping metrics.")
         else:
-            exp_list = [dict(r) for r in expected_rows]
-            if len(exp_list) != len(rows_list):
-                failures.append(
-                    ProgramFailure(
-                        stage="predict",
-                        kind="value",
-                        message=(
-                            f"expected_rows length {len(exp_list)} != input_rows length {len(rows_list)}."
-                        ),
-                        detail="ValueError",
-                    )
-                )
-                return ProgramEvaluationReport(
-                    success=False,
-                    source=source,
-                    compile_stage_reached=stage,
-                    mode=mode,
-                    failures=failures,
-                    warnings=warnings,
-                    metrics=metrics,
-                    program_metrics=program_metrics,
-                    predictions_sample=predictions_sample,
-                    trace_snippet=trace_snippet,
-                )
             try:
-                raw_scores = score_fn(
-                    preds_list_out,
-                    exp_list,
-                )
+                raw_scores = score_fn(preds_list_out, exp_list)
                 metrics = {str(k): float(v) for k, v in raw_scores.items()}
                 program_metrics = [ProgramMetric(name=k, value=v) for k, v in metrics.items()]
             except Exception as e:
@@ -303,4 +364,5 @@ def evaluate_program(
         program_metrics=program_metrics,
         predictions_sample=predictions_sample,
         trace_snippet=trace_snippet,
+        row_comparisons=row_comparisons,
     )
