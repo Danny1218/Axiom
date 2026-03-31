@@ -16,8 +16,11 @@ from axiom.experts.onyx_qwen import (
     OnyxQwenParseError,
     OnyxQwenTimeoutError,
     OnyxQwenTransportError,
+    SYSTEM_DRAFT,
+    SYSTEM_REPAIR,
     split_ax_and_prose,
     user_prompt_draft,
+    user_prompt_repair,
 )
 
 
@@ -35,16 +38,87 @@ def test_backend_satisfies_semantic_expert_protocol():
 
 
 def test_split_ax_prefers_fence():
-    ax, expl = split_ax_and_prose("Intro\n```ax\na = 1.0;\n```\nOutro")
-    assert ax == "a = 1.0;"
-    assert expl is not None
-    assert "Intro" in expl and "Outro" in expl
+    r = split_ax_and_prose("Intro\n```ax\na = 1.0;\n```\nOutro")
+    assert r.ax_source == "a = 1.0;"
+    assert r.prose is not None
+    assert "Intro" in r.prose and "Outro" in r.prose
+    assert r.extraction.get("extraction_mode") == "fenced_ax"
 
 
 def test_split_ax_fallback_plain_text():
-    ax, expl = split_ax_and_prose("  x = 2.0;\n")
-    assert ax == "x = 2.0;"
-    assert expl is None
+    r = split_ax_and_prose("  x = 2.0;\n")
+    assert r.ax_source == "x = 2.0;"
+    assert r.prose is None
+
+
+def test_split_ax_prefers_second_ax_fence_over_macaulay2():
+    """When Macaulay2 appears in another fence, use the explicit ``ax`` block."""
+    raw = """See Macaulay2:
+```m2
+R = QQ[x,y];
+ideal(x^2-y)
+```
+Real `.ax`:
+```ax
+out = max(0.0, min(1.0, x));
+```
+"""
+    r = split_ax_and_prose(raw)
+    assert "max(0.0" in r.ax_source
+    assert "QQ" not in r.ax_source
+    assert r.extraction.get("extraction_mode") == "fenced_ax"
+
+
+def test_split_ax_skips_m2_fence_uses_heuristic_line():
+    """Only m2 fence: pick code-like line outside the fence."""
+    raw = """Explanation paragraph that is not code and has many words in a row without semicolons.
+```m2
+R = QQ[x,y];
+```
+Use this line only:
+y = x * 2.0;
+"""
+    r = split_ax_and_prose(raw)
+    assert r.ax_source.strip() == "y = x * 2.0;"
+    assert r.extraction.get("extraction_mode") == "heuristic_lines"
+    assert r.prose is not None
+    assert "Explanation" in r.prose
+
+
+def test_split_ax_prose_plus_code_prefers_code_block():
+    raw = """Here is the policy you asked for.
+The output variable should be bounded.
+
+score = neural([a, b]);
+result = max(0.0, min(1.0, score));
+"""
+    r = split_ax_and_prose(raw)
+    assert "neural(" in r.ax_source
+    assert "Here is the policy" in (r.prose or "")
+    assert r.extraction.get("extraction_mode") == "heuristic_lines"
+
+
+def test_split_ax_heuristic_prefers_semicolon_and_keywords():
+    raw = """Blah blah prose without any semicolons and lots of filler text here.
+z = 1.0;
+if (z > 0.5) { out = z; } else { out = 0.0; }
+"""
+    r = split_ax_and_prose(raw)
+    assert "if (" in r.ax_source
+    assert r.ax_source.strip().endswith("}")
+    assert "Blah blah" in (r.prose or "")
+
+
+def test_system_draft_rejects_macaulay2_and_cas():
+    assert "Macaulay2" in SYSTEM_DRAFT
+    assert "theorem prover" in SYSTEM_DRAFT.lower() or "not a theorem" in SYSTEM_DRAFT.lower()
+    assert "not Axiom CAS" in SYSTEM_DRAFT or "computer algebra" in SYSTEM_DRAFT.lower()
+
+
+def test_system_repair_requires_ax_only():
+    assert "ONLY" in SYSTEM_REPAIR or "only" in SYSTEM_REPAIR.lower()
+    assert ":=" in SYSTEM_REPAIR or "colon" in SYSTEM_REPAIR.lower()
+    assert "print" in SYSTEM_REPAIR.lower()
 
 
 def test_user_prompt_draft_is_deterministic():
@@ -52,6 +126,25 @@ def test_user_prompt_draft_is_deterministic():
     b = user_prompt_draft("g", {"a": 2, "b": 1})
     assert a == b
     assert '"a":2' in a and '"b":1' in a
+    assert "Syntax summary" in a and "neural(features" in a
+
+
+def test_user_prompt_repair_is_deterministic():
+    a = user_prompt_repair("g", "x = 1.0;", "err", {"b": 1, "a": 2})
+    b = user_prompt_repair("g", "x = 1.0;", "err", {"a": 2, "b": 1})
+    assert a == b
+    assert "Syntax summary" in a and "Few-shot repair" in a
+
+
+def test_forbidden_tokens_in_metadata_from_draft():
+    def fake_post(url, json=None, headers=None, timeout=None):
+        return _ok_response("```ax\nbad := 1;\nprint(x);\n```")
+
+    b = OnyxQwenBackend("http://h", "m", _post=fake_post)
+    out = b.draft_program(ExpertDraftRequest("g"))
+    assert "forbidden_tokens_detected" in out.metadata
+    assert "assign_colon_eq" in out.metadata["forbidden_tokens_detected"]
+    assert "print_call" in out.metadata["forbidden_tokens_detected"]
 
 
 def test_successful_draft():
@@ -65,9 +158,11 @@ def test_successful_draft():
     out = b.draft_program(ExpertDraftRequest("minimal constant", context={"k": "v"}))
     assert out.ax_source == "y = 1.0;"
     assert out.backend_name == "onyx_qwen"
+    assert out.metadata.get("extraction_mode") == "fenced_ax"
     assert calls[0]["url"] == "http://qwen:9999/v1/chat/completions"
     assert calls[0]["json"]["model"] == "qwen-turbo"
     assert "minimal constant" in calls[0]["json"]["messages"][1]["content"]
+    assert SYSTEM_DRAFT in calls[0]["json"]["messages"][0]["content"]
 
 
 def test_successful_repair():
@@ -194,6 +289,13 @@ def test_plain_response_used_as_ax_when_no_fence():
     b = OnyxQwenBackend("http://h", "m", _post=fake_post)
     out = b.draft_program(ExpertDraftRequest("g"))
     assert out.ax_source == "alpha = 3.0;"
+    assert out.metadata.get("extraction_mode") == "heuristic_lines"
+
+
+def test_split_ax_plain_prose_no_code_is_plain_fallback():
+    r = split_ax_and_prose("This is only natural language with no semicolons or assignments.")
+    assert r.ax_source == "This is only natural language with no semicolons or assignments."
+    assert r.extraction.get("extraction_mode") == "plain_fallback"
 
 
 def test_custom_chat_path_url():
