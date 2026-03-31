@@ -142,6 +142,28 @@ Row file format (JSON array): each element is `{"inputs": {...}, "expected": {..
 
 **Exact-symbolic / anti-neural bias (Phase 78):** for small example-driven goals that look like affine or **`max`/`min`** clamps (e.g. **`risk_score`** in the goal), the draft/repair context sets **`exact_symbolic_examples_task`** so the Onyx prompts push **direct arithmetic** and **`REPAIR_NEURAL_TO_SYMBOLIC_BLOCK`** when the current program still uses **`neural(...)`**. Candidate selection uses **`adjusted_sort_score`** (raw metric minus small penalties for **`neural`** on these tasks, indexed **`x_0`** names, **`output(`**, and suspicious numerics like **`03`**); reports include **`ranking_penalty`** and **`adjusted_sort_score`**. No new CLI flags.
 
+**Exact-symbolic fast paths (deterministic):**
+- **What they do:** before the first expert draft call, search attempts a local symbolic inference from examples and emits canonical `.ax` directly when exact.
+- **When they activate:** only in **`predict_rows`** when **`exact_symbolic_examples_task`** is true.
+- **Supported shapes today:**
+  - single-input/single-output exact linear: **`y = a * x + b`**
+  - two-input/one-output bounded affine clamp: **`out = max(0.0, min(1.0, a * x1 + b * x2 + c));`**
+- **Fallback behavior:** if examples are ambiguous, underdetermined, non-numeric, or any row fails exact validation (including clamp edge rows), search falls back to the configured expert backend as normal.
+- **Example commands:**
+
+```powershell
+# double_x (exact linear)
+axiom copilot-search --backend onyx-qwen --goal "Compute y as double of x." `
+  --expert-url "https://api.example.com/v1/" --expert-model "qwen-7b" `
+  --examples-json ./examples/double_x.json --iterations 6 --artifact-dir ./debug_double_x
+
+# risk_score (clamped two-input affine)
+axiom copilot-search --backend onyx-qwen `
+  --goal "Compute risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));" `
+  --expert-url "https://api.example.com/v1/" --expert-model "qwen-7b" `
+  --examples-json ./examples/risk_score_v3.json --iterations 8 --artifact-dir ./debug_risk_score
+```
+
 **Train-tabular search:** use **`--train-tabular`** with **`--tabular-json path.json`** (do not combine with **`--compile-only`** or **`--examples-json`**). The file is one JSON **object**: **`target_var`**, **`train_rows`**, **`eval_rows`** (each row is **`{"inputs": {...}, "expected": {...}}`**; keys are merged for the evaluator), optional **`epochs`**, **`learning_rate`**, **`weight_decay`**, **`batch_size`**. Same schema as **`axiom.copilot.tabular_json`**. Metric-driven repair defaults **on** here as well (same CLI flags).
 
 ```powershell

@@ -258,6 +258,26 @@ def test_forbidden_tokens_in_metadata_from_draft():
     assert "print_call" in out.metadata["forbidden_tokens_detected"]
 
 
+def test_split_ax_normalizes_colon_eq_and_trailing_dot_float():
+    r = split_ax_and_prose("```ax\ny := x + 2.;\n```")
+    assert r.ax_source == "y = x + 2.0;"
+    assert r.extraction.get("normalized_colon_eq") is True
+    assert r.extraction.get("normalized_trailing_dot_float") is True
+    # Detected from raw response before normalization.
+    assert "assign_colon_eq" in (r.extraction.get("forbidden_tokens_detected") or [])
+
+
+def test_draft_metadata_includes_normalization_flags():
+    def fake_post(url, json=None, headers=None, timeout=None):
+        return _ok_response("```ax\nz := 2.;\n```")
+
+    b = OnyxQwenBackend("http://h", "m", _post=fake_post)
+    out = b.draft_program(ExpertDraftRequest("normalize"))
+    assert out.ax_source == "z = 2.0;"
+    assert out.metadata.get("normalized_colon_eq") is True
+    assert out.metadata.get("normalized_trailing_dot_float") is True
+
+
 def test_successful_draft():
     calls: list[dict] = []
 
