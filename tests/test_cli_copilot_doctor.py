@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
@@ -216,6 +217,88 @@ def test_copilot_doctor_anti_pattern_and_neural(capsys, monkeypatch):
     assert "output_call_warning" in out
     assert "suspicious_numeric_literal_warning" in out
     assert "neural: yes" in out
+
+
+def test_copilot_doctor_examples_json_eval_ok(capsys, monkeypatch, tmp_path: Path):
+    ex = tmp_path / "ex.json"
+    ex.write_text(
+        '[{"inputs": {"x": 1.0}, "expected": {"y": 2.0}}, {"inputs": {"x": 0.0}, "expected": {"y": 0.0}}]',
+        encoding="utf-8",
+    )
+
+    class _Ok:
+        def draft_program(self, _request: ExpertDraftRequest) -> ExpertDraftResponse:
+            return ExpertDraftResponse(
+                ax_source="y = x * 2.0;\n",
+                backend_name="fake",
+                metadata={"raw_chars": 1},
+            )
+
+    monkeypatch.setattr(cli_mod, "_make_copilot_expert", lambda _a: _Ok())
+    main(
+        [
+            "copilot-doctor",
+            "--backend",
+            "onyx-qwen",
+            "--expert-url",
+            "http://x/",
+            "--expert-model",
+            "m",
+            "--examples-json",
+            str(ex),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert "evaluation: ok" in out
+    assert "metrics:" in out and "neg_mse" in out
+    assert "examples: exact=yes" in out and "near_threshold=yes" in out
+
+
+def test_copilot_doctor_examples_json_eval_fail_exits_1(capsys, monkeypatch, tmp_path: Path):
+    from axiom.copilot.evaluator import ProgramEvaluationReport, ProgramFailure
+    from axiom.copilot.models import ProgramCandidate
+
+    ex = tmp_path / "ex.json"
+    ex.write_text('[{"inputs": {"x": 1.0}, "expected": {"y": 2.0}}]', encoding="utf-8")
+
+    class _Ok:
+        def draft_program(self, _request: ExpertDraftRequest) -> ExpertDraftResponse:
+            return ExpertDraftResponse(
+                ax_source="y = x * 2.0;\n",
+                backend_name="fake",
+                metadata={"raw_chars": 1},
+            )
+
+    def _fake_eval(candidate: ProgramCandidate, **kwargs: object) -> ProgramEvaluationReport:
+        return ProgramEvaluationReport(
+            success=False,
+            source=candidate.source,
+            compile_stage_reached="predict",
+            mode="predict_rows",
+            failures=[ProgramFailure("predict", "runtime", "forced failure", "test")],
+            warnings=[],
+            metrics={},
+            program_metrics=[],
+        )
+
+    monkeypatch.setattr(cli_mod, "_make_copilot_expert", lambda _a: _Ok())
+    monkeypatch.setattr("axiom.copilot.evaluator.evaluate_program", _fake_eval)
+    with pytest.raises(SystemExit) as ei:
+        main(
+            [
+                "copilot-doctor",
+                "--backend",
+                "onyx-qwen",
+                "--expert-url",
+                "http://x/",
+                "--expert-model",
+                "m",
+                "--examples-json",
+                str(ex),
+            ]
+        )
+    assert ei.value.code == 1
+    assert "evaluation: fail" in capsys.readouterr().out
 
 
 def test_copilot_doctor_passes_expert_timeout_to_builder(monkeypatch):

@@ -665,9 +665,10 @@ _COPILOT_DOCTOR_DEFAULT_GOAL = (
 
 
 def _cmd_copilot_doctor(args: argparse.Namespace) -> None:
-    from axiom.copilot.evaluator import validate_program
+    from axiom.copilot.evaluator import evaluate_program, validate_program
     from axiom.copilot.models import ProgramCandidate
     from axiom.copilot.search import build_draft_context
+    from axiom.copilot.stability_report import DEFAULT_NEAR_NEG_MSE
     from axiom.experts.base import ExpertDraftRequest
     from axiom.experts.onyx_qwen import COMPLETION_OVERRIDES_CONTEXT_KEY, OnyxQwenError, ax_source_metadata_flags
 
@@ -739,6 +740,28 @@ def _cmd_copilot_doctor(args: argparse.Namespace) -> None:
 
     if not rep.success:
         raise SystemExit(1)
+
+    ex_path = getattr(args, "examples_json", None)
+    if ex_path is not None:
+        inp, exp = _load_examples_json(Path(ex_path))
+        ev = evaluate_program(
+            ProgramCandidate(source=ax),
+            mode="predict_rows",
+            input_rows=inp,
+            expected_rows=exp,
+            score_fn=_default_predict_score_fn(),
+            row_comparison_limit=0,
+            include_trace_snippet=False,
+        )
+        print(f"evaluation: {'ok' if ev.success else 'fail'}")
+        print(f"metrics: {json.dumps(dict(ev.metrics), sort_keys=True)}")
+        if ev.success and "neg_mse" in ev.metrics:
+            neg = float(ev.metrics["neg_mse"])
+            exact = abs(neg) <= 1e-15
+            near = neg >= DEFAULT_NEAR_NEG_MSE
+            print(f"examples: exact={'yes' if exact else 'no'} near_threshold={'yes' if near else 'no'}")
+        if not ev.success:
+            raise SystemExit(1)
 
 
 def _cmd_copilot_draft(args: argparse.Namespace) -> None:
@@ -885,6 +908,30 @@ def _cmd_copilot_run(args: argparse.Namespace) -> None:
             )
         else:
             print(f"{prefix} Wrote artifact bundle to {root}", file=sys.stderr)
+
+
+def _cmd_copilot_stability_report(args: argparse.Namespace) -> None:
+    from axiom.copilot.stability_report import (
+        collect_stability_report,
+        format_discovery_failure_message,
+        stability_report_to_dict,
+    )
+
+    paths = list(getattr(args, "paths", None) or [])
+    parent = getattr(args, "parent", None)
+    near = float(getattr(args, "near_threshold", -1e-9))
+    runs, agg, text, discovery = collect_stability_report(paths, parent=parent, near_floor=near)
+    if not runs:
+        print(format_discovery_failure_message(discovery), file=sys.stderr)
+        raise SystemExit(1)
+    print(text)
+    jo = getattr(args, "json_out", None)
+    if jo is not None:
+        doc = stability_report_to_dict(runs, agg, discovery=discovery)
+        outp = Path(jo)
+        outp.parent.mkdir(parents=True, exist_ok=True)
+        outp.write_text(json.dumps(doc, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
+        print(f"Wrote JSON to {outp}", file=sys.stderr)
 
 
 def _print_copilot_benchmark_summary(doc: dict) -> None:
@@ -1084,7 +1131,7 @@ def _add_copilot_completion_args(p: argparse.ArgumentParser) -> None:
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(
         prog="axiom",
-        description="Axiom neural compiler CLI (train, predict, copilot-draft, copilot-doctor, copilot-search, copilot-run, copilot-benchmark, copilot-serve, copilot-studio, lock-bundle, export-onnx, inspect, serve, gateway-serve).",
+        description="Axiom neural compiler CLI (train, predict, copilot-draft, copilot-doctor, copilot-search, copilot-run, copilot-stability-report, copilot-benchmark, copilot-serve, copilot-studio, lock-bundle, export-onnx, inspect, serve, gateway-serve).",
     )
     sub = ap.add_subparsers(dest="cmd", required=True)
 
@@ -1316,7 +1363,7 @@ def main(argv: list[str] | None = None) -> None:
 
     p_cdoc = sub.add_parser(
         "copilot-doctor",
-        help="Smoke-test expert HTTP + one deterministic draft + parse/IR/block (requires pip install -e \".[copilot]\").",
+        help="Smoke-test expert HTTP + one deterministic draft + parse/IR/block; optional --examples-json eval (Phase 85b).",
     )
     p_cdoc.add_argument(
         "--backend",
@@ -1356,6 +1403,13 @@ def main(argv: list[str] | None = None) -> None:
         metavar="SEC",
         help="Per-request HTTP timeout in seconds (default: 120).",
     )
+    p_cdoc.add_argument(
+        "--examples-json",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="Optional [{inputs},{expected}] rows JSON; after compile OK, run predict_rows + neg_mse (Phase 85b).",
+    )
     _add_copilot_completion_args(p_cdoc)
     p_cdoc.set_defaults(_handler=_cmd_copilot_doctor)
 
@@ -1373,6 +1427,40 @@ def main(argv: list[str] | None = None) -> None:
         help="Write structured JSON (iterations, metrics, sources) to this path.",
     )
     p_cs.set_defaults(_handler=_cmd_copilot_search)
+
+    p_csr = sub.add_parser(
+        "copilot-stability-report",
+        help="Summarize metrics across copilot artifact dirs or pipeline summary JSON files (Phase 83+83b; no network).",
+    )
+    p_csr.add_argument(
+        "paths",
+        nargs="*",
+        type=Path,
+        default=[],
+        help="Scan root(s): recurse for **/search_report.json, pipeline *.json, and restart_* bundles.",
+    )
+    p_csr.add_argument(
+        "--parent",
+        type=Path,
+        default=None,
+        help="Extra scan root (same recursion as paths); use for sweep folders with many run JSON files.",
+    )
+    p_csr.add_argument(
+        "--json-out",
+        type=Path,
+        default=None,
+        dest="json_out",
+        help="Write full stability report JSON (runs + aggregate + summary_text + discovery).",
+    )
+    p_csr.add_argument(
+        "--near-threshold",
+        type=float,
+        default=-1e-9,
+        dest="near_threshold",
+        metavar="FLOAT",
+        help="For neg_mse tasks, count near-hit when neg_mse >= this (default: -1e-9).",
+    )
+    p_csr.set_defaults(_handler=_cmd_copilot_stability_report)
 
     p_cr = sub.add_parser(
         "copilot-run",
@@ -1472,6 +1560,9 @@ def main(argv: list[str] | None = None) -> None:
         handler(args)
         return
     if handler is _cmd_copilot_run:
+        handler(args)
+        return
+    if handler is _cmd_copilot_stability_report:
         handler(args)
         return
     if handler is _cmd_copilot_benchmark:

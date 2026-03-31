@@ -64,6 +64,7 @@ def test_cli_subcommands_stable():
         "copilot-serve",
         "copilot-benchmark",
         "copilot-run",
+        "copilot-stability-report",
     }
     assert found == expected, f"CLI subcommands changed: {found ^ expected}"
 

@@ -203,6 +203,7 @@ def test_cli_source_wires_documented_train_features():
     assert "artifact-dir" in src
     assert "summarize-traces" in src
     assert "--temperature" in src and "_completion_overrides_from_args" in src
+    assert "copilot-stability-report" in src and "_cmd_copilot_stability_report" in src
     onyx_src = (_root() / "src" / "axiom" / "experts" / "onyx_qwen.py").read_text(encoding="utf-8")
     assert "normalize_onyx_chat_completion_payload" in onyx_src
     assert (_root() / "src" / "axiom" / "copilot" / "benchmarks.py").is_file()
