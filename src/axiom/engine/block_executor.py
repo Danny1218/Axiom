@@ -7,6 +7,7 @@ import torch.nn as nn
 
 from axiom.compiler.ir import extract_neural_node_specs
 from axiom.engine.expert_call import ExpertHandler
+from axiom.engine.expert_registry import ExpertRuntimeRegistry
 from axiom.engine.interpreter import collect_load_names_from_stmts, exec_stmt
 from axiom.engine.ssm import LiquidKANNode
 from axiom.primitives.liquid_tensor import LiquidFeatureReadout
@@ -63,6 +64,7 @@ class InterpretedBlock(nn.Module):
         custom_neural_registry: Optional[Dict[str, nn.Module]] = None,
         expert_handler: Optional[ExpertHandler] = None,
         expert_fallback: Optional[float] = None,
+        expert_registry: Optional[ExpertRuntimeRegistry] = None,
     ) -> None:
         super().__init__()
         self.ir_stmts = list(ir_stmts)
@@ -71,6 +73,7 @@ class InterpretedBlock(nn.Module):
         self.max_unroll = int(max_unroll)
         self.expert_handler = expert_handler
         self.expert_fallback = expert_fallback
+        self.expert_registry = expert_registry
         self._last_expert_trace: List[Dict[str, Any]] = []
         spec = extract_neural_node_specs(self.ir_stmts, self.abi_widths)
         custom = dict(custom_neural_registry or {})
@@ -122,6 +125,7 @@ class InterpretedBlock(nn.Module):
                 neural_registry=self.neural_registry,
                 expert_handler=self.expert_handler,
                 expert_fallback=self.expert_fallback,
+                expert_registry=self.expert_registry,
                 expert_audit=audit,
             )
         self._last_expert_trace = audit

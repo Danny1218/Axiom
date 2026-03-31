@@ -14,6 +14,7 @@ import torch.nn as nn
 
 from axiom.compiler.deserializer import load_bundle
 from axiom.engine.block_executor import InterpretedBlock
+from axiom.engine.expert_registry import interpreted_block_ir_contains_expert
 
 
 class OnnxExportError(Exception):
@@ -27,59 +28,6 @@ def _trunk_dim(block: InterpretedBlock) -> int:
             "empty ABI: cannot determine dense input width for ONNX (unsupported bundle layout)"
         )
     return max((abi[n] + max(1, int(aw.get(n, 1))) for n in abi), default=16)
-
-
-def _expr_has_op_expert(expr: List[Any]) -> bool:
-    for tup in expr:
-        if not isinstance(tup, tuple) or not tup:
-            continue
-        op = tup[0]
-        if op == "OP_EXPERT":
-            return True
-        if op == "OP_NEURAL" and len(tup) >= 3 and _expr_has_op_expert(list(tup[2])):
-            return True
-        if op == "OP_CALL":
-            for a in tup[2]:
-                if _expr_has_op_expert(list(a)):
-                    return True
-    return False
-
-
-def _stmt_has_op_expert(stmt: tuple) -> bool:
-    if not isinstance(stmt, tuple) or not stmt:
-        return False
-    op = stmt[0]
-    if op == "OP_ASSIGN" and _expr_has_op_expert(list(stmt[2])):
-        return True
-    if op == "OP_BLEND_ASSIGN":
-        return _expr_has_op_expert(list(stmt[2])) or _expr_has_op_expert(list(stmt[3]))
-    if op == "OP_EXPR_STMT":
-        return _expr_has_op_expert(list(stmt[1]))
-    if op == "OP_CONDITIONAL":
-        if _expr_has_op_expert(list(stmt[1])):
-            return True
-        for s in stmt[2]:
-            if _stmt_has_op_expert(tuple(s) if isinstance(s, list) else s):
-                return True
-        for s in stmt[3]:
-            if _stmt_has_op_expert(tuple(s) if isinstance(s, list) else s):
-                return True
-        return False
-    if op == "OP_LOOP":
-        if _expr_has_op_expert(list(stmt[1])):
-            return True
-        for s in stmt[2]:
-            if _stmt_has_op_expert(tuple(s) if isinstance(s, list) else s):
-                return True
-        return False
-    return False
-
-
-def interpreted_block_ir_contains_expert(block: InterpretedBlock) -> bool:
-    for st in block.ir_stmts:
-        if _stmt_has_op_expert(tuple(st) if isinstance(st, list) else st):
-            return True
-    return False
 
 
 class _TrunkWrapper(nn.Module):

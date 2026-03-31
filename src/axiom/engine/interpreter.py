@@ -9,6 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from axiom.engine.expert_call import ExpertHandler, ExpertRuntimeError
+from axiom.engine.expert_registry import ExpertRuntimeRegistry
 
 Stmt = Tuple
 ExprIR = List[Tuple]
@@ -182,6 +183,7 @@ def eval_expr(
     neural_registry: Optional[Union[Dict[str, nn.Module], nn.ModuleDict]] = None,
     expert_handler: Optional[ExpertHandler] = None,
     expert_fallback: Optional[float] = None,
+    expert_registry: Optional[ExpertRuntimeRegistry] = None,
     expert_audit: Optional[List[Dict[str, Any]]] = None,
 ) -> torch.Tensor:
     stack: List[torch.Tensor] = []
@@ -283,6 +285,7 @@ def eval_expr(
                 neural_registry=neural_registry,
                 expert_handler=expert_handler,
                 expert_fallback=expert_fallback,
+                expert_registry=expert_registry,
                 expert_audit=expert_audit,
             )
             feats2 = feats.unsqueeze(-1) if feats.dim() == 1 else feats
@@ -311,6 +314,7 @@ def eval_expr(
                 neural_registry=neural_registry,
                 expert_handler=expert_handler,
                 expert_fallback=expert_fallback,
+                expert_registry=expert_registry,
                 expert_audit=expert_audit,
             )
             fd = feats.detach()
@@ -324,9 +328,14 @@ def eval_expr(
             out_vals: List[float] = []
             for bi in range(B):
                 row = [float(x) for x in rows[bi]]
-                if expert_handler is not None:
+                fn: Optional[ExpertHandler] = None
+                if expert_registry is not None:
+                    fn = expert_registry.resolve(name)
+                if fn is None:
+                    fn = expert_handler
+                if fn is not None:
                     try:
-                        v = float(expert_handler(name, row))
+                        v = float(fn(name, row))
                     except Exception as e:
                         raise ExpertRuntimeError(
                             f"expert backend {name!r} handler raised: {e}"
@@ -335,8 +344,10 @@ def eval_expr(
                     v = float(expert_fallback)
                 else:
                     raise ExpertRuntimeError(
-                        f"expert({name!r}) is not differentiable and has no runtime backend: set "
-                        f"InterpretedBlock(..., expert_handler=callable) or expert_fallback=float"
+                        f"expert({name!r}) has no runtime backend: register a handler with "
+                        f"ExpertRuntimeRegistry.register({name!r}, fn), set "
+                        f"InterpretedBlock(..., expert_handler=callable), expert_fallback=float, "
+                        f"or AxiomModel.set_expert_registry(...)"
                     )
                 out_vals.append(v)
             if expert_audit is not None:
@@ -420,6 +431,7 @@ def run_while_loop(
     neural_registry: Optional[Union[Dict[str, nn.Module], nn.ModuleDict]] = None,
     expert_handler: Optional[ExpertHandler] = None,
     expert_fallback: Optional[float] = None,
+    expert_registry: Optional[ExpertRuntimeRegistry] = None,
     expert_audit: Optional[List[Dict[str, Any]]] = None,
 ) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
     """
@@ -443,6 +455,7 @@ def run_while_loop(
             neural_registry=neural_registry,
             expert_handler=expert_handler,
             expert_fallback=expert_fallback,
+            expert_registry=expert_registry,
             expert_audit=expert_audit,
         )
         entering = scope & (cond_val != 0)
@@ -460,6 +473,7 @@ def run_while_loop(
                 neural_registry=neural_registry,
                 expert_handler=expert_handler,
                 expert_fallback=expert_fallback,
+                expert_registry=expert_registry,
                 expert_audit=expert_audit,
             )
         snaps.append(
@@ -485,6 +499,7 @@ def exec_stmt(
     neural_registry: Optional[Union[Dict[str, nn.Module], nn.ModuleDict]] = None,
     expert_handler: Optional[ExpertHandler] = None,
     expert_fallback: Optional[float] = None,
+    expert_registry: Optional[ExpertRuntimeRegistry] = None,
     expert_audit: Optional[List[Dict[str, Any]]] = None,
 ) -> None:
     if active_mask is None:
@@ -501,6 +516,7 @@ def exec_stmt(
             neural_registry=neural_registry,
             expert_handler=expert_handler,
             expert_fallback=expert_fallback,
+            expert_registry=expert_registry,
             expert_audit=expert_audit,
         )
         k = str(stmt[1])
@@ -525,6 +541,7 @@ def exec_stmt(
             neural_registry=neural_registry,
             expert_handler=expert_handler,
             expert_fallback=expert_fallback,
+            expert_registry=expert_registry,
             expert_audit=expert_audit,
         ).to(dtype=dtype)
         nv = eval_expr(
@@ -536,6 +553,7 @@ def exec_stmt(
             neural_registry=neural_registry,
             expert_handler=expert_handler,
             expert_fallback=expert_fallback,
+            expert_registry=expert_registry,
             expert_audit=expert_audit,
         )
         old = env[k]
@@ -556,6 +574,7 @@ def exec_stmt(
             neural_registry=neural_registry,
             expert_handler=expert_handler,
             expert_fallback=expert_fallback,
+            expert_registry=expert_registry,
             expert_audit=expert_audit,
         )
     elif op == "OP_CONDITIONAL":
@@ -568,6 +587,7 @@ def exec_stmt(
             neural_registry=neural_registry,
             expert_handler=expert_handler,
             expert_fallback=expert_fallback,
+            expert_registry=expert_registry,
             expert_audit=expert_audit,
         )
         base = {k: v.clone() for k, v in env.items()}
@@ -586,6 +606,7 @@ def exec_stmt(
                 neural_registry=neural_registry,
                 expert_handler=expert_handler,
                 expert_fallback=expert_fallback,
+                expert_registry=expert_registry,
                 expert_audit=expert_audit,
             )
         else_env = {k: v.clone() for k, v in env.items()}
@@ -603,6 +624,7 @@ def exec_stmt(
                 neural_registry=neural_registry,
                 expert_handler=expert_handler,
                 expert_fallback=expert_fallback,
+                expert_registry=expert_registry,
                 expert_audit=expert_audit,
             )
         sel = cond_vec != 0
@@ -632,6 +654,7 @@ def exec_stmt(
             neural_registry=neural_registry,
             expert_handler=expert_handler,
             expert_fallback=expert_fallback,
+            expert_registry=expert_registry,
             expert_audit=expert_audit,
         )
     else:
@@ -654,6 +677,7 @@ def run_loop_snapshots(
     neural_registry: Optional[Union[Dict[str, nn.Module], nn.ModuleDict]] = None,
     expert_handler: Optional[ExpertHandler] = None,
     expert_fallback: Optional[float] = None,
+    expert_registry: Optional[ExpertRuntimeRegistry] = None,
     expert_audit: Optional[List[Dict[str, Any]]] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Returns ``(seq, seq_mask)`` with **fixed** ``T = max_unroll`` (or ``T=0`` if ``max_unroll==0``).
@@ -700,6 +724,7 @@ def run_loop_snapshots(
             neural_registry=neural_registry,
             expert_handler=expert_handler,
             expert_fallback=expert_fallback,
+            expert_registry=expert_registry,
             expert_audit=expert_audit,
         )
     if max_unroll == 0:
@@ -721,6 +746,7 @@ def run_loop_snapshots(
         neural_registry=neural_registry,
         expert_handler=expert_handler,
         expert_fallback=expert_fallback,
+        expert_registry=expert_registry,
         expert_audit=expert_audit,
     )
     mat = torch.stack(snaps, dim=1)

@@ -27,6 +27,7 @@ def test_readme_documents_python_api():
     assert "axiom.load" in text and "model.predict" in text
     assert "model.explain" in text
     assert "export_report" in text
+    assert "set_expert_registry" in text and "expert()" in text
 
 
 def test_readme_documents_onnx_export_optional():

@@ -25,6 +25,52 @@ def sample_axb(tmp_path: Path) -> Path:
     return p
 
 
+@pytest.fixture
+def expert_axb(tmp_path: Path) -> Path:
+    reset_parser()
+    ir = ast_to_ir(parse_ax('e = expert("demo", [x, 1.0]);'))
+    abi = extract_global_abi(ir, max_vars=16)
+    aw = extract_abi_widths(ir, max_vars=16)
+    block = InterpretedBlock(ir, abi, abi_widths=aw)
+    p = tmp_path / "ex.axb"
+    save_bundle(block, p)
+    return p
+
+
+def test_predict_expert_bundle_503_without_runtime_wiring(expert_axb: Path):
+    from fastapi.testclient import TestClient
+
+    app = create_app(expert_axb)
+    c = TestClient(app)
+    r = c.post("/predict", json={"inputs": {"x": 1.0}})
+    assert r.status_code == 503
+    assert "expert()" in r.json()["detail"]
+
+
+def test_predict_expert_bundle_ok_with_registry(expert_axb: Path):
+    from fastapi.testclient import TestClient
+
+    from axiom.engine.expert_registry import ExpertRuntimeRegistry
+
+    reg = ExpertRuntimeRegistry()
+    reg.register("demo", lambda _n, f: float(f[0]) + 0.5)
+    app = create_app(expert_axb, expert_registry=reg)
+    c = TestClient(app)
+    r = c.post("/predict", json={"inputs": {"x": 2.0}})
+    assert r.status_code == 200
+    assert r.json()["outputs"]["e"] == pytest.approx(2.5)
+
+
+def test_explain_expert_bundle_ok_with_handler(expert_axb: Path):
+    from fastapi.testclient import TestClient
+
+    app = create_app(expert_axb, expert_handler=lambda _n, f: 3.0)
+    c = TestClient(app)
+    r = c.post("/explain", json={"inputs": {"x": 0.0}})
+    assert r.status_code == 200
+    assert r.json()["trace"]["e"] == pytest.approx(3.0)
+
+
 def test_health_ok(sample_axb: Path):
     from fastapi.testclient import TestClient
 

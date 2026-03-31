@@ -39,6 +39,7 @@ def test_plan_documents_semantic_copilot_roadmap():
     assert "Phase 69" in plan and "tabular_json" in plan
     assert "Phase 70" in plan and "copilot-benchmark" in plan
     assert "Phase 71" in plan and "copilot-run" in plan
+    assert "Phase 72" in plan and "ExpertRuntimeRegistry" in plan
     assert "Phase 57" in plan
 
 

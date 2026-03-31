@@ -8,13 +8,15 @@ here rather than duplicating trunk/ABI logic—see ``plan.md`` § Next target (n
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Mapping, Optional, Union
 
 import torch
 import torch.nn as nn
 
 from axiom.compiler.deserializer import load_bundle
 from axiom.engine.block_executor import InterpretedBlock
+from axiom.engine.expert_call import ExpertHandler
+from axiom.engine.expert_registry import ExpertRuntimeRegistry
 from axiom.engine.inference import _abi_outputs_from_trunk_row, _inputs_to_tensor
 from axiom.tools.html_exporter import export_html_report
 
@@ -40,9 +42,16 @@ def _trunk_dim_from_block_abi(block: InterpretedBlock) -> int:
 def load(
     bundle_path: str | Path,
     custom_neural_registry: Optional[Dict[str, nn.Module]] = None,
+    expert_registry: Optional[Union[ExpertRuntimeRegistry, Mapping[str, ExpertHandler]]] = None,
 ) -> AxiomModel:
-    """Load a ``.axb`` bundle. Pass ``custom_neural_registry`` if training used non-default ``neural()`` nets."""
-    return AxiomModel(load_bundle(bundle_path, custom_neural_registry=custom_neural_registry))
+    """Load a ``.axb`` bundle. Pass ``custom_neural_registry`` if training used non-default ``neural()`` nets.
+
+    ``expert_registry`` wires in-process ``expert("name", …)`` handlers (not serialized in ``.axb``).
+    """
+    model = AxiomModel(load_bundle(bundle_path, custom_neural_registry=custom_neural_registry))
+    if expert_registry is not None:
+        model.set_expert_registry(expert_registry)
+    return model
 
 
 class AxiomModel:
@@ -50,6 +59,30 @@ class AxiomModel:
 
     def __init__(self, block: InterpretedBlock) -> None:
         self.block = block
+
+    def set_expert_handler(self, handler: Optional[ExpertHandler]) -> None:
+        """Single callable ``(name, features) -> float`` for all ``expert()`` backends (optional)."""
+        self.block.expert_handler = handler
+
+    def set_expert_fallback(self, value: Optional[float]) -> None:
+        """Scalar used when no handler resolves for ``OP_EXPERT``."""
+        self.block.expert_fallback = value
+
+    def set_expert_registry(
+        self,
+        registry: Optional[Union[ExpertRuntimeRegistry, Mapping[str, ExpertHandler]]],
+    ) -> None:
+        """Per-name handlers for ``expert("name", …)``. Pass ``None`` to clear. Not stored in ``.axb``."""
+        if registry is None:
+            self.block.expert_registry = None
+            return
+        if isinstance(registry, ExpertRuntimeRegistry):
+            self.block.expert_registry = registry
+            return
+        r = ExpertRuntimeRegistry()
+        for k, v in registry.items():
+            r.register(str(k), v)
+        self.block.expert_registry = r
 
     def predict(self, data: Any) -> Any:
         block = self.block

@@ -9,11 +9,18 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Mapping, Optional, Union
 
+import torch.nn as nn
 from fastapi import Depends, FastAPI, HTTPException, Request
 
 from axiom.api import AxiomModel, load
+from axiom.engine.expert_call import ExpertHandler, ExpertRuntimeError
+from axiom.engine.expert_registry import (
+    ExpertRuntimeRegistry,
+    expert_runtime_wiring_sufficient,
+    interpreted_block_ir_contains_expert,
+)
 from axiom.api_models import (
     ExplainRequest,
     ExplainResponse,
@@ -52,13 +59,47 @@ def get_model(request: Request) -> AxiomModel:
     return request.app.state.model
 
 
-def create_app(bundle_path: str | Path) -> FastAPI:
-    """Load ``bundle_path`` once and return a FastAPI app serving ``/health``, ``/predict``, ``/explain``, ``/report``."""
+def _require_op_expert_wiring(model: AxiomModel) -> None:
+    """Reject predict/explain/report when IR uses ``expert()`` but nothing can satisfy it at runtime."""
+    if interpreted_block_ir_contains_expert(model.block) and not expert_runtime_wiring_sufficient(
+        model.block
+    ):
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Bundle uses expert() but no OP_EXPERT runtime wiring is configured. "
+                "Pass expert_registry=..., expert_handler=..., or expert_fallback=... to create_app(), "
+                "or call model.set_expert_registry(...) / set_expert_handler / set_expert_fallback after load."
+            ),
+        )
+
+
+def create_app(
+    bundle_path: str | Path,
+    *,
+    custom_neural_registry: Optional[Dict[str, nn.Module]] = None,
+    expert_registry: Optional[Union[ExpertRuntimeRegistry, Mapping[str, ExpertHandler]]] = None,
+    expert_handler: Optional[ExpertHandler] = None,
+    expert_fallback: Optional[float] = None,
+) -> FastAPI:
+    """Load ``bundle_path`` once and return a FastAPI app serving ``/health``, ``/predict``, ``/explain``, ``/report``.
+
+    Optional ``expert_*`` / ``custom_neural_registry`` mirror :func:`axiom.api.load` for bundles that use
+    ``expert()`` or custom ``neural()`` modules.
+    """
     path = Path(bundle_path).resolve()
     if not path.is_file():
         raise FileNotFoundError(f"Bundle not found: {path}")
 
-    model = load(path)
+    model = load(
+        path,
+        custom_neural_registry=custom_neural_registry,
+        expert_registry=expert_registry,
+    )
+    if expert_handler is not None:
+        model.set_expert_handler(expert_handler)
+    if expert_fallback is not None:
+        model.set_expert_fallback(expert_fallback)
     app = FastAPI(title="Axiom Bundle Server", version="1.0")
     app.state.model = model
     app.state.bundle_path = str(path)
@@ -72,7 +113,11 @@ def create_app(bundle_path: str | Path) -> FastAPI:
         body: PredictRequest,
         model_: AxiomModel = Depends(get_model),
     ) -> PredictResponse:
-        out = model_.predict(body.inputs)
+        _require_op_expert_wiring(model_)
+        try:
+            out = model_.predict(body.inputs)
+        except ExpertRuntimeError as e:
+            raise HTTPException(status_code=503, detail=str(e)) from e
         return PredictResponse(outputs=out)
 
     @app.post("/explain", response_model=ExplainResponse, dependencies=[Depends(verify_api_key)])
@@ -80,7 +125,11 @@ def create_app(bundle_path: str | Path) -> FastAPI:
         body: ExplainRequest,
         model_: AxiomModel = Depends(get_model),
     ) -> ExplainResponse:
-        trace = model_.explain(body.inputs)
+        _require_op_expert_wiring(model_)
+        try:
+            trace = model_.explain(body.inputs)
+        except ExpertRuntimeError as e:
+            raise HTTPException(status_code=503, detail=str(e)) from e
         return ExplainResponse(trace=trace)
 
     @app.post("/report", response_model=ReportResponse, dependencies=[Depends(verify_api_key)])
@@ -88,7 +137,11 @@ def create_app(bundle_path: str | Path) -> FastAPI:
         body: ReportRequest,
         model_: AxiomModel = Depends(get_model),
     ) -> ReportResponse:
-        html = render_html_report(model_, body.inputs, body.source_code)
+        _require_op_expert_wiring(model_)
+        try:
+            html = render_html_report(model_, body.inputs, body.source_code)
+        except ExpertRuntimeError as e:
+            raise HTTPException(status_code=503, detail=str(e)) from e
         if body.output_path:
             out = Path(body.output_path)
             out.parent.mkdir(parents=True, exist_ok=True)

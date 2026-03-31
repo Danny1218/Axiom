@@ -1,4 +1,5 @@
 from axiom.engine.block_executor import InterpretedBlock
+from axiom.engine.expert_registry import ExpertRuntimeRegistry
 from axiom.engine.dataloader import AxiomDataset, LiquidSequenceLoader, load_csv_to_dicts, sequential_to_features
 from axiom.engine.inference import AxiomRunner
 from axiom.engine.fitness import (
@@ -31,6 +32,7 @@ __all__ = [
     "InterpretedLiquidLoop",
     "LiquidKANNode",
     "InterpretedBlock",
+    "ExpertRuntimeRegistry",
     "AxiomDataset",
     "load_csv_to_dicts",
     "LiquidSequenceLoader",

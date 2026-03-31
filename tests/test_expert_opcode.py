@@ -13,6 +13,7 @@ from axiom.compiler.parser import parse_ax, reset_parser
 from axiom.compiler.serializer import save_bundle
 from axiom.engine.block_executor import InterpretedBlock
 from axiom.engine.expert_call import ExpertRuntimeError
+from axiom.engine.expert_registry import ExpertRuntimeRegistry
 from axiom.engine.interpreter import eval_expr, exec_stmt
 from axiom.export.onnx_export import OnnxExportError, export_interpreted_block_to_onnx
 
@@ -54,6 +55,27 @@ def test_expert_requires_two_args():
     reset_parser()
     with pytest.raises(ValueError, match="2 arguments"):
         ast_to_ir(parse_ax('e = expert("a");'))
+
+
+def test_interpreter_expert_via_registry_only():
+    ir = _ir()
+    env = {
+        "x": torch.tensor([2.0, 3.0]),
+        "e": torch.zeros(2),
+    }
+    reg = ExpertRuntimeRegistry()
+    reg.register("demo", lambda n, f: float(f[0]) + float(f[1]))
+    rhs = ir[0][2]
+    out = eval_expr(
+        env,
+        rhs,
+        B=2,
+        device=torch.device("cpu"),
+        dtype=torch.float32,
+        expert_registry=reg,
+    )
+    assert float(out[0].item()) == pytest.approx(3.0)
+    assert float(out[1].item()) == pytest.approx(4.0)
 
 
 def test_interpreter_fake_expert_handler():
@@ -106,7 +128,7 @@ def test_interpreter_expert_raises_when_no_backend():
     ir = _ir()
     env = {"x": torch.tensor([1.0]), "e": torch.zeros(1)}
     rhs = ir[0][2]
-    with pytest.raises(ExpertRuntimeError, match="no runtime backend"):
+    with pytest.raises(ExpertRuntimeError, match="has no runtime backend"):
         eval_expr(
             env,
             rhs,

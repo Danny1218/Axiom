@@ -157,6 +157,8 @@ axiom copilot-run --backend onyx-qwen --goal "Small policy on x" `
 
 Serves **one** `.axb` at startup via FastAPI: **`GET /health`**, **`POST /predict`**, **`POST /explain`**, **`POST /report`** (JSON **`inputs`**; report can return inline HTML). Install **`pip install -e ".[serve]"`**.
 
+Programmatic **`serve.create_app(path, expert_registry=..., expert_handler=..., expert_fallback=...)`** mirrors **`axiom.load`** for bundles that use **`expert()`**; otherwise **`POST /predict`** (and **`/explain`** / **`/report`**) return **503** with an explicit message when **`expert()`** is present but unwired.
+
 Optional **`AXIOM_API_KEY`**: mutating routes accept **`Authorization: Bearer …`** or **`X-API-Key`**; **`GET /health`** is unauthenticated. **`AXIOM_BUNDLE_PATH`** selects the bundle if **`--bundle`** is omitted.
 
 **Examples:**
@@ -320,6 +322,8 @@ batch = model.predict(
 # market = pd.read_csv("spy_daily.csv")
 # preds = model.predict(market)
 ```
+
+**`expert()` / `OP_EXPERT` (Phase 66, 72):** if the program calls **`expert("name", features)`**, the bundle does **not** store Python handlers. After **`axiom.load`**, attach runtime callables with **`model.set_expert_registry({"name": fn})`** (or **`ExpertRuntimeRegistry`**), **`model.set_expert_handler(fn)`** for one dispatch callable, or **`model.set_expert_fallback(float)`**. This registry is **not** the semantic copilot **`SemanticExpert`** (LLM HTTP). For **`axiom serve`**, pass **`expert_registry=`** / **`expert_handler=`** / **`expert_fallback=`** into **`serve.create_app(...)`**; **`POST /predict`**, **`/explain`**, and **`/report`** return **503** if the bundle uses **`expert()`** and nothing is wired.
 
 ---
 
