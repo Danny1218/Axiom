@@ -49,6 +49,7 @@ def test_readme_documents_copilot_cli():
     assert "copilot-studio" in text and "Copilot Studio" in text
     assert "copilot-serve" in text and "AXIOM_COPILOT_API_KEY" in text
     assert "train_tabular" in text and "TrainTabularParams" in text
+    assert "train-tabular" in text and "tabular-json" in text
 
 
 def test_readme_from_compile_to_production_story():
@@ -189,6 +190,7 @@ def test_cli_source_wires_documented_train_features():
     assert "gateway-serve" in src and "create_gateway_app" in src
     assert "Glass Box requires" in src and ".[inspect]" in src
     assert "copilot-draft" in src and "copilot-search" in src and "_make_copilot_expert" in src
+    assert "--train-tabular" in src and "--tabular-json" in src
     assert "artifact-dir" in src
     assert "summarize-traces" in src
     assert (_root() / "src" / "axiom" / "copilot" / "benchmarks.py").is_file()

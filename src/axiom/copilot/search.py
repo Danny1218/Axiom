@@ -14,6 +14,7 @@ from axiom.copilot.models import (
     ProgramEvaluationReport,
     ProgramFailure,
     ProgramMetric,
+    TrainTabularParams,
 )
 from axiom.copilot.summarize import safe_summarize_evaluation
 from axiom.experts.base import ExpertDraftRequest, ExpertRepairRequest, SemanticExpert
@@ -26,13 +27,17 @@ def build_draft_context(
     domain_context: Optional[str],
     example_input_rows: Optional[Sequence[Mapping[str, Any]]],
     expected_rows: Optional[Sequence[Mapping[str, Any]]],
+    train_tabular_meta: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Structured, JSON-serializable context for :class:`ExpertDraftRequest` (inspectable, deterministic)."""
-    return {
+    ctx: Dict[str, Any] = {
         "domain_context": domain_context or "",
         "example_input_rows": [dict(r) for r in example_input_rows] if example_input_rows else [],
         "expected_outputs": [dict(r) for r in expected_rows] if expected_rows else [],
     }
+    if train_tabular_meta:
+        ctx["train_tabular"] = dict(train_tabular_meta)
+    return ctx
 
 
 def format_failures_for_repair(failures: Sequence[ProgramFailure]) -> str:
@@ -95,12 +100,16 @@ def build_repair_context(
     example_input_rows: Optional[Sequence[Mapping[str, Any]]],
     expected_rows: Optional[Sequence[Mapping[str, Any]]],
     evaluation_mode: EvaluationMode,
+    train_tabular_meta: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
-    return {
+    out: Dict[str, Any] = {
         "example_input_rows": [dict(r) for r in example_input_rows] if example_input_rows else [],
         "expected_outputs": [dict(r) for r in expected_rows] if expected_rows else [],
         "evaluation_mode": evaluation_mode,
     }
+    if train_tabular_meta:
+        out["train_tabular"] = dict(train_tabular_meta)
+    return out
 
 
 @dataclass
@@ -130,6 +139,12 @@ class CopilotSearchConfig:
     # Merged into expert draft/repair JSON context (e.g. benchmark task ids); no effect on evaluation harness.
     draft_context_extras: Dict[str, Any] = field(default_factory=dict)
     repair_context_extras: Dict[str, Any] = field(default_factory=dict)
+    # When mode == "train_tabular": merged row dicts (inputs ∪ expected) + target + params + expected for scoring.
+    tabular_train_rows: Optional[Sequence[Mapping[str, Any]]] = None
+    tabular_eval_rows: Optional[Sequence[Mapping[str, Any]]] = None
+    tabular_target_var: Optional[str] = None
+    tabular_train_params: Optional[TrainTabularParams] = None
+    tabular_eval_expected_rows: Optional[Sequence[Mapping[str, Any]]] = None
 
 
 @dataclass
@@ -229,13 +244,30 @@ def _needs_metric_repair(config: CopilotSearchConfig, report: ProgramEvaluationR
     return v is not None and v < thr
 
 
+def _train_tabular_meta(config: CopilotSearchConfig) -> Optional[Dict[str, Any]]:
+    if config.mode != "train_tabular":
+        return None
+    ttp = config.tabular_train_params or TrainTabularParams()
+    return {
+        "target_var": config.tabular_target_var or "",
+        "train_row_count": len(config.tabular_train_rows or ()),
+        "eval_row_count": len(config.tabular_eval_rows or ()),
+        "epochs": ttp.epochs,
+        "learning_rate": ttp.learning_rate,
+        "weight_decay": ttp.weight_decay,
+        "batch_size": ttp.batch_size,
+    }
+
+
 def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
     from axiom.copilot.artifacts import expert_response_to_dict, persist_copilot_artifacts
 
+    tt_meta = _train_tabular_meta(config)
     ctx: Dict[str, Any] = build_draft_context(
         domain_context=config.domain_context,
         example_input_rows=config.example_input_rows,
         expected_rows=config.expected_rows,
+        train_tabular_meta=tt_meta,
     )
     if config.draft_context_extras:
         ctx = {**ctx, **dict(config.draft_context_extras)}
@@ -261,16 +293,31 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
         producing = ingress_payload
         iter_expert_meta = provenance_meta
 
-        report = evaluate_program(
-            ProgramCandidate(source_evaluated),
-            mode=config.mode,
-            max_unroll=config.max_unroll,
-            input_rows=config.example_input_rows,
-            expected_rows=config.expected_rows,
-            score_fn=config.score_fn,
-            predictions_sample_limit=config.predictions_sample_limit,
-            include_trace_snippet=need_trace,
-        )
+        if config.mode == "train_tabular":
+            report = evaluate_program(
+                ProgramCandidate(source_evaluated),
+                mode="train_tabular",
+                max_unroll=config.max_unroll,
+                train_rows=config.tabular_train_rows,
+                eval_rows=config.tabular_eval_rows,
+                target_var=config.tabular_target_var,
+                train_tabular_params=config.tabular_train_params,
+                expected_rows=config.tabular_eval_expected_rows,
+                score_fn=config.score_fn,
+                predictions_sample_limit=config.predictions_sample_limit,
+                include_trace_snippet=need_trace,
+            )
+        else:
+            report = evaluate_program(
+                ProgramCandidate(source_evaluated),
+                mode=config.mode,
+                max_unroll=config.max_unroll,
+                input_rows=config.example_input_rows,
+                expected_rows=config.expected_rows,
+                score_fn=config.score_fn,
+                predictions_sample_limit=config.predictions_sample_limit,
+                include_trace_snippet=need_trace,
+            )
         final_report = report
 
         sem_summary: Optional[str] = None
@@ -303,6 +350,7 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
                 example_input_rows=config.example_input_rows,
                 expected_rows=config.expected_rows,
                 evaluation_mode=config.mode,
+                train_tabular_meta=tt_meta,
             )
             if config.repair_context_extras:
                 repair_ctx = {**repair_ctx, **dict(config.repair_context_extras)}

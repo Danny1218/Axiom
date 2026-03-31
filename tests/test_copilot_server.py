@@ -18,10 +18,10 @@ from axiom.experts.base import (
 
 
 class _FakeCopilotExpert:
-    """No network; returns tiny valid .ax for draft/repair."""
+    """No network; returns tiny valid .ax for draft/repair (neural on ``x`` for train_tabular tests)."""
 
     def __init__(self) -> None:
-        self._ax = "y = 1.0;\n"
+        self._ax = "y = neural([x]);\n"
         self.draft_calls: list[ExpertDraftRequest] = []
         self.repair_calls: list[ExpertRepairRequest] = []
         self.summarize_calls: list[ExpertTraceSummaryRequest] = []
@@ -67,7 +67,7 @@ def test_draft_success(client):
     r = c.post("/draft", json={"goal": "make a constant", "domain_context": "test"})
     assert r.status_code == 200
     data = r.json()
-    assert "y = 1.0" in data["ax_source"]
+    assert "neural" in data["ax_source"]
     assert data["backend_name"] == "fake"
     assert data["explanation"] == "ok"
     assert data["metadata"] == {"n": 1}
@@ -94,7 +94,7 @@ def test_search_compile_only_converges(client):
     assert r.status_code == 200
     data = r.json()
     assert data["converged"] is True
-    assert "y = 1.0" in data["best_source"]
+    assert "neural" in data["best_source"]
     assert data["best_evaluation"]["success"] is True
     assert len(data["iterations"]) >= 1
     assert data["iterations"][0]["evaluation"]["success"] is True
@@ -114,6 +114,69 @@ def test_search_with_examples_predict_rows(client):
     assert r.status_code == 200
     data = r.json()
     assert data["best_evaluation"]["mode"] == "predict_rows"
+
+
+def test_search_train_tabular(client):
+    c, _ = client
+    train = [{"inputs": {"x": float(i) * 0.1}, "expected": {"y": float(i) * 0.2}} for i in range(6)]
+    ev = [{"inputs": {"x": 1.0}, "expected": {"y": 2.0}}]
+    r = c.post(
+        "/search",
+        json={
+            "goal": "linear",
+            "max_iterations": 1,
+            "compile_only": False,
+            "train_tabular": {
+                "target_var": "y",
+                "train_rows": train,
+                "eval_rows": ev,
+                "epochs": 80,
+                "learning_rate": 0.07,
+                "batch_size": 4,
+            },
+        },
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["best_evaluation"]["mode"] == "train_tabular"
+    assert data["best_evaluation"]["success"] is True
+    assert "eval_mse" in data["best_evaluation"]["metrics"]
+
+
+def test_search_train_tabular_mutually_exclusive_with_examples(client):
+    c, _ = client
+    r = c.post(
+        "/search",
+        json={
+            "goal": "g",
+            "max_iterations": 1,
+            "examples": [{"inputs": {"x": 0.0}, "expected": {"y": 1.0}}],
+            "train_tabular": {
+                "target_var": "y",
+                "train_rows": [{"inputs": {"x": 0.0}, "expected": {"y": 0.0}}],
+                "eval_rows": [{"inputs": {"x": 1.0}, "expected": {"y": 1.0}}],
+            },
+        },
+    )
+    assert r.status_code == 422
+
+
+def test_search_train_tabular_rejected_with_compile_only(client):
+    c, _ = client
+    r = c.post(
+        "/search",
+        json={
+            "goal": "g",
+            "max_iterations": 1,
+            "compile_only": True,
+            "train_tabular": {
+                "target_var": "y",
+                "train_rows": [{"inputs": {"x": 0.0}, "expected": {"y": 0.0}}],
+                "eval_rows": [{"inputs": {"x": 1.0}, "expected": {"y": 1.0}}],
+            },
+        },
+    )
+    assert r.status_code == 422
 
 
 def test_summarize_endpoint(client):

@@ -521,6 +521,20 @@ def _load_examples_json(path: Path) -> Tuple[List[dict], List[dict]]:
     return inputs, expected
 
 
+def _load_tabular_json(path: Path) -> Any:
+    """Load tabular train/eval JSON for ``--train-tabular`` (see :mod:`axiom.copilot.tabular_json`)."""
+    from axiom.copilot.tabular_json import parse_tabular_json_text
+
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as e:
+        raise SystemExit(f"Cannot read --tabular-json file: {e}") from e
+    try:
+        return parse_tabular_json_text(text)
+    except ValueError as e:
+        raise SystemExit(f"Invalid tabular JSON: {e}") from e
+
+
 def _default_predict_score_fn() -> Callable[[List[Dict[str, Any]], List[Dict[str, Any]]], Dict[str, float]]:
     """Higher ``neg_mse`` is better (matches copilot search ranking)."""
 
@@ -568,15 +582,43 @@ def _cmd_copilot_search(args: argparse.Namespace) -> None:
     from axiom.copilot.search import CopilotSearchConfig, run_copilot_search
 
     expert = _make_copilot_expert(args)
+    train_tab = bool(getattr(args, "train_tabular", False))
+    tab_path = getattr(args, "tabular_json", None)
+    if train_tab and args.compile_only:
+        raise SystemExit("Cannot use --train-tabular with --compile-only.")
+    if train_tab and args.examples_json is not None:
+        raise SystemExit("Cannot use --train-tabular together with --examples-json.")
+    if train_tab and tab_path is None:
+        raise SystemExit("--train-tabular requires --tabular-json PATH.")
+    if tab_path is not None and not train_tab:
+        raise SystemExit("--tabular-json requires --train-tabular.")
+
     example_in: Optional[List[dict]] = None
     example_exp: Optional[List[dict]] = None
     if args.examples_json is not None:
         example_in, example_exp = _load_examples_json(args.examples_json)
 
+    tab_train: Optional[List[dict]] = None
+    tab_eval: Optional[List[dict]] = None
+    tab_target: Optional[str] = None
+    tab_params = None
+    tab_eval_exp: Optional[List[dict]] = None
+    if train_tab:
+        pld = _load_tabular_json(tab_path)
+        tab_train = list(pld.train_rows)
+        tab_eval = list(pld.eval_rows)
+        tab_target = pld.target_var
+        tab_params = pld.params
+        tab_eval_exp = list(pld.eval_expected_rows)
+
     if args.compile_only:
         mode: str = "compile_only"
         score_fn = None
         sort_key = None
+    elif train_tab:
+        mode = "train_tabular"
+        score_fn = _default_predict_score_fn()
+        sort_key = "neg_mse"
     elif example_in is not None:
         mode = "predict_rows"
         score_fn = _default_predict_score_fn()
@@ -600,6 +642,11 @@ def _cmd_copilot_search(args: argparse.Namespace) -> None:
         include_trace_snippet=summarize,
         summarize_traces=summarize,
         artifact_dir=args.artifact_dir,
+        tabular_train_rows=tab_train,
+        tabular_eval_rows=tab_eval,
+        tabular_target_var=tab_target,
+        tabular_train_params=tab_params,
+        tabular_eval_expected_rows=tab_eval_exp,
     )
     result = run_copilot_search(cfg)
 
@@ -934,6 +981,18 @@ def main(argv: list[str] | None = None) -> None:
         type=Path,
         default=None,
         help='Optional JSON file: [{"inputs":{...},"expected":{...}}, ...] for predict_rows scoring.',
+    )
+    p_cs.add_argument(
+        "--train-tabular",
+        action="store_true",
+        help="Evaluate candidates with in-memory train+eval (requires --tabular-json; see tabular_json module).",
+    )
+    p_cs.add_argument(
+        "--tabular-json",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="JSON object: target_var, train_rows, eval_rows (rows: inputs+expected), optional epochs/lr/weight_decay/batch_size.",
     )
     p_cs.add_argument(
         "--compile-only",

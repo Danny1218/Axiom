@@ -9,6 +9,7 @@ from axiom.copilot import (
     CopilotSearchConfig,
     ProgramCandidate,
     ProgramEvaluationReport,
+    TrainTabularParams,
     build_draft_context,
     build_repair_error_report,
     evaluate_program,
@@ -16,6 +17,7 @@ from axiom.copilot import (
     format_metrics_for_repair,
     run_copilot_search,
 )
+from axiom.copilot.benchmarks import default_neg_mse_score_fn
 from axiom.copilot.search import _is_better
 from axiom.experts import (
     ExpertDraftRequest,
@@ -202,10 +204,39 @@ def test_build_draft_context_serializable():
         domain_context="ctx",
         example_input_rows=[{"a": 1}],
         expected_rows=[{"y": 0}],
+        train_tabular_meta={"target_var": "y", "train_row_count": 3, "eval_row_count": 1},
     )
     assert ctx["domain_context"] == "ctx"
     assert ctx["example_input_rows"] == [{"a": 1}]
     assert ctx["expected_outputs"] == [{"y": 0}]
+    assert ctx["train_tabular"]["target_var"] == "y"
+    assert ctx["train_tabular"]["train_row_count"] == 3
+
+
+def test_train_tabular_search_success_and_draft_context():
+    ex = ScriptedExpert("y = neural([x]);\n", [])
+    train = [{"x": float(i) * 0.2, "y": float(i) * 0.4} for i in range(10)]
+    ev = [{"x": 1.0, "y": 2.0}]
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="fit y from x",
+        max_iterations=1,
+        mode="train_tabular",
+        tabular_train_rows=train,
+        tabular_eval_rows=ev,
+        tabular_target_var="y",
+        tabular_train_params=TrainTabularParams(epochs=60, learning_rate=0.08, batch_size=5),
+        tabular_eval_expected_rows=[{"y": 2.0}],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+    )
+    out = run_copilot_search(cfg)
+    assert out.best_evaluation.success
+    assert out.best_evaluation.mode == "train_tabular"
+    assert "eval_mse" in out.best_evaluation.metrics
+    assert "neg_mse" in out.best_evaluation.metrics
+    assert "train_tabular" in ex.draft_calls[0].context
+    assert ex.draft_calls[0].context["train_tabular"]["target_var"] == "y"
 
 
 def test_format_failures_and_full_repair_report():

@@ -287,6 +287,149 @@ def test_load_examples_json_errors(tmp_path: Path, raw: str, msg: str):
     assert msg in str(e.value)
 
 
+def _copilot_search_argv(tmp_path: Path) -> list:
+    return [
+        "copilot-search",
+        "--backend",
+        "onyx-qwen",
+        "--goal",
+        "g",
+        "--expert-url",
+        "http://x/",
+        "--expert-model",
+        "m",
+        "--iterations",
+        "1",
+    ]
+
+
+def test_copilot_search_train_tabular_requires_tabular_json(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(cli_mod, "_make_copilot_expert", lambda _a: _FakeExpert())
+    with pytest.raises(SystemExit) as e:
+        main(_copilot_search_argv(tmp_path) + ["--train-tabular"])
+    assert "tabular-json" in str(e.value).lower()
+
+
+def test_copilot_search_tabular_json_requires_flag(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(cli_mod, "_make_copilot_expert", lambda _a: _FakeExpert())
+    tj = tmp_path / "t.json"
+    tj.write_text(
+        json.dumps(
+            {
+                "target_var": "y",
+                "train_rows": [{"inputs": {"x": 0.0}, "expected": {"y": 0.0}}],
+                "eval_rows": [{"inputs": {"x": 1.0}, "expected": {"y": 1.0}}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(SystemExit) as e:
+        main(_copilot_search_argv(tmp_path) + ["--tabular-json", str(tj)])
+    assert "train-tabular" in str(e.value).lower()
+
+
+def test_copilot_search_train_tabular_incompatible_with_compile_only(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(cli_mod, "_make_copilot_expert", lambda _a: _FakeExpert())
+    tj = tmp_path / "t.json"
+    tj.write_text(
+        json.dumps(
+            {
+                "target_var": "y",
+                "train_rows": [{"inputs": {"x": 0.0}, "expected": {"y": 0.0}}],
+                "eval_rows": [{"inputs": {"x": 1.0}, "expected": {"y": 1.0}}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(SystemExit) as e:
+        main(
+            _copilot_search_argv(tmp_path)
+            + ["--train-tabular", "--tabular-json", str(tj), "--compile-only"]
+        )
+    assert "compile-only" in str(e.value).lower()
+
+
+def test_copilot_search_train_tabular_incompatible_with_examples_json(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(cli_mod, "_make_copilot_expert", lambda _a: _FakeExpert())
+    tj = tmp_path / "t.json"
+    tj.write_text(
+        json.dumps(
+            {
+                "target_var": "y",
+                "train_rows": [{"inputs": {"x": 0.0}, "expected": {"y": 0.0}}],
+                "eval_rows": [{"inputs": {"x": 1.0}, "expected": {"y": 1.0}}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    ej = tmp_path / "e.json"
+    ej.write_text('[{"inputs":{},"expected":{"y":1}}]', encoding="utf-8")
+    with pytest.raises(SystemExit) as e:
+        main(
+            _copilot_search_argv(tmp_path)
+            + ["--train-tabular", "--tabular-json", str(tj), "--examples-json", str(ej)]
+        )
+    assert "examples-json" in str(e.value).lower()
+
+
+def test_copilot_search_train_tabular_runs(tmp_path: Path, capsys, monkeypatch):
+    fake = _FakeExpert()
+    fake.draft_source = "y = neural([x]);\n"
+    monkeypatch.setattr(cli_mod, "_make_copilot_expert", lambda _a: fake)
+    tab = tmp_path / "tab.json"
+    tab.write_text(
+        json.dumps(
+            {
+                "target_var": "y",
+                "train_rows": [{"inputs": {"x": 0.1}, "expected": {"y": 0.2}}] * 6,
+                "eval_rows": [{"inputs": {"x": 1.0}, "expected": {"y": 2.0}}],
+                "epochs": 50,
+                "learning_rate": 0.06,
+                "batch_size": 4,
+            }
+        ),
+        encoding="utf-8",
+    )
+    main(
+        [
+            "copilot-search",
+            "--backend",
+            "onyx-qwen",
+            "--goal",
+            "fit",
+            "--expert-url",
+            "http://x/",
+            "--expert-model",
+            "m",
+            "--iterations",
+            "1",
+            "--train-tabular",
+            "--tabular-json",
+            str(tab),
+        ]
+    )
+    captured = capsys.readouterr()
+    assert "train" in captured.err or "metrics=" in captured.err
+    assert "neural" in captured.out
+
+
+def test_load_tabular_json_ok(tmp_path: Path):
+    p = tmp_path / "z.json"
+    p.write_text(
+        json.dumps(
+            {
+                "target_var": "y",
+                "train_rows": [{"inputs": {"x": 0.0}, "expected": {"y": 0.0}}],
+                "eval_rows": [{"inputs": {"x": 1.0}, "expected": {"y": 2.0}}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    pld = cli_mod._load_tabular_json(p)
+    assert pld.target_var == "y"
+    assert len(pld.train_rows) == 1
+
+
 def test_default_predict_score_fn_higher_is_better():
     fn = cli_mod._default_predict_score_fn()
     s = fn([{"y": 0.0}, {"y": 1.0}], [{"y": 0.0}, {"y": 1.0}])

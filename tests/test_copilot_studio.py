@@ -40,6 +40,50 @@ def test_parse_examples_rows_json_ok():
     assert a == [{}] and b == [{"y": 0.5}]
 
 
+def test_parse_tabular_json_studio_ok():
+    raw = json.dumps(
+        {
+            "target_var": "y",
+            "train_rows": [{"inputs": {"x": 0.0}, "expected": {"y": 0.0}}],
+            "eval_rows": [{"inputs": {"x": 1.0}, "expected": {"y": 2.0}}],
+            "epochs": 5,
+        }
+    )
+    pld = cs.parse_tabular_json_studio(raw)
+    assert pld.target_var == "y"
+    assert pld.params.epochs == 5
+    assert pld.train_rows[0]["x"] == 0.0 and pld.train_rows[0]["y"] == 0.0
+
+
+def test_run_studio_search_train_tabular():
+    ex = _ScriptedExpert()
+    ex.draft_src = "y = neural([x]);\n"
+    ex.repairs = []
+    tab = json.dumps(
+        {
+            "target_var": "y",
+            "train_rows": [{"inputs": {"x": float(i) * 0.1}, "expected": {"y": float(i) * 0.2}} for i in range(8)],
+            "eval_rows": [{"inputs": {"x": 1.0}, "expected": {"y": 2.0}}],
+            "epochs": 40,
+            "learning_rate": 0.07,
+            "batch_size": 4,
+        }
+    )
+    cfg, out = cs.run_studio_search(
+        "g", None, ex, 1, evaluation_mode="train_tabular", tabular_text=tab
+    )
+    assert cfg.mode == "train_tabular"
+    assert out.best_evaluation.success
+    assert "eval_mse" in out.best_evaluation.metrics
+
+
+def test_run_studio_search_train_tabular_requires_json():
+    ex = _ScriptedExpert()
+    with pytest.raises(ValueError) as e:
+        cs.run_studio_search("g", None, ex, 1, evaluation_mode="train_tabular", tabular_text=None)
+    assert "tabular" in str(e.value).lower()
+
+
 @pytest.mark.parametrize(
     "raw,sub",
     [
@@ -70,7 +114,7 @@ def test_run_studio_draft():
 
 def test_run_studio_search_compile_only():
     ex = _ScriptedExpert()
-    cfg, out = cs.run_studio_search("g", None, ex, 3, compile_only=True)
+    cfg, out = cs.run_studio_search("g", None, ex, 3, evaluation_mode="compile_only")
     assert cfg.mode == "compile_only"
     assert out.converged is True
     assert "neural" in out.best_source
@@ -81,14 +125,14 @@ def test_run_studio_search_predict_rows():
     ex.draft_src = "y = neural([1.0, 2.0]);\n"
     ex.repairs = []
     js = json.dumps([{"inputs": {}, "expected": {"y": 0.5}}])
-    cfg, out = cs.run_studio_search("g", None, ex, 1, compile_only=False, examples_text=js)
+    cfg, out = cs.run_studio_search("g", None, ex, 1, evaluation_mode="predict_rows", examples_text=js)
     assert cfg.mode == "predict_rows"
     assert out.iterations[0].evaluation.success is True
 
 
 def test_iterations_table_rows_shape():
     ex = _ScriptedExpert()
-    _, out = cs.run_studio_search("g", None, ex, 2, compile_only=True)
+    _, out = cs.run_studio_search("g", None, ex, 2, evaluation_mode="compile_only")
     rows = cs.iterations_table_rows(out)
     assert len(rows) == 2
     assert "iter" in rows[0] and "failure_count" in rows[0]
@@ -101,7 +145,7 @@ def test_run_studio_search_summarize_traces():
             return "explained"
 
     ex = _Talkative()
-    cfg, out = cs.run_studio_search("g", None, ex, 1, compile_only=True, summarize_traces=True)
+    cfg, out = cs.run_studio_search("g", None, ex, 1, evaluation_mode="compile_only", summarize_traces=True)
     assert cfg.summarize_traces is True
     assert out.iterations[0].semantic_trace_summary == "explained"
     row = cs.iterations_table_rows(out)[0]
@@ -110,7 +154,7 @@ def test_run_studio_search_summarize_traces():
 
 def test_build_studio_download_payload_keys():
     ex = _ScriptedExpert()
-    cfg, out = cs.run_studio_search("goal", "dom", ex, 2, compile_only=True)
+    cfg, out = cs.run_studio_search("goal", "dom", ex, 2, evaluation_mode="compile_only")
     blob = cs.build_studio_download_payload(cfg, out)
     json.dumps(blob)
     assert blob["converged"] is True

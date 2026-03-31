@@ -14,9 +14,11 @@ from axiom.copilot.api_models import (
     SearchResponse,
     SummarizeRequest,
     SummarizeResponse,
+    TrainTabularPayload,
 )
 from axiom.copilot.artifacts import evaluation_report_to_dict, json_safe
 from axiom.copilot.search import CopilotSearchConfig, CopilotSearchResult, build_draft_context, run_copilot_search
+from axiom.copilot.tabular_json import parse_tabular_json_dict
 from axiom.experts.base import ExpertDraftRequest, ExpertTraceSummaryRequest, SemanticExpert
 
 
@@ -39,6 +41,19 @@ def _default_neg_mse_score_fn() -> Callable[[List[Dict[str, Any]], List[Dict[str
         return {"neg_mse": float(-mse)}
 
     return score_fn
+
+
+def _copilot_payload_from_train_tabular(section: TrainTabularPayload):
+    d = {
+        "target_var": section.target_var.strip(),
+        "train_rows": [{"inputs": dict(r.inputs), "expected": dict(r.expected)} for r in section.train_rows],
+        "eval_rows": [{"inputs": dict(r.inputs), "expected": dict(r.expected)} for r in section.eval_rows],
+        "epochs": section.epochs,
+        "learning_rate": section.learning_rate,
+        "weight_decay": section.weight_decay,
+        "batch_size": section.batch_size,
+    }
+    return parse_tabular_json_dict(d)
 
 
 def _serialize_search_response(result: CopilotSearchResult, cfg: CopilotSearchConfig) -> SearchResponse:
@@ -123,10 +138,27 @@ def create_app(expert: SemanticExpert):
             example_in = [dict(x.inputs) for x in body.examples]
             example_exp = [dict(x.expected) for x in body.examples]
 
+        tab_train: Optional[List[Dict[str, Any]]] = None
+        tab_eval: Optional[List[Dict[str, Any]]] = None
+        tab_target: Optional[str] = None
+        tab_params = None
+        tab_eval_exp: Optional[List[Dict[str, Any]]] = None
+        if body.train_tabular is not None:
+            pld = _copilot_payload_from_train_tabular(body.train_tabular)
+            tab_train = list(pld.train_rows)
+            tab_eval = list(pld.eval_rows)
+            tab_target = pld.target_var
+            tab_params = pld.params
+            tab_eval_exp = list(pld.eval_expected_rows)
+
         if body.compile_only:
             mode: str = "compile_only"
             score_fn = None
             sort_key = None
+        elif body.train_tabular is not None:
+            mode = "train_tabular"
+            score_fn = _default_neg_mse_score_fn()
+            sort_key = "neg_mse"
         elif example_in is not None:
             mode = "predict_rows"
             score_fn = _default_neg_mse_score_fn()
@@ -150,6 +182,11 @@ def create_app(expert: SemanticExpert):
             include_trace_snippet=summarize,
             summarize_traces=summarize,
             artifact_dir=Path(body.artifact_dir).resolve() if body.artifact_dir else None,
+            tabular_train_rows=tab_train,
+            tabular_eval_rows=tab_eval,
+            tabular_target_var=tab_target,
+            tabular_train_params=tab_params,
+            tabular_eval_expected_rows=tab_eval_exp,
         )
         result = run_copilot_search(cfg)
         return _serialize_search_response(result, cfg)

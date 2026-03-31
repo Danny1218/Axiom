@@ -36,6 +36,7 @@ def test_plan_documents_semantic_copilot_roadmap():
     assert "Phase 66" in plan and "OP_EXPERT" in plan
     assert "Phase 67" in plan and "copilot-serve" in plan
     assert "Phase 68" in plan and "train_tabular" in plan
+    assert "Phase 69" in plan and "tabular_json" in plan
     assert "Phase 57" in plan
 
 

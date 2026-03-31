@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from axiom.copilot.artifacts import build_iterations_document, build_search_report_document
 from axiom.copilot.search import CopilotSearchConfig, CopilotSearchResult, build_draft_context, run_copilot_search
+from axiom.copilot.tabular_json import parse_tabular_json_text
 from axiom.experts.base import ExpertDraftRequest, ExpertDraftResponse
 
 
@@ -60,6 +61,11 @@ def parse_examples_rows_json(text: str) -> Tuple[List[dict], List[dict]]:
     return inputs, expected
 
 
+def parse_tabular_json_studio(text: str):
+    """Alias for :func:`~axiom.copilot.tabular_json.parse_tabular_json_text` (Studio + tests)."""
+    return parse_tabular_json_text(text)
+
+
 def build_studio_expert(base_url: str, model: str, api_key: Optional[str] = None):
     """Build :class:`~axiom.experts.onyx_qwen.OnyxQwenBackend`. Raises ``ImportError`` or ``ValueError``."""
     try:
@@ -93,26 +99,50 @@ def run_studio_search(
     expert: Any,
     max_iterations: int,
     *,
-    compile_only: bool,
+    evaluation_mode: str = "compile_only",
     examples_text: Optional[str] = None,
+    tabular_text: Optional[str] = None,
     summarize_traces: bool = False,
 ) -> Tuple[CopilotSearchConfig, CopilotSearchResult]:
+    """Run search. ``evaluation_mode`` is ``compile_only`` | ``predict_rows`` | ``train_tabular``."""
+    em = (evaluation_mode or "compile_only").strip()
     example_in: Optional[List[dict]] = None
     example_exp: Optional[List[dict]] = None
-    if not compile_only and examples_text and examples_text.strip():
+    tab_train: Optional[List[dict]] = None
+    tab_eval: Optional[List[dict]] = None
+    tab_target: Optional[str] = None
+    tab_params = None
+    tab_eval_exp: Optional[List[dict]] = None
+
+    if em == "predict_rows":
+        if not examples_text or not examples_text.strip():
+            raise ValueError("predict_rows requires non-empty examples JSON.")
         example_in, example_exp = parse_examples_rows_json(examples_text.strip())
-    if compile_only:
+    elif em == "train_tabular":
+        if not tabular_text or not str(tabular_text).strip():
+            raise ValueError("train_tabular requires non-empty tabular JSON.")
+        pld = parse_tabular_json_text(str(tabular_text).strip())
+        tab_train = list(pld.train_rows)
+        tab_eval = list(pld.eval_rows)
+        tab_target = pld.target_var
+        tab_params = pld.params
+        tab_eval_exp = list(pld.eval_expected_rows)
+
+    if em == "compile_only":
         mode: str = "compile_only"
         score_fn = None
         sort_key = None
-    elif example_in is not None:
+    elif em == "predict_rows":
         mode = "predict_rows"
         score_fn = _default_neg_mse_score_fn()
         sort_key = "neg_mse"
+    elif em == "train_tabular":
+        mode = "train_tabular"
+        score_fn = _default_neg_mse_score_fn()
+        sort_key = "neg_mse"
     else:
-        mode = "compile_only"
-        score_fn = None
-        sort_key = None
+        raise ValueError(f"Unknown evaluation_mode: {evaluation_mode!r}")
+
     cfg = CopilotSearchConfig(
         expert=expert,
         goal=goal.strip(),
@@ -125,6 +155,11 @@ def run_studio_search(
         score_sort_key=sort_key,
         include_trace_snippet=bool(summarize_traces),
         summarize_traces=bool(summarize_traces),
+        tabular_train_rows=tab_train,
+        tabular_eval_rows=tab_eval,
+        tabular_target_var=tab_target,
+        tabular_train_params=tab_params,
+        tabular_eval_expected_rows=tab_eval_exp,
     )
     return cfg, run_copilot_search(cfg)
 
@@ -196,13 +231,24 @@ def main() -> None:
         value=False,
         key="summarize_traces",
     )
-    eval_mode = st.radio("Search evaluation", ("compile_only", "predict_rows"), horizontal=True)
+    eval_mode = st.radio(
+        "Search evaluation",
+        ("compile_only", "predict_rows", "train_tabular"),
+        horizontal=True,
+    )
     examples_text = None
+    tabular_text = None
     if eval_mode == "predict_rows":
         examples_text = st.text_area(
             'Examples JSON (array of {"inputs":{}, "expected":{}})',
             height=120,
             key="examples_json",
+        )
+    elif eval_mode == "train_tabular":
+        tabular_text = st.text_area(
+            'Tabular JSON (object: target_var, train_rows, eval_rows; rows: {"inputs":{}, "expected":{}})',
+            height=160,
+            key="tabular_json",
         )
 
     col_draft, col_search = st.columns(2)
@@ -237,6 +283,10 @@ def main() -> None:
             st.session_state.search_error = "predict_rows requires non-empty examples JSON."
             st.session_state.search_result = None
             st.session_state.search_cfg = None
+        elif eval_mode == "train_tabular" and (not tabular_text or not str(tabular_text).strip()):
+            st.session_state.search_error = "train_tabular requires non-empty tabular JSON."
+            st.session_state.search_result = None
+            st.session_state.search_cfg = None
         else:
             try:
                 expert = build_studio_expert(expert_url, expert_model, expert_key or None)
@@ -245,8 +295,9 @@ def main() -> None:
                     context or None,
                     expert,
                     int(iterations),
-                    compile_only=(eval_mode == "compile_only"),
+                    evaluation_mode=str(eval_mode),
                     examples_text=examples_text if eval_mode == "predict_rows" else None,
+                    tabular_text=tabular_text if eval_mode == "train_tabular" else None,
                     summarize_traces=summarize_traces,
                 )
                 st.session_state.search_cfg = cfg
