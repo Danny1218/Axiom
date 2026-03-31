@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from axiom.copilot.api_models import (
+    BenchmarkRunRequest,
+    BenchmarkRunResponse,
     CopilotHealthResponse,
     DraftRequest,
     DraftResponse,
@@ -17,6 +19,7 @@ from axiom.copilot.api_models import (
     TrainTabularPayload,
 )
 from axiom.copilot.artifacts import evaluation_report_to_dict, json_safe
+from axiom.copilot.benchmarks import benchmark_suite_to_dict, benchmark_tasks_from_json_dict, run_benchmark_suite
 from axiom.copilot.search import CopilotSearchConfig, CopilotSearchResult, build_draft_context, run_copilot_search
 from axiom.copilot.tabular_json import parse_tabular_json_dict
 from axiom.experts.base import ExpertDraftRequest, ExpertTraceSummaryRequest, SemanticExpert
@@ -190,6 +193,25 @@ def create_app(expert: SemanticExpert):
         )
         result = run_copilot_search(cfg)
         return _serialize_search_response(result, cfg)
+
+    @app.post("/benchmarks/run", response_model=BenchmarkRunResponse, dependencies=[Depends(verify_copilot_api_key)])
+    def benchmarks_run(body: BenchmarkRunRequest, exp: SemanticExpert = Depends(get_expert)) -> BenchmarkRunResponse:
+        task_list = None
+        if body.tasks is not None:
+            try:
+                task_list = benchmark_tasks_from_json_dict(body.tasks)
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e)) from e
+        run_draft = not body.search_only
+        run_search = not body.draft_only
+        suite = run_benchmark_suite(
+            exp,
+            tasks=task_list,
+            max_iterations=int(body.max_iterations),
+            run_draft=run_draft,
+            run_search=run_search,
+        )
+        return BenchmarkRunResponse(suite=benchmark_suite_to_dict(suite))
 
     @app.post("/summarize", response_model=SummarizeResponse, dependencies=[Depends(verify_copilot_api_key)])
     def summarize(body: SummarizeRequest, exp: SemanticExpert = Depends(get_expert)) -> SummarizeResponse:

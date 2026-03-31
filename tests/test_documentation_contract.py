@@ -50,6 +50,7 @@ def test_readme_documents_copilot_cli():
     assert "copilot-serve" in text and "AXIOM_COPILOT_API_KEY" in text
     assert "train_tabular" in text and "TrainTabularParams" in text
     assert "train-tabular" in text and "tabular-json" in text
+    assert "copilot-benchmark" in text and "benchmark" in text.lower()
 
 
 def test_readme_from_compile_to_production_story():
@@ -167,6 +168,7 @@ def test_array_literal_and_indexing_ir():
         ["copilot-search", "--help"],
         ["copilot-studio", "--help"],
         ["copilot-serve", "--help"],
+        ["copilot-benchmark", "--help"],
     ],
 )
 def test_cli_subcommands_help_exits_ok(argv: list):
@@ -189,13 +191,18 @@ def test_cli_source_wires_documented_train_features():
     assert "export-onnx" in src and "export_bundle_to_onnx" in src
     assert "gateway-serve" in src and "create_gateway_app" in src
     assert "Glass Box requires" in src and ".[inspect]" in src
-    assert "copilot-draft" in src and "copilot-search" in src and "_make_copilot_expert" in src
+    assert "copilot-draft" in src and "copilot-search" in src and "copilot-benchmark" in src
+    assert "_make_copilot_expert" in src and "_cmd_copilot_benchmark" in src
     assert "--train-tabular" in src and "--tabular-json" in src
     assert "artifact-dir" in src
     assert "summarize-traces" in src
     assert (_root() / "src" / "axiom" / "copilot" / "benchmarks.py").is_file()
     assert "copilot-studio" in src and "copilot_studio.py" in src
     assert "copilot-serve" in src and "copilot.server" in src
+    server_src = (_root() / "src" / "axiom" / "copilot" / "server.py").read_text(
+        encoding="utf-8"
+    )
+    assert "/benchmarks/run" in server_src or "benchmarks_run" in server_src
 
 
 def test_cli_rejects_dataset_and_csv_together():

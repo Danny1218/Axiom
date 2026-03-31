@@ -8,6 +8,7 @@ import pytest
 
 pytest.importorskip("fastapi")
 
+from axiom.copilot.benchmarks import BenchmarkDispatchExpert
 from axiom.copilot.server import create_app
 from axiom.experts.base import (
     ExpertDraftRequest,
@@ -247,3 +248,58 @@ def test_search_writes_artifact_dir(tmp_path: Path, monkeypatch):
 def test_create_app_import_error_message():
     # FastAPI is present in test env; smoke-check module loads
     assert callable(create_app)
+
+
+@pytest.fixture
+def bench_client(monkeypatch):
+    monkeypatch.delenv("AXIOM_COPILOT_API_KEY", raising=False)
+    from fastapi.testclient import TestClient
+
+    app = create_app(BenchmarkDispatchExpert())
+    return TestClient(app)
+
+
+def test_benchmarks_run_default(bench_client):
+    r = bench_client.post("/benchmarks/run", json={})
+    assert r.status_code == 200
+    body = r.json()
+    assert "suite" in body
+    s = body["suite"]
+    assert s["kind"] == "axiom.copilot.benchmark_suite"
+    assert s["run_options"] == {"draft": True, "search": True}
+    assert s["draft_summary"] is not None and s["search_summary"] is not None
+    assert len(s["tasks"]) == 3
+
+
+def test_benchmarks_run_draft_only(bench_client):
+    r = bench_client.post("/benchmarks/run", json={"draft_only": True})
+    assert r.status_code == 200
+    s = r.json()["suite"]
+    assert s["run_options"] == {"draft": True, "search": False}
+    assert s["draft_summary"] is not None
+    assert s["search_summary"] is None
+
+
+def test_benchmarks_run_invalid_tasks_object(bench_client):
+    r = bench_client.post("/benchmarks/run", json={"tasks": {}})
+    assert r.status_code == 400
+
+
+def test_benchmarks_run_draft_and_search_mutually_exclusive(bench_client):
+    r = bench_client.post("/benchmarks/run", json={"draft_only": True, "search_only": True})
+    assert r.status_code == 422
+
+
+def test_benchmarks_run_requires_auth_when_env_set(monkeypatch, bench_client):
+    monkeypatch.setenv("AXIOM_COPILOT_API_KEY", "secret-bench")
+    from fastapi.testclient import TestClient
+
+    app = create_app(BenchmarkDispatchExpert())
+    c = TestClient(app)
+    assert c.post("/benchmarks/run", json={}).status_code == 401
+    ok = c.post(
+        "/benchmarks/run",
+        json={},
+        headers={"Authorization": "Bearer secret-bench"},
+    )
+    assert ok.status_code == 200

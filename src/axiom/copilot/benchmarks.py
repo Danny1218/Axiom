@@ -126,8 +126,8 @@ class BenchmarkRunRecord:
 class BenchmarkTaskComparison:
     task_id: str
     title: str
-    draft_only: BenchmarkRunRecord
-    search: BenchmarkRunRecord
+    draft_only: Optional[BenchmarkRunRecord] = None
+    search: Optional[BenchmarkRunRecord] = None
 
 
 @dataclass
@@ -147,6 +147,8 @@ class BenchmarkSuiteResult:
     tasks: List[BenchmarkTaskComparison] = field(default_factory=list)
     draft_summary: Optional[BenchmarkSummary] = None
     search_summary: Optional[BenchmarkSummary] = None
+    run_draft: bool = True
+    run_search: bool = True
 
 
 def run_benchmark_draft_only(expert: SemanticExpert, task: BenchmarkTask) -> BenchmarkRunRecord:
@@ -223,22 +225,30 @@ def run_benchmark_suite(
     *,
     tasks: Optional[Sequence[BenchmarkTask]] = None,
     max_iterations: int = 4,
+    run_draft: bool = True,
+    run_search: bool = True,
 ) -> BenchmarkSuiteResult:
-    """Run every task under draft-only and search; compare aggregate success rates."""
+    """Run tasks under draft-only and/or full search; compare aggregate success rates when both arms run."""
+    if not run_draft and not run_search:
+        raise ValueError("run_benchmark_suite requires run_draft and/or run_search.")
     seq = tuple(tasks) if tasks is not None else DEFAULT_BENCHMARK_TASKS
     comps: List[BenchmarkTaskComparison] = []
     draft_recs: List[BenchmarkRunRecord] = []
     search_recs: List[BenchmarkRunRecord] = []
     for t in seq:
-        dr = run_benchmark_draft_only(expert, t)
-        sr = run_benchmark_search(expert, t, max_iterations=max_iterations)
-        draft_recs.append(dr)
-        search_recs.append(sr)
+        dr = run_benchmark_draft_only(expert, t) if run_draft else None
+        sr = run_benchmark_search(expert, t, max_iterations=max_iterations) if run_search else None
+        if dr is not None:
+            draft_recs.append(dr)
+        if sr is not None:
+            search_recs.append(sr)
         comps.append(BenchmarkTaskComparison(task_id=t.id, title=t.title, draft_only=dr, search=sr))
     return BenchmarkSuiteResult(
         tasks=comps,
-        draft_summary=summarize_rates(draft_recs),
-        search_summary=summarize_rates(search_recs),
+        draft_summary=summarize_rates(draft_recs) if draft_recs else None,
+        search_summary=summarize_rates(search_recs) if search_recs else None,
+        run_draft=run_draft,
+        run_search=run_search,
     )
 
 
@@ -279,14 +289,15 @@ def benchmark_suite_to_dict(result: BenchmarkSuiteResult) -> Dict[str, Any]:
     out: Dict[str, Any] = {
         "schema_version": result.schema_version,
         "kind": "axiom.copilot.benchmark_suite",
+        "run_options": {"draft": result.run_draft, "search": result.run_search},
         "draft_summary": summ(result.draft_summary),
         "search_summary": summ(result.search_summary),
         "tasks": [
             {
                 "task_id": c.task_id,
                 "title": c.title,
-                "draft_only": _record_to_dict(c.draft_only),
-                "search": _record_to_dict(c.search),
+                "draft_only": _record_to_dict(c.draft_only) if c.draft_only is not None else None,
+                "search": _record_to_dict(c.search) if c.search is not None else None,
             }
             for c in result.tasks
         ],

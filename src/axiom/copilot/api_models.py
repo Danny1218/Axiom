@@ -78,3 +78,24 @@ class SummarizeRequest(BaseModel):
 
 class SummarizeResponse(BaseModel):
     summary: str
+
+
+class BenchmarkRunRequest(BaseModel):
+    """Optional task suite override (same shape as ``benchmark_tasks_from_json_dict`` file root)."""
+
+    tasks: Optional[Dict[str, Any]] = None
+    max_iterations: int = Field(default=4, ge=1, le=64)
+    draft_only: bool = False
+    search_only: bool = False
+
+    @model_validator(mode="after")
+    def _draft_search_exclusive(self) -> BenchmarkRunRequest:
+        if self.draft_only and self.search_only:
+            raise ValueError("draft_only and search_only cannot both be true.")
+        return self
+
+
+class BenchmarkRunResponse(BaseModel):
+    """Full output of :func:`~axiom.copilot.benchmarks.benchmark_suite_to_dict`."""
+
+    suite: Dict[str, Any]

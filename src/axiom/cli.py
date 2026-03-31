@@ -696,6 +696,84 @@ def _cmd_copilot_search(args: argparse.Namespace) -> None:
         print(f"Wrote artifact bundle to {args.artifact_dir.resolve()}", file=sys.stderr)
 
 
+def _print_copilot_benchmark_summary(doc: dict) -> None:
+    prefix = "[copilot-benchmark]"
+    if doc.get("draft_summary"):
+        s = doc["draft_summary"]
+        print(
+            f"{prefix} draft: n={s['task_count']} compile_ok={s['compile_ok_count']} "
+            f"compile_rate={100.0 * float(s['compile_success_rate']):.1f}% "
+            f"metric_ok={s['metric_ok_count']} "
+            f"metric_rate={100.0 * float(s['metric_success_rate']):.1f}%",
+            file=sys.stderr,
+        )
+    if doc.get("search_summary"):
+        s = doc["search_summary"]
+        print(
+            f"{prefix} search: n={s['task_count']} compile_ok={s['compile_ok_count']} "
+            f"compile_rate={100.0 * float(s['compile_success_rate']):.1f}% "
+            f"metric_ok={s['metric_ok_count']} "
+            f"metric_rate={100.0 * float(s['metric_success_rate']):.1f}%",
+            file=sys.stderr,
+        )
+
+
+def _cmd_copilot_benchmark(args: argparse.Namespace) -> None:
+    from axiom.copilot.benchmarks import benchmark_suite_to_dict, load_benchmark_tasks_json_path, run_benchmark_suite
+
+    expert = _make_copilot_expert(args)
+    if args.draft_only and args.search_only:
+        raise SystemExit("Cannot use --draft-only and --search together.")
+    run_draft = not args.search_only
+    run_search = not args.draft_only
+    task_list = None
+    if args.task_json is not None:
+        try:
+            task_list = load_benchmark_tasks_json_path(args.task_json)
+        except (OSError, json.JSONDecodeError, ValueError) as e:
+            raise SystemExit(f"Invalid --task-json: {e}") from e
+    suite = run_benchmark_suite(
+        expert,
+        tasks=task_list,
+        max_iterations=max(1, int(args.max_iterations)),
+        run_draft=run_draft,
+        run_search=run_search,
+    )
+    doc = benchmark_suite_to_dict(suite)
+    _print_copilot_benchmark_summary(doc)
+    if args.out is not None:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(json.dumps(doc, indent=2, ensure_ascii=False), encoding="utf-8")
+        print(f"Wrote benchmark JSON to {args.out}", file=sys.stderr)
+
+
+def _add_copilot_benchmark_backend_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument(
+        "--backend",
+        choices=["onyx-qwen"],
+        required=True,
+        help="Semantic expert implementation (requires [copilot] / requests).",
+    )
+    p.add_argument(
+        "--expert-url",
+        type=str,
+        required=True,
+        help="Base URL for chat/completions (e.g. https://api.example.com/v1/).",
+    )
+    p.add_argument(
+        "--expert-model",
+        type=str,
+        required=True,
+        help="Remote model id (passed through to the chat API).",
+    )
+    p.add_argument(
+        "--expert-api-key",
+        type=str,
+        default=None,
+        help="Optional API key (else AXIOM_EXPERT_API_KEY).",
+    )
+
+
 def _add_copilot_backend_args(p: argparse.ArgumentParser) -> None:
     p.add_argument(
         "--backend",
@@ -734,7 +812,7 @@ def _add_copilot_backend_args(p: argparse.ArgumentParser) -> None:
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(
         prog="axiom",
-        description="Axiom neural compiler CLI (train, predict, copilot-draft, copilot-search, copilot-serve, copilot-studio, lock-bundle, export-onnx, inspect, serve, gateway-serve).",
+        description="Axiom neural compiler CLI (train, predict, copilot-draft, copilot-search, copilot-benchmark, copilot-serve, copilot-studio, lock-bundle, export-onnx, inspect, serve, gateway-serve).",
     )
     sub = ap.add_subparsers(dest="cmd", required=True)
 
@@ -1018,6 +1096,45 @@ def main(argv: list[str] | None = None) -> None:
     )
     p_cs.set_defaults(_handler=_cmd_copilot_search)
 
+    p_cb = sub.add_parser(
+        "copilot-benchmark",
+        help="Run semantic copilot NL→.ax benchmark suite (draft vs search; requires pip install -e \".[copilot]\").",
+    )
+    _add_copilot_benchmark_backend_args(p_cb)
+    p_cb.add_argument(
+        "--task-json",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="Optional JSON file with {\"tasks\":[...]} (same as axiom.copilot.benchmarks fixtures); default built-in tasks.",
+    )
+    p_cb.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="Write full benchmark_suite_to_dict JSON to this path.",
+    )
+    p_cb.add_argument(
+        "--max-iterations",
+        type=int,
+        default=4,
+        metavar="N",
+        help="Search arm iteration budget per task (default: 4).",
+    )
+    p_cb.add_argument(
+        "--draft-only",
+        action="store_true",
+        help="Run only the draft+eval arm (skip search/repair loop).",
+    )
+    p_cb.add_argument(
+        "--search",
+        action="store_true",
+        dest="search_only",
+        help="Run only the search arm (skip draft-only baseline).",
+    )
+    p_cb.set_defaults(_handler=_cmd_copilot_benchmark)
+
     args = ap.parse_args(argv)
     handler = args._handler
     if handler is _cmd_inspect:
@@ -1043,6 +1160,9 @@ def main(argv: list[str] | None = None) -> None:
         handler(args)
         return
     if handler is _cmd_copilot_search:
+        handler(args)
+        return
+    if handler is _cmd_copilot_benchmark:
         handler(args)
         return
     if handler is _cmd_copilot_serve:

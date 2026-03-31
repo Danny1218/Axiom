@@ -130,12 +130,47 @@ def test_run_benchmark_suite_dict_roundtrip():
     suite = run_benchmark_suite(ex, tasks=DEFAULT_BENCHMARK_TASKS, max_iterations=2)
     assert suite.draft_summary and suite.search_summary
     assert suite.draft_summary.task_count == 3
+    assert suite.run_draft and suite.run_search
     d = benchmark_suite_to_dict(suite)
     assert d["schema_version"] == BENCHMARK_SUITE_SCHEMA_VERSION
     assert d["kind"] == "axiom.copilot.benchmark_suite"
+    assert d["run_options"] == {"draft": True, "search": True}
     json.dumps(d)
     assert d["draft_summary"]["compile_success_rate"] == 1.0
     assert d["search_summary"]["metric_success_rate"] == 1.0
+
+
+def test_run_benchmark_suite_requires_draft_or_search():
+    ex = BenchmarkDispatchExpert()
+    with pytest.raises(ValueError, match="run_draft and/or"):
+        run_benchmark_suite(ex, tasks=DEFAULT_BENCHMARK_TASKS[:1], run_draft=False, run_search=False)
+
+
+def test_run_benchmark_suite_draft_only():
+    ex = BenchmarkDispatchExpert()
+    suite = run_benchmark_suite(
+        ex, tasks=DEFAULT_BENCHMARK_TASKS[:1], max_iterations=2, run_draft=True, run_search=False
+    )
+    assert suite.draft_summary is not None
+    assert suite.search_summary is None
+    assert suite.tasks[0].draft_only is not None
+    assert suite.tasks[0].search is None
+    d = benchmark_suite_to_dict(suite)
+    assert d["search_summary"] is None
+    assert d["tasks"][0]["search"] is None
+    assert d["run_options"] == {"draft": True, "search": False}
+
+
+def test_run_benchmark_suite_search_only():
+    ex = BenchmarkDispatchExpert()
+    suite = run_benchmark_suite(
+        ex, tasks=(DEFAULT_BENCHMARK_TASKS[2],), run_draft=False, run_search=True, max_iterations=2
+    )
+    assert suite.draft_summary is None
+    assert suite.search_summary is not None
+    d = benchmark_suite_to_dict(suite)
+    assert d["draft_summary"] is None
+    assert d["tasks"][0]["draft_only"] is None
 
 
 def test_search_beats_draft_when_first_draft_broken():
