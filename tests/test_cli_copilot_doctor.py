@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import Mock
+
 import pytest
 
 import axiom.cli as cli_mod
@@ -58,7 +60,7 @@ def test_copilot_doctor_happy_path(capsys, monkeypatch):
         def draft_program(self, request: ExpertDraftRequest) -> ExpertDraftResponse:
             assert request.goal
             assert "_onyx_completion_overrides" in request.context
-            assert request.context["_onyx_completion_overrides"] == {"temperature": 0}
+            assert request.context["_onyx_completion_overrides"] == {"temperature": 0.0}
             return ExpertDraftResponse(
                 ax_source="y = x * 2.0;\n",
                 backend_name="fake",
@@ -85,6 +87,73 @@ def test_copilot_doctor_happy_path(capsys, monkeypatch):
     assert "parse: ok" in out and "ir: ok" in out and "block: ok" in out
     assert "anti_pattern: (none)" in out
     assert "neural: no" in out
+
+
+def test_copilot_doctor_live_onyx_backend_sends_greedy_payload_not_temperature_zero(capsys, monkeypatch):
+    pytest.importorskip("requests")
+    captured: list[dict] = []
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        captured.append(dict(json or {}))
+        r = Mock()
+        r.status_code = 200
+        r.text = ""
+        r.json.return_value = {"choices": [{"message": {"content": "```ax\ny = x * 2.0;\n```"}}]}
+        return r
+
+    from axiom.experts.onyx_qwen import OnyxQwenBackend
+
+    monkeypatch.setattr(
+        cli_mod,
+        "_make_copilot_expert",
+        lambda _a: OnyxQwenBackend("http://127.0.0.1/v1/", "m", _post=fake_post),
+    )
+    main(
+        [
+            "copilot-doctor",
+            "--backend",
+            "onyx-qwen",
+            "--expert-url",
+            "http://127.0.0.1/v1/",
+            "--expert-model",
+            "m",
+        ]
+    )
+    assert captured, "expected one chat/completions POST"
+    body = captured[0]
+    assert "temperature" not in body
+    assert body.get("do_sample") is False
+    assert "connection: ok" in capsys.readouterr().out
+
+
+def test_copilot_doctor_respects_explicit_temperature_and_top_p(capsys, monkeypatch):
+    class _Ok:
+        def draft_program(self, request: ExpertDraftRequest) -> ExpertDraftResponse:
+            o = request.context.get("_onyx_completion_overrides")
+            assert o == {"temperature": 0.35, "top_p": 0.88}
+            return ExpertDraftResponse(
+                ax_source="y = x * 2.0;\n",
+                backend_name="fake",
+                metadata={"raw_chars": 1},
+            )
+
+    monkeypatch.setattr(cli_mod, "_make_copilot_expert", lambda _a: _Ok())
+    main(
+        [
+            "copilot-doctor",
+            "--backend",
+            "onyx-qwen",
+            "--expert-url",
+            "http://x/",
+            "--expert-model",
+            "m",
+            "--temperature",
+            "0.35",
+            "--top-p",
+            "0.88",
+        ]
+    )
+    assert "connection: ok" in capsys.readouterr().out
 
 
 def test_copilot_doctor_parse_fail_exits_1(capsys, monkeypatch):

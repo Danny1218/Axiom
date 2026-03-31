@@ -566,6 +566,15 @@ def _serialize_evaluation_report(rep: Any) -> dict:
     return evaluation_report_to_dict(rep)
 
 
+def _completion_overrides_from_args(args: argparse.Namespace) -> Optional[Dict[str, Any]]:
+    out: Dict[str, Any] = {}
+    if getattr(args, "temperature", None) is not None:
+        out["temperature"] = float(args.temperature)
+    if getattr(args, "top_p", None) is not None:
+        out["top_p"] = float(args.top_p)
+    return out if out else None
+
+
 def _build_copilot_search_config(args: argparse.Namespace, expert) -> Any:
     """Shared by ``copilot-search`` and ``copilot-run`` (same evaluation modes and artifacts)."""
     from axiom.copilot.search import CopilotSearchConfig
@@ -646,6 +655,7 @@ def _build_copilot_search_config(args: argparse.Namespace, expert) -> Any:
         tabular_eval_expected_rows=tab_eval_exp,
         repair_valid_with_metrics=repair_valid,
         metric_repair_if_below=float(metric_below) if metric_below is not None else None,
+        completion_overrides=_completion_overrides_from_args(args),
     )
 
 
@@ -669,7 +679,14 @@ def _cmd_copilot_doctor(args: argparse.Namespace) -> None:
             expected_rows=None,
         )
     )
-    ctx[COMPLETION_OVERRIDES_CONTEXT_KEY] = {"temperature": 0}
+    co: Dict[str, Any] = {}
+    if getattr(args, "temperature", None) is not None:
+        co["temperature"] = float(args.temperature)
+    else:
+        co["temperature"] = 0.0
+    if getattr(args, "top_p", None) is not None:
+        co["top_p"] = float(args.top_p)
+    ctx[COMPLETION_OVERRIDES_CONTEXT_KEY] = co
 
     try:
         resp = expert.draft_program(ExpertDraftRequest(goal=args.goal, context=ctx))
@@ -1045,6 +1062,25 @@ def _add_copilot_search_loop_args(p: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_copilot_completion_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument(
+        "--temperature",
+        type=float,
+        default=None,
+        metavar="FLOAT",
+        help="Optional chat completion temperature (OpenAI-style; expert draft+repair when set). "
+        "0 or lower uses greedy decoding (Onyx: do_sample=false, temperature omitted from the HTTP body).",
+    )
+    p.add_argument(
+        "--top-p",
+        type=float,
+        default=None,
+        dest="top_p",
+        metavar="FLOAT",
+        help="Optional nucleus sampling top_p (expert draft+repair when set).",
+    )
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(
         prog="axiom",
@@ -1320,6 +1356,7 @@ def main(argv: list[str] | None = None) -> None:
         metavar="SEC",
         help="Per-request HTTP timeout in seconds (default: 120).",
     )
+    _add_copilot_completion_args(p_cdoc)
     p_cdoc.set_defaults(_handler=_cmd_copilot_doctor)
 
     p_cs = sub.add_parser(
@@ -1328,6 +1365,7 @@ def main(argv: list[str] | None = None) -> None:
     )
     _add_copilot_backend_args(p_cs)
     _add_copilot_search_loop_args(p_cs)
+    _add_copilot_completion_args(p_cs)
     p_cs.add_argument(
         "--report-out",
         type=Path,
@@ -1342,6 +1380,7 @@ def main(argv: list[str] | None = None) -> None:
     )
     _add_copilot_backend_args(p_cr)
     _add_copilot_search_loop_args(p_cr)
+    _add_copilot_completion_args(p_cr)
     p_cr.add_argument(
         "--summary-out",
         type=Path,

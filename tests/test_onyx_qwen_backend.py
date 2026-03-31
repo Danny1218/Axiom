@@ -18,6 +18,7 @@ from axiom.experts.onyx_qwen import (
     REPAIR_UNROLL_COLLAPSE_BLOCK,
     OnyxQwenBackend,
     ax_source_metadata_flags,
+    normalize_onyx_chat_completion_payload,
     OnyxQwenHTTPError,
     OnyxQwenParseError,
     OnyxQwenTimeoutError,
@@ -275,6 +276,30 @@ def test_successful_draft():
     assert SYSTEM_DRAFT in calls[0]["json"]["messages"][0]["content"]
 
 
+def test_repair_completion_overrides_merged_and_stripped_from_user_json():
+    calls: list[dict] = []
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        calls.append(json)
+        return _ok_response("```ax\nz = 1.0;\n```")
+
+    b = OnyxQwenBackend("http://h", "m", _post=fake_post)
+    from axiom.experts.onyx_qwen import COMPLETION_OVERRIDES_CONTEXT_KEY
+
+    b.repair_program(
+        ExpertRepairRequest(
+            "g",
+            current_program="a=1;",
+            error_report="e",
+            context={COMPLETION_OVERRIDES_CONTEXT_KEY: {"temperature": 0.1, "top_p": 0.9}, "k": 1},
+        )
+    )
+    assert calls[0].get("temperature") == 0.1
+    assert calls[0].get("top_p") == 0.9
+    user = calls[0]["messages"][1]["content"]
+    assert COMPLETION_OVERRIDES_CONTEXT_KEY not in user
+
+
 def test_draft_completion_overrides_merged_and_stripped_from_user_json():
     calls: list[dict] = []
 
@@ -289,10 +314,58 @@ def test_draft_completion_overrides_merged_and_stripped_from_user_json():
             context={COMPLETION_OVERRIDES_CONTEXT_KEY: {"temperature": 0}, "extra": 1},
         )
     )
-    assert calls[0].get("temperature") == 0
+    assert "temperature" not in calls[0]
+    assert calls[0].get("do_sample") is False
     user = calls[0]["messages"][1]["content"]
     assert COMPLETION_OVERRIDES_CONTEXT_KEY not in user
     assert "extra" in user
+
+
+def test_normalize_onyx_chat_completion_payload_zero_temperature_greedy():
+    p = {"model": "m", "messages": [], "temperature": 0.0}
+    normalize_onyx_chat_completion_payload(p)
+    assert "temperature" not in p
+    assert p.get("do_sample") is False
+
+
+def test_normalize_onyx_chat_completion_payload_negative_temperature_greedy():
+    p = {"model": "m", "messages": [], "temperature": -0.5, "top_p": 0.9}
+    normalize_onyx_chat_completion_payload(p)
+    assert "temperature" not in p and "top_p" not in p
+    assert p.get("do_sample") is False
+
+
+def test_normalize_onyx_chat_completion_payload_positive_unchanged():
+    p = {"model": "m", "messages": [], "temperature": 0.7, "top_p": 0.95}
+    normalize_onyx_chat_completion_payload(p)
+    assert p["temperature"] == 0.7 and p["top_p"] == 0.95
+    assert "do_sample" not in p
+
+
+def test_normalize_onyx_chat_completion_payload_no_temperature_no_op():
+    p = {"model": "m", "messages": [], "max_tokens": 10}
+    normalize_onyx_chat_completion_payload(p)
+    assert p == {"model": "m", "messages": [], "max_tokens": 10}
+
+
+def test_greedy_completion_overrides_drop_top_p_from_http_payload():
+    calls: list[dict] = []
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        calls.append(json)
+        return _ok_response("```ax\ny = 1.0;\n```")
+
+    b = OnyxQwenBackend("http://h", "m", _post=fake_post)
+    b.draft_program(
+        ExpertDraftRequest(
+            "g",
+            context={
+                COMPLETION_OVERRIDES_CONTEXT_KEY: {"temperature": 0.0, "top_p": 0.88},
+            },
+        )
+    )
+    assert "temperature" not in calls[0] and "top_p" not in calls[0]
+    assert calls[0].get("do_sample") is False
 
 
 def test_successful_repair():

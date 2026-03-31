@@ -460,10 +460,13 @@ def test_build_copilot_search_config_metric_repair_on_by_default_for_examples(tm
         repair_valid_with_metrics=False,
         no_repair_valid_with_metrics=False,
         metric_repair_if_below=None,
+        temperature=None,
+        top_p=None,
     )
     cfg = cli_mod._build_copilot_search_config(ns, object())
     assert cfg.mode == "predict_rows"
     assert cfg.repair_valid_with_metrics is True
+    assert cfg.completion_overrides is None
 
 
 def test_build_copilot_search_config_no_repair_valid_with_metrics(tmp_path: Path):
@@ -487,6 +490,8 @@ def test_build_copilot_search_config_no_repair_valid_with_metrics(tmp_path: Path
         repair_valid_with_metrics=False,
         no_repair_valid_with_metrics=True,
         metric_repair_if_below=None,
+        temperature=None,
+        top_p=None,
     )
     cfg = cli_mod._build_copilot_search_config(ns, object())
     assert cfg.repair_valid_with_metrics is False
@@ -513,9 +518,82 @@ def test_build_copilot_search_config_conflicting_repair_flags_exits(tmp_path: Pa
         repair_valid_with_metrics=True,
         no_repair_valid_with_metrics=True,
         metric_repair_if_below=None,
+        temperature=None,
+        top_p=None,
     )
     with pytest.raises(SystemExit, match="Cannot combine"):
         cli_mod._build_copilot_search_config(ns, object())
+
+
+def test_build_copilot_search_config_completion_overrides(tmp_path: Path):
+    from argparse import Namespace
+
+    ex_path = tmp_path / "ex.json"
+    ex_path.write_text(
+        json.dumps([{"inputs": {"x": 1.0}, "expected": {"y": 2.0}}]),
+        encoding="utf-8",
+    )
+    ns = Namespace(
+        goal="g",
+        context=None,
+        compile_only=False,
+        train_tabular=False,
+        tabular_json=None,
+        examples_json=ex_path,
+        iterations=3,
+        artifact_dir=None,
+        summarize_traces=False,
+        repair_valid_with_metrics=False,
+        no_repair_valid_with_metrics=False,
+        metric_repair_if_below=None,
+        temperature=0.15,
+        top_p=0.9,
+    )
+    cfg = cli_mod._build_copilot_search_config(ns, object())
+    assert cfg.completion_overrides == {"temperature": 0.15, "top_p": 0.9}
+
+
+def test_build_copilot_search_config_completion_overrides_temperature_zero(tmp_path: Path):
+    from argparse import Namespace
+
+    ex_path = tmp_path / "ex.json"
+    ex_path.write_text(
+        json.dumps([{"inputs": {"x": 1.0}, "expected": {"y": 2.0}}]),
+        encoding="utf-8",
+    )
+    ns = Namespace(
+        goal="g",
+        context=None,
+        compile_only=False,
+        train_tabular=False,
+        tabular_json=None,
+        examples_json=ex_path,
+        iterations=3,
+        artifact_dir=None,
+        summarize_traces=False,
+        repair_valid_with_metrics=False,
+        no_repair_valid_with_metrics=False,
+        metric_repair_if_below=None,
+        temperature=0.0,
+        top_p=None,
+    )
+    cfg = cli_mod._build_copilot_search_config(ns, object())
+    assert cfg.completion_overrides == {"temperature": 0.0}
+
+
+def test_copilot_run_help_includes_restarts_flag(capsys):
+    with pytest.raises(SystemExit) as e:
+        main(["copilot-run", "--help"])
+    assert e.value.code == 0
+    out = capsys.readouterr().out
+    assert "--restarts" in out and "--temperature" in out
+
+
+def test_copilot_search_help_includes_temperature(capsys):
+    with pytest.raises(SystemExit) as e:
+        main(["copilot-search", "--help"])
+    assert e.value.code == 0
+    assert "--temperature" in capsys.readouterr().out
 
 
 def test_serialize_evaluation_report_roundtrip_keys():

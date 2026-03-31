@@ -470,6 +470,25 @@ class OnyxQwenParseError(OnyxQwenError):
 PostFn = Callable[..., Any]
 
 
+def normalize_onyx_chat_completion_payload(payload: dict[str, Any]) -> None:
+    """Onyx rejects ``temperature: 0``; map non-positive temperature to greedy decoding in-place.
+
+    If ``temperature`` is present and ``<= 0`` (after ``float()``), drops ``temperature`` and
+    ``top_p``, and sets ``do_sample`` to ``False``. Positive temperatures are unchanged.
+    """
+    if "temperature" not in payload:
+        return
+    try:
+        t = float(payload["temperature"])
+    except (TypeError, ValueError):
+        return
+    if t > 0:
+        return
+    payload.pop("temperature", None)
+    payload["do_sample"] = False
+    payload.pop("top_p", None)
+
+
 def _assistant_content(data: Any) -> str:
     try:
         return str(data["choices"][0]["message"]["content"])
@@ -526,6 +545,7 @@ class OnyxQwenBackend:
             for k, v in completion_overrides.items():
                 if k != "messages" and k != "model":
                     payload[k] = v
+            normalize_onyx_chat_completion_payload(payload)
         try:
             r = post(
                 self._chat_url,
@@ -572,9 +592,13 @@ class OnyxQwenBackend:
         )
 
     def repair_program(self, request: ExpertRepairRequest) -> ExpertDraftResponse:
+        ctx = dict(request.context) if isinstance(request.context, Mapping) else {}
+        co = ctx.pop(COMPLETION_OVERRIDES_CONTEXT_KEY, None)
+        overrides = co if isinstance(co, dict) else None
         raw = self._chat(
             SYSTEM_REPAIR,
-            user_prompt_repair(request.goal, request.current_program, request.error_report, request.context),
+            user_prompt_repair(request.goal, request.current_program, request.error_report, ctx),
+            completion_overrides=overrides,
         )
         split = split_ax_and_prose(raw)
         return ExpertDraftResponse(
@@ -609,6 +633,7 @@ __all__ = [
     "OnyxQwenParseError",
     "OnyxQwenTimeoutError",
     "OnyxQwenTransportError",
+    "normalize_onyx_chat_completion_payload",
     "REPAIR_FEWSHOT",
     "SYSTEM_DRAFT",
     "SYSTEM_REPAIR",

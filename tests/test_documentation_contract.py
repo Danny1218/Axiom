@@ -53,6 +53,7 @@ def test_readme_documents_copilot_cli():
     assert "train_tabular" in text and "TrainTabularParams" in text
     assert "train-tabular" in text and "tabular-json" in text
     assert "copilot-benchmark" in text and "benchmark" in text.lower()
+    assert "temperature" in text.lower() and "Phase 82" in text
 
 
 def test_readme_from_compile_to_production_story():
@@ -201,6 +202,9 @@ def test_cli_source_wires_documented_train_features():
     assert "--train-tabular" in src and "--tabular-json" in src
     assert "artifact-dir" in src
     assert "summarize-traces" in src
+    assert "--temperature" in src and "_completion_overrides_from_args" in src
+    onyx_src = (_root() / "src" / "axiom" / "experts" / "onyx_qwen.py").read_text(encoding="utf-8")
+    assert "normalize_onyx_chat_completion_payload" in onyx_src
     assert (_root() / "src" / "axiom" / "copilot" / "benchmarks.py").is_file()
     assert "copilot-studio" in src and "copilot_studio.py" in src
     assert "copilot-serve" in src and "copilot.server" in src
