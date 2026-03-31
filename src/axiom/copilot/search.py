@@ -144,6 +144,164 @@ def _try_linear_xy_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraf
     )
 
 
+def _clamp01(v: float) -> float:
+    return max(0.0, min(1.0, v))
+
+
+def _is_strict01_interior(y: float) -> bool:
+    return y > 0.0 and y < 1.0
+
+
+def _solve_3x3_affine(
+    x1a: float,
+    x2a: float,
+    ya: float,
+    x1b: float,
+    x2b: float,
+    yb: float,
+    x1c: float,
+    x2c: float,
+    yc: float,
+) -> Optional[tuple[float, float, float]]:
+    """Solve ``a*x1 + b*x2 + c = y`` for three rows; return ``(a, b, c)`` or None if singular."""
+    m = [
+        [x1a, x2a, 1.0, ya],
+        [x1b, x2b, 1.0, yb],
+        [x1c, x2c, 1.0, yc],
+    ]
+    for col in range(3):
+        pivot = col
+        best = abs(m[col][col])
+        for r in range(col + 1, 3):
+            if abs(m[r][col]) > best:
+                best = abs(m[r][col])
+                pivot = r
+        if best < 1e-15:
+            return None
+        if pivot != col:
+            m[col], m[pivot] = m[pivot], m[col]
+        pv = m[col][col]
+        for j in range(4):
+            m[col][j] /= pv
+        for r in range(3):
+            if r == col:
+                continue
+            f = m[r][col]
+            if abs(f) < 1e-18:
+                continue
+            for j in range(4):
+                m[r][j] -= f * m[col][j]
+    return (m[0][3], m[1][3], m[2][3])
+
+
+def _bounded_affine2_inner_source(k1: str, k2: str, out_var: str, a: float, b: float, c: float) -> str:
+    ca, cb = _linear_xy_coeff_str(a), _linear_xy_coeff_str(b)
+    inner = f"{ca} * {k1} + {cb} * {k2}"
+    if not math.isclose(c, 0.0, abs_tol=1e-12, rel_tol=1e-12):
+        cc = _linear_xy_coeff_str(abs(c))
+        inner = f"{inner} - {cc}" if c < 0 else f"{inner} + {_linear_xy_coeff_str(c)}"
+    return f"{out_var} = max(0.0, min(1.0, {inner}));\n"
+
+
+def _try_bounded_affine2_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
+    """``out = max(0, min(1, a*x1 + b*x2 + c))`` with two numeric inputs and one output (exact fit only)."""
+    if not is_exact_symbolic_examples_task(config):
+        return None
+    if config.mode != "predict_rows":
+        return None
+    inp = config.example_input_rows
+    exp = config.expected_rows
+    if not inp or not exp or len(inp) != len(exp):
+        return None
+    n = len(inp)
+    if n < 3:
+        return None
+
+    in_keys: Optional[tuple[str, str]] = None
+    out_key: Optional[str] = None
+    interior: List[tuple[float, float, float]] = []
+    all_rows: List[tuple[float, float, float]] = []
+
+    for row_in, row_ex in zip(inp, exp):
+        if not isinstance(row_in, Mapping) or not isinstance(row_ex, Mapping):
+            return None
+        if len(row_in) != 2 or len(row_ex) != 1:
+            return None
+        ks = sorted(row_in.keys())
+        if in_keys is None:
+            in_keys = (ks[0], ks[1])
+        elif tuple(ks) != (in_keys[0], in_keys[1]):
+            return None
+        ok = next(iter(row_ex.keys()))
+        if out_key is None:
+            out_key = ok
+        elif ok != out_key:
+            return None
+        try:
+            x1 = float(row_in[in_keys[0]])
+            x2 = float(row_in[in_keys[1]])
+            y = float(row_ex[out_key])
+        except (TypeError, ValueError, KeyError):
+            return None
+        all_rows.append((x1, x2, y))
+        if _is_strict01_interior(y):
+            interior.append((x1, x2, y))
+
+    assert in_keys is not None and out_key is not None
+
+    if len(interior) < 3:
+        return None
+
+    ni = len(interior)
+    sol: Optional[tuple[float, float, float]] = None
+    for i in range(ni):
+        for j in range(i + 1, ni):
+            for k in range(j + 1, ni):
+                x1a, x2a, ya = interior[i]
+                x1b, x2b, yb = interior[j]
+                x1c, x2c, yc = interior[k]
+                cand = _solve_3x3_affine(x1a, x2a, ya, x1b, x2b, yb, x1c, x2c, yc)
+                if cand is None:
+                    continue
+                aa, bb, cc = cand
+                ok = True
+                for x1, x2, y in interior:
+                    if not math.isclose(aa * x1 + bb * x2 + cc, y, rel_tol=1e-11, abs_tol=1e-8):
+                        ok = False
+                        break
+                if ok:
+                    sol = (aa, bb, cc)
+                    break
+            if sol is not None:
+                break
+        if sol is not None:
+            break
+
+    if sol is None:
+        return None
+
+    aa, bb, cc = sol
+    for x1, x2, y in all_rows:
+        pred = _clamp01(aa * x1 + bb * x2 + cc)
+        if not math.isclose(pred, y, rel_tol=1e-11, abs_tol=1e-8):
+            return None
+
+    k1, k2 = in_keys[0], in_keys[1]
+    src = _bounded_affine2_inner_source(k1, k2, out_key, aa, bb, cc)
+    return ExpertDraftResponse(
+        ax_source=src,
+        backend_name="bounded_affine2_fast_path",
+        metadata={
+            "fast_path": "bounded_affine2",
+            "a": aa,
+            "b": bb,
+            "c": cc,
+            "in_keys": [k1, k2],
+            "out_key": out_key,
+        },
+    )
+
+
 def _compute_ranking_penalty(source: str, exact_symbolic_task: bool) -> tuple[float, Dict[str, float]]:
     flags = ax_source_metadata_flags(source)
     bd: Dict[str, float] = {}
@@ -548,6 +706,8 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
     ctx = merge_completion_overrides_into_context(ctx, config.completion_overrides)
     draft_req = ExpertDraftRequest(goal=config.goal, context=ctx)
     fast = _try_linear_xy_fast_path(config)
+    if fast is None:
+        fast = _try_bounded_affine2_fast_path(config)
     if fast is not None:
         draft_resp = fast
     else:

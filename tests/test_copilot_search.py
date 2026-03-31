@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -24,6 +25,7 @@ from axiom.copilot.benchmarks import default_neg_mse_score_fn
 from axiom.copilot.search import (
     DEFAULT_METRIC_REPAIR_THRESHOLD,
     _is_better,
+    _try_bounded_affine2_fast_path,
     _try_linear_xy_fast_path,
     is_exact_symbolic_examples_task,
     merge_completion_overrides_into_context,
@@ -591,3 +593,102 @@ def test_try_linear_xy_fast_path_none_when_keys_not_only_x_y():
         score_sort_key="neg_mse",
     )
     assert _try_linear_xy_fast_path(cfg) is None
+
+
+def _load_risk_score_v3_rows():
+    p = Path(__file__).resolve().parent.parent / "examples" / "risk_score_v3.json"
+    data = json.loads(p.read_text(encoding="utf-8"))
+    ex_in = [dict(x["inputs"]) for x in data]
+    ex_out = [dict(x["expected"]) for x in data]
+    return ex_in, ex_out
+
+
+def test_bounded_affine2_fast_path_risk_score_v3_exact():
+    ex_in, ex_out = _load_risk_score_v3_rows()
+    ex = ScriptedExpert("SHOULD_NOT_DRAFT", [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="risk_score weighted blend formula",
+        max_iterations=2,
+        mode="predict_rows",
+        example_input_rows=ex_in,
+        expected_rows=ex_out,
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+        repair_valid_with_metrics=False,
+    )
+    out = run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 0
+    assert out.iterations[0].producing_expert["backend_name"] == "bounded_affine2_fast_path"
+    want = "risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));"
+    assert out.best_source.strip() == want
+    assert out.converged and out.best_evaluation.success
+
+
+def test_bounded_affine2_fast_path_falls_back_when_row_noisy():
+    ex_in, ex_out = _load_risk_score_v3_rows()
+    ex_out = [dict(r) for r in ex_out]
+    ex_out[-1] = {"risk_score": 0.999}  # last row should be 1.0 for consistent blend
+    ex = ScriptedExpert(GOOD_DOUBLE_AX, [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="risk_score weighted blend formula",
+        max_iterations=2,
+        mode="predict_rows",
+        example_input_rows=ex_in,
+        expected_rows=ex_out,
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+        repair_valid_with_metrics=False,
+    )
+    run_copilot_search(cfg)
+    assert len(ex.draft_calls) >= 1
+
+
+def test_bounded_affine2_fast_path_falls_back_insufficient_strict_interior():
+    ex = ScriptedExpert(GOOD_DOUBLE_AX, [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="risk_score clamp",
+        max_iterations=2,
+        mode="predict_rows",
+        example_input_rows=[
+            {"risk_a": 0.0, "risk_b": 0.0},
+            {"risk_a": 1.0, "risk_b": 0.0},
+            {"risk_a": 0.0, "risk_b": 1.0},
+        ],
+        expected_rows=[
+            {"risk_score": 0.0},
+            {"risk_score": 0.7},
+            {"risk_score": 0.3},
+        ],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+        repair_valid_with_metrics=False,
+    )
+    assert _try_bounded_affine2_fast_path(cfg) is None
+    run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 1
+
+
+def test_bounded_affine2_clamp_edges_validated_on_v3_subset():
+    """Rows at 0, 1, and interior — clamp must match after inference."""
+    ex_in, ex_out = _load_risk_score_v3_rows()
+    # First 12 rows include clamp-to-0, interior, and clamp-to-1 cases
+    ex_in, ex_out = ex_in[:12], ex_out[:12]
+    r = _try_bounded_affine2_fast_path(
+        CopilotSearchConfig(
+            expert=ScriptedExpert(GOOD_AX, []),
+            goal="risk_score",
+            max_iterations=1,
+            mode="predict_rows",
+            example_input_rows=ex_in,
+            expected_rows=ex_out,
+            score_fn=default_neg_mse_score_fn(),
+            score_sort_key="neg_mse",
+        )
+    )
+    assert r is not None
+    assert "max(0.0, min(1.0" in r.ax_source
+    md = r.metadata
+    assert md.get("a") == pytest.approx(0.7) and md.get("b") == pytest.approx(0.3)
