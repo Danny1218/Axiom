@@ -142,27 +142,94 @@ Row file format (JSON array): each element is `{"inputs": {...}, "expected": {..
 
 **Exact-symbolic / anti-neural bias (Phase 78):** for small example-driven goals that look like affine or **`max`/`min`** clamps (e.g. **`risk_score`** in the goal), the draft/repair context sets **`exact_symbolic_examples_task`** so the Onyx prompts push **direct arithmetic** and **`REPAIR_NEURAL_TO_SYMBOLIC_BLOCK`** when the current program still uses **`neural(...)`**. Candidate selection uses **`adjusted_sort_score`** (raw metric minus small penalties for **`neural`** on these tasks, indexed **`x_0`** names, **`output(`**, and suspicious numerics like **`03`**); reports include **`ranking_penalty`** and **`adjusted_sort_score`**. No new CLI flags.
 
-**Exact-symbolic fast paths (deterministic):**
-- **What they do:** before the first expert draft call, search attempts a local symbolic inference from examples and emits canonical `.ax` directly when exact.
+**Exact-symbolic / control-flow fast paths (deterministic):**
+- **What they do:** before the first expert draft call, search runs a local symbolic inference over examples and emits canonical `.ax` immediately when it can prove an exact fit.
+- **Why they exist:** they reduce latency and backend load for common symbolic tasks, avoid unnecessary LLM variance, and keep outputs deterministic when the examples already define a closed form.
 - **When they activate:** only in **`predict_rows`** when **`exact_symbolic_examples_task`** is true.
-- **Supported shapes today:**
-  - single-input/single-output exact linear: **`y = a * x + b`**
-  - two-input/one-output bounded affine clamp: **`out = max(0.0, min(1.0, a * x1 + b * x2 + c));`**
-- **Fallback behavior:** if examples are ambiguous, underdetermined, non-numeric, or any row fails exact validation (including clamp edge rows), search falls back to the configured expert backend as normal.
-- **Example commands:**
+- **Supported task shapes today:**
+  - one-input affine (**double_x family**): **`y = a * x + b`**
+  - clamped two-input affine (**risk_score family**): **`out = max(0.0, min(1.0, a * x1 + b * x2 + c));`**
+  - one-input piecewise threshold identity / zero-floor (**piecewise_threshold family**): **`if (x < 0.0) y = 0.0 else y = x`**
+  - multi-input affine (**three_input_affine family**): **`out = sum(w_i * x_i) + b`**
+- **Fallback to Onyx expert backend:** if inference is ambiguous/underdetermined, rows are non-numeric, shape constraints do not match, or any row fails exact validation (including clamp edge rows), search proceeds with normal expert draft/repair.
+- **Concrete examples:** `double_x`, `risk_score`, `piecewise_threshold`, and `three_input_affine` are first-class targets for these fast paths.
+
+**What is now proven working:**
+- deterministic fast-path emission for the four task families above when rows define an exact fit
+- canonical `.ax` output for affine/clamp/piecewise control-flow forms
+- exact row validation gate before accepting a fast path
+- strict fallback to expert draft/repair when rows are ambiguous/noisy/out-of-shape
+
+**What is still model-dependent:**
+- tasks outside current exact fast-path families
+- any noisy or underdetermined example set (intent cannot be proven exactly)
+- generalization quality after fallback to LLM draft/repair
+- prompt-following quality under different expert backends/models
 
 ```powershell
-# double_x (exact linear)
-axiom copilot-search --backend onyx-qwen --goal "Compute y as double of x." `
-  --expert-url "https://api.example.com/v1/" --expert-model "qwen-7b" `
-  --examples-json ./examples/double_x.json --iterations 6 --artifact-dir ./debug_double_x
+# Local smoke bundles (Windows PowerShell)
+.\scripts\smoke_copilot_symbolic.ps1
+.\scripts\smoke_copilot_non_fast_path.ps1
 
-# risk_score (clamped two-input affine)
+# double_x — copilot-search
+axiom copilot-search --backend onyx-qwen --goal "Compute y as double of x." `
+  --expert-url "http://127.0.0.1:8000" --expert-model "onyx-qwen-production-v1" --expert-api-key "sk-morph-b2b-test" `
+  --examples-json ./examples/double_x.json --iterations 6 `
+  --artifact-dir ./debug_double_x --out ./debug_double_x/best.ax --report-out ./debug_double_x/search_report.json
+
+# double_x — copilot-run
+axiom copilot-run --backend onyx-qwen --goal "Compute y as double of x." `
+  --expert-url "http://127.0.0.1:8000" --expert-model "onyx-qwen-production-v1" --expert-api-key "sk-morph-b2b-test" `
+  --examples-json ./examples/double_x.json --iterations 6 `
+  --artifact-dir ./showcase_double_x --out ./showcase_double_x.ax --summary-out ./showcase_double_x/pipeline_summary.json
+
+# risk_score — copilot-search
 axiom copilot-search --backend onyx-qwen `
   --goal "Compute risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));" `
-  --expert-url "https://api.example.com/v1/" --expert-model "qwen-7b" `
-  --examples-json ./examples/risk_score_v3.json --iterations 8 --artifact-dir ./debug_risk_score
+  --expert-url "http://127.0.0.1:8000" --expert-model "onyx-qwen-production-v1" --expert-api-key "sk-morph-b2b-test" `
+  --examples-json ./examples/risk_score_v3.json --iterations 8 `
+  --artifact-dir ./debug_risk_score --out ./debug_risk_score/best.ax --report-out ./debug_risk_score/search_report.json
+
+# risk_score — copilot-run
+axiom copilot-run --backend onyx-qwen `
+  --goal "Compute risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));" `
+  --expert-url "http://127.0.0.1:8000" --expert-model "onyx-qwen-production-v1" --expert-api-key "sk-morph-b2b-test" `
+  --examples-json ./examples/risk_score_v3.json --iterations 8 `
+  --artifact-dir ./showcase_risk_score --out ./showcase_risk_score.ax --summary-out ./showcase_risk_score/pipeline_summary.json
+
+# piecewise_threshold — copilot-search
+axiom copilot-search --backend onyx-qwen `
+  --goal "Write a valid Axiom .ax program in this repo's DSL that computes y = x when x > 0, otherwise y = 0.0." `
+  --expert-url "http://127.0.0.1:8000" --expert-model "onyx-qwen-production-v1" --expert-api-key "sk-morph-b2b-test" `
+  --examples-json ./examples/piecewise_threshold.json --iterations 8 `
+  --artifact-dir ./debug_piecewise_threshold --out ./debug_piecewise_threshold/best.ax --report-out ./debug_piecewise_threshold/search_report_cli.json
+
+# piecewise_threshold — copilot-run
+axiom copilot-run --backend onyx-qwen `
+  --goal "Write a valid Axiom .ax program in this repo's DSL that computes y = x when x > 0, otherwise y = 0.0." `
+  --expert-url "http://127.0.0.1:8000" --expert-model "onyx-qwen-production-v1" --expert-api-key "sk-morph-b2b-test" `
+  --examples-json ./examples/piecewise_threshold.json --iterations 8 `
+  --artifact-dir ./showcase_piecewise_threshold --out ./showcase_piecewise_threshold.ax --summary-out ./showcase_piecewise_threshold/pipeline_summary.json
+
+# three_input_affine — copilot-search
+axiom copilot-search --backend onyx-qwen `
+  --goal "Write a valid Axiom .ax program in this repo's DSL that computes score = 0.5 * a + 0.3 * b + 0.2 * c." `
+  --expert-url "http://127.0.0.1:8000" --expert-model "onyx-qwen-production-v1" --expert-api-key "sk-morph-b2b-test" `
+  --examples-json ./examples/three_input_affine.json --iterations 8 `
+  --artifact-dir ./debug_three_input_affine --out ./debug_three_input_affine/best.ax --report-out ./debug_three_input_affine/search_report_cli.json
+
+# three_input_affine — copilot-run
+axiom copilot-run --backend onyx-qwen `
+  --goal "Write a valid Axiom .ax program in this repo's DSL that computes score = 0.5 * a + 0.3 * b + 0.2 * c." `
+  --expert-url "http://127.0.0.1:8000" --expert-model "onyx-qwen-production-v1" --expert-api-key "sk-morph-b2b-test" `
+  --examples-json ./examples/three_input_affine.json --iterations 8 `
+  --artifact-dir ./showcase_three_input_affine --out ./showcase_three_input_affine.ax --summary-out ./showcase_three_input_affine/pipeline_summary.json
 ```
+
+**Limitations / next targets:**
+- no multi-output symbolic inference yet
+- no symbolic inference for products/nonlinear terms beyond current bounded affine shape
+- no robust symbolic handling for noisy-but-close data (current behavior requires exact fit and otherwise falls back)
 
 **Train-tabular search:** use **`--train-tabular`** with **`--tabular-json path.json`** (do not combine with **`--compile-only`** or **`--examples-json`**). The file is one JSON **object**: **`target_var`**, **`train_rows`**, **`eval_rows`** (each row is **`{"inputs": {...}, "expected": {...}}`**; keys are merged for the evaluator), optional **`epochs`**, **`learning_rate`**, **`weight_decay`**, **`batch_size`**. Same schema as **`axiom.copilot.tabular_json`**. Metric-driven repair defaults **on** here as well (same CLI flags).
 
@@ -199,6 +266,16 @@ axiom copilot-run --backend onyx-qwen --goal "…" `
 ```
 
 **Benchmark harness:** `axiom.copilot.benchmarks` defines tiny NL tasks (`DEFAULT_BENCHMARK_TASKS`), compares draft-only vs full search, and serializes with **`benchmark_suite_to_dict`**. **CLI:** **`axiom copilot-benchmark`** (expert flags like other copilot commands; optional **`--task-json`**, **`--out`**, **`--draft-only`** or **`--search`**, **`--max-iterations`**). **HTTP:** with **`pip install -e ".[serve,copilot]"`**, **`POST /benchmarks/run`** on the copilot server accepts optional inline **`tasks`**, **`max_iterations`**, **`draft_only`**, **`search_only`**; response wraps the same JSON document under **`suite`**. Extra tasks can be loaded from **`axiom/copilot/fixtures/benchmark_tasks.json`** or your own file matching that schema.
+
+For local Onyx evaluation of symbolic + generalization tasks, use **`benchmarks/copilot_symbolic_and_generalization_tasks.json`** (includes labels like **`fast_path_expected`** and **`category`**; loader ignores unknown fields):
+
+```powershell
+axiom copilot-benchmark --backend onyx-qwen `
+  --expert-url "http://127.0.0.1:8000" --expert-model "onyx-qwen-production-v1" `
+  --expert-api-key "sk-morph-b2b-test" `
+  --task-json "./benchmarks/copilot_symbolic_and_generalization_tasks.json" `
+  --max-iterations 6 --out "./benchmarks/copilot_symbolic_and_generalization_results.json"
+```
 
 **In-memory tabular training (library API):** **`evaluate_program(..., mode="train_tabular")`** trains a compiled **`InterpretedBlock`** on **`train_rows`** with Adam (numeric dict rows, ABI-aware trunk fill, **`target_var`** column blinded in inputs like **`AxiomDataset`**), reports **`train_mse`** / **`eval_mse`** on **`eval_rows`**, optional **`TrainTabularParams`** (**`epochs`**, **`learning_rate`**, **`weight_decay`**, **`batch_size`**) and **`max_unroll`**. Purely symbolic programs get a **`no_trainable_parameters`** warning and eval metrics only—no subprocess and not a replacement for full **`axiom train`**.
 
