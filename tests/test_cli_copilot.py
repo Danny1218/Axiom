@@ -50,6 +50,12 @@ def test_copilot_search_help_exits_ok():
     assert exc.value.code == 0
 
 
+def test_copilot_serve_help_exits_ok():
+    with pytest.raises(SystemExit) as exc:
+        main(["copilot-serve", "--help"])
+    assert exc.value.code == 0
+
+
 def test_copilot_draft_runs_with_stub_expert(capsys, monkeypatch):
     fake = _FakeExpert()
     monkeypatch.setattr(cli_mod, "_make_copilot_expert", lambda _a: fake)

@@ -2,6 +2,8 @@
 
 ## Current phase
 
+**Phase 67** — **Copilot FastAPI server** — **`src/axiom/copilot/server.py`**: **`create_app(expert)`** — **`GET /health`**, **`POST /draft`**, **`POST /search`**, **`POST /summarize`** (wraps **`SemanticExpert`**; reuses **`run_copilot_search`**, **`build_draft_context`**, **`evaluation_report_to_dict`**, artifact persistence via **`CopilotSearchConfig.artifact_dir`**). Auth: optional **`AXIOM_COPILOT_API_KEY`** → Bearer / **`X-API-Key`** on POST routes only. Pydantic I/O in **`src/axiom/copilot/api_models.py`**. **`src/axiom/copilot/backend.py`**: **`build_onyx_qwen_expert`**, **`build_copilot_expert`** (shared with CLI **`_make_copilot_expert`**). CLI **`axiom copilot-serve --expert-url … --expert-model … --host --port`** (default port **8020**; needs **`pip install -e ".[serve,copilot]"`**). Does **not** modify **`axiom.serve.create_app`** or **`axiom.gateway.server`**. Tests: **`tests/test_copilot_server.py`**.
+
 **Phase 66** — **In-program `expert()` / `OP_EXPERT`** — Syntax **`expert("backend_name", feature_expr)`** (second argument is any expression that evaluates to **`(B,)`** or **`(B,K)`** on the trunk stack, typically **`[a, b, …]`**). Lowers to **`("OP_EXPERT", name, input_ir)`** — **not** **`OP_NEURAL`**; **not differentiable**; **no ONNX export** (**`interpreted_block_ir_contains_expert`** + **`OnnxExportError`** in **`src/axiom/export/onnx_export.py`**). Runtime: **`InterpretedBlock(..., expert_handler=Callable[[str, Sequence[float]], float], expert_fallback: Optional[float])`**; missing both → **`ExpertRuntimeError`**. Threaded through **`eval_expr`**, **`exec_stmt`**, **`run_while_loop`**, **`run_loop_snapshots`**, optional **`InterpretedLiquidLoop`** kwargs. Audit: **`_last_expert_trace`**; **`AxiomModel.explain`** adds **`expert_calls`**. **`src/axiom/engine/expert_call.py`**: **`ExpertHandler`**, **`ExpertRuntimeError`**. Reserved name (**`ir.RESERVED_EXPERT_BUILTIN`**). Tests: **`tests/test_expert_opcode.py`**.
 
 **Phase 65** — **Copilot benchmark harness** — **`src/axiom/copilot/benchmarks.py`**: small **NL→`.ax`** tasks (**finance-style threshold policy**, **blended risk score**, **while-loop counter** in **`DEFAULT_BENCHMARK_TASKS`**), optional JSON at **`src/axiom/copilot/fixtures/benchmark_tasks.json`** (**`load_benchmark_tasks_json_path`** / **`benchmark_tasks_from_json_dict`**). **`run_benchmark_draft_only`**, **`run_benchmark_search`**, **`run_benchmark_suite`** compare draft vs repair loop; **`compile_success`** / **`metric_success`** + **`summarize_rates`**; **`benchmark_suite_to_dict`** for JSON. **`BenchmarkDispatchExpert`** maps **`benchmark_task_id`** in draft/repair context to reference **`.ax`** (tests / offline baselines). **`CopilotSearchConfig.draft_context_extras`** / **`repair_context_extras`** merge into expert payloads. No HTTP in-module. Tests: **`tests/test_copilot_benchmarks.py`**.
@@ -132,14 +134,14 @@
 - `src/axiom/compiler/`, `src/axiom/engine/`, `src/axiom/primitives/`
 - `src/axiom/engine/expert_call.py` — Phase 66 **`OP_EXPERT`** types / **`ExpertRuntimeError`**
 - `src/axiom/experts/` — Phase 58 protocol + registry; Phase 59 **`onyx_qwen.py`** (optional **`[copilot]`**)
-- `src/axiom/copilot/` — Phase 60 **`search.py`** + Phase 62 **`artifacts.py`** + Phase 64 **`summarize.py`** + Phase 65 **`benchmarks.py`** + **`fixtures/benchmark_tasks.json`**
-- `tests/` — **`tests/test_architecture_baseline.py`**, **`tests/test_expert_opcode.py`**, **`tests/test_experts.py`**, **`tests/test_onyx_qwen_backend.py`**, **`tests/test_copilot_evaluator.py`**, **`tests/test_copilot_search.py`**, **`tests/test_cli_copilot.py`**, **`tests/test_copilot_artifacts.py`**, **`tests/test_copilot_studio.py`**, **`tests/test_copilot_summarize.py`**, **`tests/test_copilot_benchmarks.py`**
+- `src/axiom/copilot/` — Phase 60 **`search.py`** + Phase 62 **`artifacts.py`** + Phase 64 **`summarize.py`** + Phase 65 **`benchmarks.py`** + Phase 67 **`server.py`**, **`api_models.py`**, **`backend.py`** + **`fixtures/benchmark_tasks.json`**
+- `tests/` — **`tests/test_architecture_baseline.py`**, **`tests/test_expert_opcode.py`**, **`tests/test_experts.py`**, **`tests/test_onyx_qwen_backend.py`**, **`tests/test_copilot_evaluator.py`**, **`tests/test_copilot_search.py`**, **`tests/test_cli_copilot.py`**, **`tests/test_copilot_artifacts.py`**, **`tests/test_copilot_studio.py`**, **`tests/test_copilot_summarize.py`**, **`tests/test_copilot_benchmarks.py`**, **`tests/test_copilot_server.py`**
 
 ## Next target (semantic copilot — wiring)
 
 **Done:** typed **expert** API (**Phase 58**) + **Onyx/Qwen HTTP adapter** (**Phase 59**) + **in-memory evaluate harness** + **semantic draft–repair–search loop** (**Phase 60**) + **copilot CLI** (**Phase 61**) + **artifact persistence** (**Phase 62**) + **Copilot Studio** Streamlit UI (**Phase 63**) + **optional `summarize_trace` integration** (**Phase 64**) + **internal NL→`.ax` benchmark harness** (**Phase 65**).
 
-**Not started:** copilot **FastAPI** routes, **`train_tabular`** inside the harness (use **`axiom train`** / **`EvolutionaryTrainer`**).
+**Not started:** **`train_tabular`** inside the harness (use **`axiom train`** / **`EvolutionaryTrainer`**). **Done (Phase 67):** copilot **FastAPI** (**`axiom copilot-serve`**).
 
 ## IR opcodes
 
@@ -188,6 +190,10 @@ axiom inspect
 # axiom copilot-search --backend onyx-qwen --goal "..." --expert-url https://host/v1/ --expert-model qwen-7b --iterations 5 --artifact-dir ./copilot_trace
 # axiom copilot-search ... --summarize-traces   # optional expert trace narration (Phase 64)
 # axiom copilot-studio   # Streamlit UI — pip install -e ".[inspect,copilot]"
+# Copilot HTTP API (Phase 67 — separate from axiom serve / gateway):
+# pip install -e ".[serve,copilot]"
+# $env:AXIOM_COPILOT_API_KEY="optional-post-guard"
+# axiom copilot-serve --expert-url https://host/v1/ --expert-model qwen-7b --host 127.0.0.1 --port 8020
 ```
 
 ## Next

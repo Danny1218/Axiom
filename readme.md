@@ -104,6 +104,8 @@ Install **`[copilot]`** so `requests` is available. Pass **`--expert-url`** (API
 
 **Copilot Studio (optional UI):** install **`[inspect]`** and **`[copilot]`** (`pip install -e ".[inspect,copilot]"`), then run **`axiom copilot-studio`**. It opens a separate Streamlit app from Glass Box (`axiom inspect`): enter expert URL / model / API key, goal, optional context, iteration limit, optional **Summarize traces**, then use **Draft once** or **Run search** — nothing calls the network until you click. You get tables for iteration summaries, expandable eval/metrics/failure JSON, and download buttons for **`draft.ax`**, **`best.ax`**, and **`copilot_report.json`**.
 
+**Copilot HTTP server (Phase 67):** headless FastAPI app for **`/draft`**, **`/search`**, **`/summarize`**, and **`/health`** — not **`axiom serve`** (bundles) and not the policy gateway. Install **`pip install -e ".[serve,copilot]"`**, then e.g. **`axiom copilot-serve --expert-url https://your-host/v1/ --expert-model qwen-7b --port 8020`**. Optional **`AXIOM_COPILOT_API_KEY`**: when set, POST routes require **`Authorization: Bearer …`** or **`X-API-Key`** (health stays open). Downstream chat auth for the expert remains **`AXIOM_EXPERT_API_KEY`** / **`--expert-api-key`** as for the CLI.
+
 **Draft** (goal → single program):
 
 ```powershell

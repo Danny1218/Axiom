@@ -397,6 +397,36 @@ def _cmd_inspect(_args: argparse.Namespace) -> int:
     )
 
 
+def _cmd_copilot_serve(args: argparse.Namespace) -> None:
+    try:
+        import uvicorn
+    except ImportError as e:
+        raise SystemExit(
+            'axiom copilot-serve requires FastAPI/uvicorn: pip install -e ".[serve]"'
+        ) from e
+    _require_requests_for_copilot()
+    from axiom.copilot.backend import build_copilot_expert
+    from axiom.copilot.server import create_app
+
+    url = (args.expert_url or "").strip()
+    model = (args.expert_model or "").strip()
+    if not url:
+        raise SystemExit("--expert-url is required.")
+    if not model:
+        raise SystemExit("--expert-model is required.")
+    key = args.expert_api_key
+    if key is None or str(key).strip() == "":
+        key = os.environ.get("AXIOM_EXPERT_API_KEY")
+    try:
+        expert = build_copilot_expert(
+            args.backend, expert_url=url, expert_model=model, expert_api_key=key
+        )
+    except ValueError as e:
+        raise SystemExit(str(e)) from e
+    app = create_app(expert)
+    uvicorn.run(app, host=str(args.host), port=int(args.port), log_level="info")
+
+
 def _cmd_copilot_studio(_args: argparse.Namespace) -> int:
     try:
         import streamlit  # noqa: F401
@@ -440,7 +470,7 @@ def _make_copilot_expert(args: argparse.Namespace):
     _require_requests_for_copilot()
     if args.backend != "onyx-qwen":
         raise SystemExit(f"Unsupported --backend {args.backend!r} (expected onyx-qwen).")
-    from axiom.experts.onyx_qwen import OnyxQwenBackend
+    from axiom.copilot.backend import build_copilot_expert
 
     url = (args.expert_url or "").strip()
     model = (args.expert_model or "").strip()
@@ -451,7 +481,12 @@ def _make_copilot_expert(args: argparse.Namespace):
     key = args.expert_api_key
     if key is None or str(key).strip() == "":
         key = os.environ.get("AXIOM_EXPERT_API_KEY")
-    return OnyxQwenBackend(url, model, api_key=key)
+    try:
+        return build_copilot_expert(
+            args.backend, expert_url=url, expert_model=model, expert_api_key=key
+        )
+    except ValueError as e:
+        raise SystemExit(str(e)) from e
 
 
 def _load_examples_json(path: Path) -> Tuple[List[dict], List[dict]]:
@@ -652,7 +687,7 @@ def _add_copilot_backend_args(p: argparse.ArgumentParser) -> None:
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(
         prog="axiom",
-        description="Axiom neural compiler CLI (train, predict, copilot-draft, copilot-search, copilot-studio, lock-bundle, export-onnx, inspect, serve, gateway-serve).",
+        description="Axiom neural compiler CLI (train, predict, copilot-draft, copilot-search, copilot-serve, copilot-studio, lock-bundle, export-onnx, inspect, serve, gateway-serve).",
     )
     sub = ap.add_subparsers(dest="cmd", required=True)
 
@@ -724,6 +759,38 @@ def main(argv: list[str] | None = None) -> None:
         help='Copilot Studio: Streamlit UI for draft/search (needs pip install -e ".[inspect,copilot]").',
     )
     p_copilot_studio.set_defaults(_handler=_cmd_copilot_studio)
+
+    p_copilot_serve = sub.add_parser(
+        "copilot-serve",
+        help='HTTP copilot API: /draft, /search, /summarize (needs pip install -e ".[serve,copilot]").',
+    )
+    p_copilot_serve.add_argument(
+        "--backend",
+        choices=["onyx-qwen"],
+        default="onyx-qwen",
+        help="Semantic expert backend (default: onyx-qwen).",
+    )
+    p_copilot_serve.add_argument(
+        "--expert-url",
+        type=str,
+        required=True,
+        help="Base URL for chat/completions (e.g. https://api.example.com/v1/).",
+    )
+    p_copilot_serve.add_argument(
+        "--expert-model",
+        type=str,
+        required=True,
+        help="Remote model id for the chat API.",
+    )
+    p_copilot_serve.add_argument(
+        "--expert-api-key",
+        type=str,
+        default=None,
+        help="Optional API key (else AXIOM_EXPERT_API_KEY). POST routes may also require AXIOM_COPILOT_API_KEY.",
+    )
+    p_copilot_serve.add_argument("--host", type=str, default="127.0.0.1", help="Bind address.")
+    p_copilot_serve.add_argument("--port", type=int, default=8020, help="TCP port (default: 8020).")
+    p_copilot_serve.set_defaults(_handler=_cmd_copilot_serve)
 
     p_predict = sub.add_parser(
         "predict",
@@ -917,6 +984,9 @@ def main(argv: list[str] | None = None) -> None:
         handler(args)
         return
     if handler is _cmd_copilot_search:
+        handler(args)
+        return
+    if handler is _cmd_copilot_serve:
         handler(args)
         return
     handler(args)

@@ -47,6 +47,7 @@ def test_readme_documents_copilot_cli():
     assert "Semantic copilot" in text and "inputs" in text and "expected" in text
     assert "artifact-dir" in text and "iterations.json" in text and "search_report.json" in text
     assert "copilot-studio" in text and "Copilot Studio" in text
+    assert "copilot-serve" in text and "AXIOM_COPILOT_API_KEY" in text
 
 
 def test_readme_from_compile_to_production_story():
@@ -163,6 +164,7 @@ def test_array_literal_and_indexing_ir():
         ["copilot-draft", "--help"],
         ["copilot-search", "--help"],
         ["copilot-studio", "--help"],
+        ["copilot-serve", "--help"],
     ],
 )
 def test_cli_subcommands_help_exits_ok(argv: list):
@@ -190,6 +192,7 @@ def test_cli_source_wires_documented_train_features():
     assert "summarize-traces" in src
     assert (_root() / "src" / "axiom" / "copilot" / "benchmarks.py").is_file()
     assert "copilot-studio" in src and "copilot_studio.py" in src
+    assert "copilot-serve" in src and "copilot.server" in src
 
 
 def test_cli_rejects_dataset_and_csv_together():
