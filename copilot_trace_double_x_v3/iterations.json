@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "kind": "axiom.copilot.iterations",
+  "goal": "Write a valid Axiom .ax program in this repo's DSL that computes y = x * 2.0;",
+  "domain_context": null,
+  "backend_name": "onyx_qwen",
+  "evaluation_mode": "predict_rows",
+  "max_iterations_config": 5,
+  "iteration_count": 1,
+  "score_sort_key": "neg_mse",
+  "iterations": [
+    {
+      "index": 0,
+      "candidate_source": "result = neural([x], \"liquid\");\ny = result[0];",
+      "success": true,
+      "compile_stage_reached": "predict",
+      "metrics": {
+        "neg_mse": -19.450633813999218
+      },
+      "program_metrics": [
+        {
+          "name": "neg_mse",
+          "value": -19.450633813999218
+        }
+      ],
+      "failure_summaries": [],
+      "warnings": [],
+      "producing_expert": {
+        "expert_call": "draft",
+        "backend_name": "onyx_qwen",
+        "metadata": {
+          "model": "onyx-qwen-production-v1",
+          "raw_chars": 56,
+          "extraction_mode": "fenced_ax",
+          "code_line_count": 2
+        },
+        "explanation": null
+      },
+      "producing_payload": {
+        "type": "draft",
+        "goal": "Write a valid Axiom .ax program in this repo's DSL that computes y = x * 2.0;",
+        "context": {
+          "domain_context": "",
+          "example_input_rows": [
+            {
+              "x": 1.0
+            },
+            {
+              "x": 2.5
+            },
+            {
+              "x": -3.0
+            },
+            {
+              "x": 0.0
+            }
+          ],
+          "expected_outputs": [
+            {
+              "y": 2.0
+            },
+            {
+              "y": 5.0
+            },
+            {
+              "y": -6.0
+            },
+            {
+              "y": 0.0
+            }
+          ]
+        }
+      },
+      "outgoing_repair_error_report": null,
+      "semantic_trace_summary": null
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+# Axiom Engine Development Rules
+1. We are building a PyTorch-based neural compiler and Differentiable Neural Architecture Search (DNAS) engine.
+2. STRICT TYPING: All Python code must use strict type hinting (e.g., `Tensor`, `Dict`, `List`).
+3. AUTOGRAD STABILITY: Never use inplace PyTorch operations (e.g., `add_()`). The backward pass must never shatter.
+4. MODULARITY: Keep files under 200 lines. Separate parsing (Lark), IR logic, and PyTorch `nn.Modules` into distinct directories.
+5. MEMORY EFFICIENCY: We are running this locally. Prioritize Low-Rank Adaptation (LoRA) and aggressive memory clearing over dense matrix allocations.

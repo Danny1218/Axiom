@@ -722,9 +722,9 @@ def _symbolic_row_error_hints(
     offset = _constant_offset_from_row_comparisons(row_comparisons)
     if offset is not None:
         hints.append(
-            "Row errors suggest a near-constant offset across rows "
+            "Row errors show a **near-constant offset** across rows "
             f"(`predicted - expected ~= {offset:.6g}`): missing or altered additive bias is likely; "
-            "preserve additive bias terms exactly."
+            "**preserve additive bias terms exactly** (intercept / constant term)."
         )
 
     xs, errs, _ = _extract_numeric_row_errors(row_comparisons)
@@ -778,16 +778,22 @@ def _symbolic_row_error_hints(
         )
         if strong:
             hints.append(
-                "Row errors suggest the interaction term is missing or wrong "
-                f"(error tracks `{best_pair}` with corr~{best_pair_corr:.2f}). "
-                f"Preserve interaction terms exactly; keep an explicit `{best_pair}` (or equivalent) in the formula. "
-                "Do not replace interaction terms with scaled unary terms."
+                "**Missing or wrong interaction term** (e.g. `a * b`): row errors track the product "
+                f"`{best_pair}` (corr~{best_pair_corr:.2f}). "
+                f"**Preserve interaction terms exactly**; keep an explicit `{best_pair}` (or equivalent). "
+                "**Do not replace interaction terms with scaled unary terms.**"
             )
         elif moderate:
             hints.append(
                 f"Row errors partially align with `{best_pair}` (corr~{best_pair_corr:.2f}); "
-                f"verify an explicit interaction term like `{best_pair}` is present and correct — "
-                "preserve interaction terms exactly; do not replace interaction terms with scaled unary terms."
+                f"check for a **missing interaction term** like `{best_pair}` — **preserve interaction terms exactly**; "
+                "**do not replace interaction terms with scaled unary terms.**"
+            )
+        elif max(abs(e) for e in errs) > 1e-9:
+            hints.append(
+                "Goal appears to combine a **product** (`a * b`), unary terms, and a **bias**; row errors remain. "
+                "**Preserve interaction terms exactly** and **additive bias terms exactly**; "
+                "**do not replace interaction terms with scaled unary terms** (e.g. `a * 2` instead of `a * b`)."
             )
     return hints
 
@@ -795,11 +801,13 @@ def _symbolic_row_error_hints(
 def _exact_symbolic_row_repair_preamble() -> str:
     """Fixed bullets for exact-symbolic tasks with row data (repair prompts only)."""
     return (
-        "- Preserve interaction terms exactly (e.g. `a * b` when the goal requires a product of inputs).\n"
-        "- Preserve additive bias terms exactly (intercepts, constant offsets).\n"
-        "- Do not replace interaction terms with scaled unary terms.\n"
-        "- Check row errors for: missing interaction term (`a * b`), distorted coefficient on a variable, "
-        "or missing/altered additive bias.\n"
+        "- **Preserve interaction terms exactly** (e.g. `a * b` when the goal requires a product of inputs).\n"
+        "- **Preserve additive bias terms exactly** (intercepts, constant offsets).\n"
+        "- **Do not replace interaction terms with scaled unary terms** (e.g. `a * 2` or `2.0 * a` standing in for `a * b`).\n"
+        "- Check row errors for: **missing interaction term** (`a * b`), **distorted coefficient** on a variable, "
+        "or **missing or altered additive bias**.\n"
+        "- Do not accept common wrong shapes when the goal specifies `a * b + …` — e.g. `y = a + a * b` (wrong bias) "
+        "or `y = a * 2 + a + 1.0` (scaled unary instead of `a * b`) unless they match every row.\n"
     )
 
 

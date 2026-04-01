@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "kind": "axiom.copilot.search_report",
+  "goal": "Write a valid Axiom .ax program in this repo's DSL that computes y = x * 2.0;",
+  "domain_context": null,
+  "backend_name": "onyx_qwen",
+  "converged": true,
+  "iteration_count": 1,
+  "evaluation_mode": "predict_rows",
+  "max_iterations_config": 5,
+  "score_sort_key": "neg_mse",
+  "artifact_files": {
+    "best_ax": "best.ax",
+    "iterations": "iterations.json",
+    "search_report": "search_report.json"
+  },
+  "best_evaluation": {
+    "success": true,
+    "source": "result = neural([x], \"liquid\");\ny = result[0];",
+    "compile_stage_reached": "predict",
+    "mode": "predict_rows",
+    "failures": [],
+    "warnings": [],
+    "metrics": {
+      "neg_mse": -19.450633813999218
+    },
+    "program_metrics": [
+      {
+        "name": "neg_mse",
+        "value": -19.450633813999218
+      }
+    ]
+  },
+  "final_evaluation": {
+    "success": true,
+    "source": "result = neural([x], \"liquid\");\ny = result[0];",
+    "compile_stage_reached": "predict",
+    "mode": "predict_rows",
+    "failures": [],
+    "warnings": [],
+    "metrics": {
+      "neg_mse": -19.450633813999218
+    },
+    "program_metrics": [
+      {
+        "name": "neg_mse",
+        "value": -19.450633813999218
+      }
+    ]
+  },
+  "failures_metrics_summary": {
+    "per_iteration": [
+      {
+        "index": 0,
+        "success": true,
+        "metrics": {
+          "neg_mse": -19.450633813999218
+        },
+        "failure_count": 0,
+        "failure_summaries": []
+      }
+    ],
+    "best": {
+      "success": true,
+      "metrics": {
+        "neg_mse": -19.450633813999218
+      },
+      "failure_count": 0
+    },
+    "final": {
+      "success": true,
+      "metrics": {
+        "neg_mse": -19.450633813999218
+      },
+      "failure_count": 0
+    }
+  },
+  "semantic_summaries": {
+    "enabled": false,
+    "per_iteration": [
+      {
+        "index": 0,
+        "semantic_trace_summary": null
+      }
+    ]
+  }
+}

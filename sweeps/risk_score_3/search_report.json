@@ -1,0 +1,860 @@
+{
+  "schema_version": 1,
+  "kind": "axiom.copilot.search_report",
+  "goal": "Write a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));",
+  "domain_context": null,
+  "backend_name": "onyx_qwen",
+  "converged": false,
+  "convergence_reason": "metric_budget_exhausted",
+  "metric_repair": {
+    "enabled": true,
+    "threshold_effective": -1e-09,
+    "metric_repair_if_below_config": null
+  },
+  "iteration_count": 10,
+  "evaluation_mode": "predict_rows",
+  "max_iterations_config": 10,
+  "score_sort_key": "neg_mse",
+  "artifact_files": {
+    "best_ax": "best.ax",
+    "iterations": "iterations.json",
+    "search_report": "search_report.json"
+  },
+  "best_evaluation": {
+    "success": true,
+    "source": "risk_score = max(min(0.7*risk_a +  0.2*risk_b, 1), 0);",
+    "compile_stage_reached": "predict",
+    "mode": "predict_rows",
+    "failures": [],
+    "warnings": [],
+    "metrics": {
+      "neg_mse": -0.009511765220936677
+    },
+    "program_metrics": [
+      {
+        "name": "neg_mse",
+        "value": -0.009511765220936677
+      }
+    ],
+    "row_comparisons": [
+      {
+        "inputs": {
+          "risk_a": 0.0,
+          "risk_b": 3.5
+        },
+        "predicted": {
+          "risk_score": 0.699999988079071,
+          "risk_a": 0.0,
+          "risk_b": 3.5
+        },
+        "expected": {
+          "risk_score": 1.0
+        },
+        "abs_error": {
+          "risk_score": 0.30000001192092896
+        },
+        "row_max_abs_error": 0.30000001192092896
+      },
+      {
+        "inputs": {
+          "risk_a": 0.0,
+          "risk_b": 2.0
+        },
+        "predicted": {
+          "risk_score": 0.4000000059604645,
+          "risk_a": 0.0,
+          "risk_b": 2.0
+        },
+        "expected": {
+          "risk_score": 0.6
+        },
+        "abs_error": {
+          "risk_score": 0.1999999940395355
+        },
+        "row_max_abs_error": 0.1999999940395355
+      },
+      {
+        "inputs": {
+          "risk_a": 1.0,
+          "risk_b": 1.0
+        },
+        "predicted": {
+          "risk_score": 0.8999999761581421,
+          "risk_a": 1.0,
+          "risk_b": 1.0
+        },
+        "expected": {
+          "risk_score": 1.0
+        },
+        "abs_error": {
+          "risk_score": 0.10000002384185791
+        },
+        "row_max_abs_error": 0.10000002384185791
+      },
+      {
+        "inputs": {
+          "risk_a": 0.0,
+          "risk_b": 1.0
+        },
+        "predicted": {
+          "risk_score": 0.20000000298023224,
+          "risk_a": 0.0,
+          "risk_b": 1.0
+        },
+        "expected": {
+          "risk_score": 0.3
+        },
+        "abs_error": {
+          "risk_score": 0.09999999701976775
+        },
+        "row_max_abs_error": 0.09999999701976775
+      },
+      {
+        "inputs": {
+          "risk_a": 0.1,
+          "risk_b": 0.7
+        },
+        "predicted": {
+          "risk_score": 0.21000000834465027,
+          "risk_a": 0.10000000149011612,
+          "risk_b": 0.699999988079071
+        },
+        "expected": {
+          "risk_score": 0.28
+        },
+        "abs_error": {
+          "risk_score": 0.06999999165534976
+        },
+        "row_max_abs_error": 0.06999999165534976
+      },
+      {
+        "inputs": {
+          "risk_a": 0.5,
+          "risk_b": 0.5
+        },
+        "predicted": {
+          "risk_score": 0.44999998807907104,
+          "risk_a": 0.5,
+          "risk_b": 0.5
+        },
+        "expected": {
+          "risk_score": 0.5
+        },
+        "abs_error": {
+          "risk_score": 0.050000011920928955
+        },
+        "row_max_abs_error": 0.050000011920928955
+      },
+      {
+        "inputs": {
+          "risk_a": 0.0,
+          "risk_b": 0.5
+        },
+        "predicted": {
+          "risk_score": 0.10000000149011612,
+          "risk_a": 0.0,
+          "risk_b": 0.5
+        },
+        "expected": {
+          "risk_score": 0.15
+        },
+        "abs_error": {
+          "risk_score": 0.049999998509883875
+        },
+        "row_max_abs_error": 0.049999998509883875
+      },
+      {
+        "inputs": {
+          "risk_a": 0.2,
+          "risk_b": 0.4
+        },
+        "predicted": {
+          "risk_score": 0.2199999988079071,
+          "risk_a": 0.20000000298023224,
+          "risk_b": 0.4000000059604645
+        },
+        "expected": {
+          "risk_score": 0.26
+        },
+        "abs_error": {
+          "risk_score": 0.040000001192092904
+        },
+        "row_max_abs_error": 0.040000001192092904
+      },
+      {
+        "inputs": {
+          "risk_a": 0.1,
+          "risk_b": 0.1
+        },
+        "predicted": {
+          "risk_score": 0.09000000357627869,
+          "risk_a": 0.10000000149011612,
+          "risk_b": 0.10000000149011612
+        },
+        "expected": {
+          "risk_score": 0.1
+        },
+        "abs_error": {
+          "risk_score": 0.009999996423721319
+        },
+        "row_max_abs_error": 0.009999996423721319
+      },
+      {
+        "inputs": {
+          "risk_a": 0.3,
+          "risk_b": 0.1
+        },
+        "predicted": {
+          "risk_score": 0.23000000417232513,
+          "risk_a": 0.30000001192092896,
+          "risk_b": 0.10000000149011612
+        },
+        "expected": {
+          "risk_score": 0.24
+        },
+        "abs_error": {
+          "risk_score": 0.009999995827674857
+        },
+        "row_max_abs_error": 0.009999995827674857
+      },
+      {
+        "inputs": {
+          "risk_a": 1.0,
+          "risk_b": 0.0
+        },
+        "predicted": {
+          "risk_score": 0.699999988079071,
+          "risk_a": 1.0,
+          "risk_b": 0.0
+        },
+        "expected": {
+          "risk_score": 0.7
+        },
+        "abs_error": {
+          "risk_score": 1.1920928910669204e-08
+        },
+        "row_max_abs_error": 1.1920928910669204e-08
+      },
+      {
+        "inputs": {
+          "risk_a": 0.5,
+          "risk_b": 0.0
+        },
+        "predicted": {
+          "risk_score": 0.3499999940395355,
+          "risk_a": 0.5,
+          "risk_b": 0.0
+        },
+        "expected": {
+          "risk_score": 0.35
+        },
+        "abs_error": {
+          "risk_score": 5.960464455334602e-09
+        },
+        "row_max_abs_error": 5.960464455334602e-09
+      },
+      {
+        "inputs": {
+          "risk_a": 0.0,
+          "risk_b": 0.0
+        },
+        "predicted": {
+          "risk_score": 0.0,
+          "risk_a": 0.0,
+          "risk_b": 0.0
+        },
+        "expected": {
+          "risk_score": 0.0
+        },
+        "abs_error": {
+          "risk_score": 0.0
+        },
+        "row_max_abs_error": 0.0
+      },
+      {
+        "inputs": {
+          "risk_a": -1.0,
+          "risk_b": 0.0
+        },
+        "predicted": {
+          "risk_score": 0.0,
+          "risk_a": -1.0,
+          "risk_b": 0.0
+        },
+        "expected": {
+          "risk_score": 0.0
+        },
+        "abs_error": {
+          "risk_score": 0.0
+        },
+        "row_max_abs_error": 0.0
+      },
+      {
+        "inputs": {
+          "risk_a": -0.5,
+          "risk_b": 1.0
+        },
+        "predicted": {
+          "risk_score": 0.0,
+          "risk_a": -0.5,
+          "risk_b": 1.0
+        },
+        "expected": {
+          "risk_score": 0.0
+        },
+        "abs_error": {
+          "risk_score": 0.0
+        },
+        "row_max_abs_error": 0.0
+      },
+      {
+        "inputs": {
+          "risk_a": 2.0,
+          "risk_b": 0.0
+        },
+        "predicted": {
+          "risk_score": 1.0,
+          "risk_a": 2.0,
+          "risk_b": 0.0
+        },
+        "expected": {
+          "risk_score": 1.0
+        },
+        "abs_error": {
+          "risk_score": 0.0
+        },
+        "row_max_abs_error": 0.0
+      },
+      {
+        "inputs": {
+          "risk_a": 1.5,
+          "risk_b": 0.0
+        },
+        "predicted": {
+          "risk_score": 1.0,
+          "risk_a": 1.5,
+          "risk_b": 0.0
+        },
+        "expected": {
+          "risk_score": 1.0
+        },
+        "abs_error": {
+          "risk_score": 0.0
+        },
+        "row_max_abs_error": 0.0
+      }
+    ],
+    "ranking_penalty": 0.0,
+    "adjusted_sort_score": -0.009511765220936677
+  },
+  "final_evaluation": {
+    "success": true,
+    "source": "risk_score = max(min(0.7*risk_a +  0.2*risk_b, 1), 0);",
+    "compile_stage_reached": "predict",
+    "mode": "predict_rows",
+    "failures": [],
+    "warnings": [],
+    "metrics": {
+      "neg_mse": -0.009511765220936677
+    },
+    "program_metrics": [
+      {
+        "name": "neg_mse",
+        "value": -0.009511765220936677
+      }
+    ],
+    "row_comparisons": [
+      {
+        "inputs": {
+          "risk_a": 0.0,
+          "risk_b": 3.5
+        },
+        "predicted": {
+          "risk_score": 0.699999988079071,
+          "risk_a": 0.0,
+          "risk_b": 3.5
+        },
+        "expected": {
+          "risk_score": 1.0
+        },
+        "abs_error": {
+          "risk_score": 0.30000001192092896
+        },
+        "row_max_abs_error": 0.30000001192092896
+      },
+      {
+        "inputs": {
+          "risk_a": 0.0,
+          "risk_b": 2.0
+        },
+        "predicted": {
+          "risk_score": 0.4000000059604645,
+          "risk_a": 0.0,
+          "risk_b": 2.0
+        },
+        "expected": {
+          "risk_score": 0.6
+        },
+        "abs_error": {
+          "risk_score": 0.1999999940395355
+        },
+        "row_max_abs_error": 0.1999999940395355
+      },
+      {
+        "inputs": {
+          "risk_a": 1.0,
+          "risk_b": 1.0
+        },
+        "predicted": {
+          "risk_score": 0.8999999761581421,
+          "risk_a": 1.0,
+          "risk_b": 1.0
+        },
+        "expected": {
+          "risk_score": 1.0
+        },
+        "abs_error": {
+          "risk_score": 0.10000002384185791
+        },
+        "row_max_abs_error": 0.10000002384185791
+      },
+      {
+        "inputs": {
+          "risk_a": 0.0,
+          "risk_b": 1.0
+        },
+        "predicted": {
+          "risk_score": 0.20000000298023224,
+          "risk_a": 0.0,
+          "risk_b": 1.0
+        },
+        "expected": {
+          "risk_score": 0.3
+        },
+        "abs_error": {
+          "risk_score": 0.09999999701976775
+        },
+        "row_max_abs_error": 0.09999999701976775
+      },
+      {
+        "inputs": {
+          "risk_a": 0.1,
+          "risk_b": 0.7
+        },
+        "predicted": {
+          "risk_score": 0.21000000834465027,
+          "risk_a": 0.10000000149011612,
+          "risk_b": 0.699999988079071
+        },
+        "expected": {
+          "risk_score": 0.28
+        },
+        "abs_error": {
+          "risk_score": 0.06999999165534976
+        },
+        "row_max_abs_error": 0.06999999165534976
+      },
+      {
+        "inputs": {
+          "risk_a": 0.5,
+          "risk_b": 0.5
+        },
+        "predicted": {
+          "risk_score": 0.44999998807907104,
+          "risk_a": 0.5,
+          "risk_b": 0.5
+        },
+        "expected": {
+          "risk_score": 0.5
+        },
+        "abs_error": {
+          "risk_score": 0.050000011920928955
+        },
+        "row_max_abs_error": 0.050000011920928955
+      },
+      {
+        "inputs": {
+          "risk_a": 0.0,
+          "risk_b": 0.5
+        },
+        "predicted": {
+          "risk_score": 0.10000000149011612,
+          "risk_a": 0.0,
+          "risk_b": 0.5
+        },
+        "expected": {
+          "risk_score": 0.15
+        },
+        "abs_error": {
+          "risk_score": 0.049999998509883875
+        },
+        "row_max_abs_error": 0.049999998509883875
+      },
+      {
+        "inputs": {
+          "risk_a": 0.2,
+          "risk_b": 0.4
+        },
+        "predicted": {
+          "risk_score": 0.2199999988079071,
+          "risk_a": 0.20000000298023224,
+          "risk_b": 0.4000000059604645
+        },
+        "expected": {
+          "risk_score": 0.26
+        },
+        "abs_error": {
+          "risk_score": 0.040000001192092904
+        },
+        "row_max_abs_error": 0.040000001192092904
+      },
+      {
+        "inputs": {
+          "risk_a": 0.1,
+          "risk_b": 0.1
+        },
+        "predicted": {
+          "risk_score": 0.09000000357627869,
+          "risk_a": 0.10000000149011612,
+          "risk_b": 0.10000000149011612
+        },
+        "expected": {
+          "risk_score": 0.1
+        },
+        "abs_error": {
+          "risk_score": 0.009999996423721319
+        },
+        "row_max_abs_error": 0.009999996423721319
+      },
+      {
+        "inputs": {
+          "risk_a": 0.3,
+          "risk_b": 0.1
+        },
+        "predicted": {
+          "risk_score": 0.23000000417232513,
+          "risk_a": 0.30000001192092896,
+          "risk_b": 0.10000000149011612
+        },
+        "expected": {
+          "risk_score": 0.24
+        },
+        "abs_error": {
+          "risk_score": 0.009999995827674857
+        },
+        "row_max_abs_error": 0.009999995827674857
+      },
+      {
+        "inputs": {
+          "risk_a": 1.0,
+          "risk_b": 0.0
+        },
+        "predicted": {
+          "risk_score": 0.699999988079071,
+          "risk_a": 1.0,
+          "risk_b": 0.0
+        },
+        "expected": {
+          "risk_score": 0.7
+        },
+        "abs_error": {
+          "risk_score": 1.1920928910669204e-08
+        },
+        "row_max_abs_error": 1.1920928910669204e-08
+      },
+      {
+        "inputs": {
+          "risk_a": 0.5,
+          "risk_b": 0.0
+        },
+        "predicted": {
+          "risk_score": 0.3499999940395355,
+          "risk_a": 0.5,
+          "risk_b": 0.0
+        },
+        "expected": {
+          "risk_score": 0.35
+        },
+        "abs_error": {
+          "risk_score": 5.960464455334602e-09
+        },
+        "row_max_abs_error": 5.960464455334602e-09
+      },
+      {
+        "inputs": {
+          "risk_a": 0.0,
+          "risk_b": 0.0
+        },
+        "predicted": {
+          "risk_score": 0.0,
+          "risk_a": 0.0,
+          "risk_b": 0.0
+        },
+        "expected": {
+          "risk_score": 0.0
+        },
+        "abs_error": {
+          "risk_score": 0.0
+        },
+        "row_max_abs_error": 0.0
+      },
+      {
+        "inputs": {
+          "risk_a": -1.0,
+          "risk_b": 0.0
+        },
+        "predicted": {
+          "risk_score": 0.0,
+          "risk_a": -1.0,
+          "risk_b": 0.0
+        },
+        "expected": {
+          "risk_score": 0.0
+        },
+        "abs_error": {
+          "risk_score": 0.0
+        },
+        "row_max_abs_error": 0.0
+      },
+      {
+        "inputs": {
+          "risk_a": -0.5,
+          "risk_b": 1.0
+        },
+        "predicted": {
+          "risk_score": 0.0,
+          "risk_a": -0.5,
+          "risk_b": 1.0
+        },
+        "expected": {
+          "risk_score": 0.0
+        },
+        "abs_error": {
+          "risk_score": 0.0
+        },
+        "row_max_abs_error": 0.0
+      },
+      {
+        "inputs": {
+          "risk_a": 2.0,
+          "risk_b": 0.0
+        },
+        "predicted": {
+          "risk_score": 1.0,
+          "risk_a": 2.0,
+          "risk_b": 0.0
+        },
+        "expected": {
+          "risk_score": 1.0
+        },
+        "abs_error": {
+          "risk_score": 0.0
+        },
+        "row_max_abs_error": 0.0
+      },
+      {
+        "inputs": {
+          "risk_a": 1.5,
+          "risk_b": 0.0
+        },
+        "predicted": {
+          "risk_score": 1.0,
+          "risk_a": 1.5,
+          "risk_b": 0.0
+        },
+        "expected": {
+          "risk_score": 1.0
+        },
+        "abs_error": {
+          "risk_score": 0.0
+        },
+        "row_max_abs_error": 0.0
+      }
+    ],
+    "ranking_penalty": 0.0,
+    "adjusted_sort_score": -0.009511765220936677
+  },
+  "failures_metrics_summary": {
+    "per_iteration": [
+      {
+        "index": 0,
+        "success": true,
+        "metrics": {
+          "neg_mse": -0.3979176451795244
+        },
+        "failure_count": 0,
+        "failure_summaries": []
+      },
+      {
+        "index": 1,
+        "success": true,
+        "metrics": {
+          "neg_mse": -0.32638823529411765
+        },
+        "failure_count": 0,
+        "failure_summaries": []
+      },
+      {
+        "index": 2,
+        "success": false,
+        "metrics": {},
+        "failure_count": 1,
+        "failure_summaries": [
+          {
+            "stage": "parse",
+            "kind": "syntax",
+            "message": "Unexpected token Token('NUMBER', '0.8') at line 1, column 17.\nExpected one of: \n\t* SEMICOLON\n\t* LSQB\n\t* NE\n\t* GT\n\t* MUL\n\t* EQ\n\t* SUB\n\t* LPAR\n\t* DIV\n\t* ADD\n\t* LT\nPrevious tokens: [Token('NAME', 'if')]\n",
+            "detail": "UnexpectedToken"
+          }
+        ]
+      },
+      {
+        "index": 3,
+        "success": false,
+        "metrics": {},
+        "failure_count": 1,
+        "failure_summaries": [
+          {
+            "stage": "parse",
+            "kind": "syntax",
+            "message": "No terminal matches '.' in the current parser context, at line 1 col 37\n\nrisk_score = max(min(0.7*risk_a +  0. 3*risk_b, 1. 0), 0.0);\n                                    ^\nExpected one of: \n\t* SEMICOLON\n\t* LSQB\n\t* GT\n\t* LPAR\n\t* DIV\n\t* ADD\n\t* LT\n\t* NE\n\t* EQ\n\t* MUL\n\t* SUB\n\t* RSQB\n\t* COMMA\n\t* RPAR\n\nPrevious tokens: Token('NUMBER', '0')\n",
+            "detail": "UnexpectedCharacters"
+          }
+        ]
+      },
+      {
+        "index": 4,
+        "success": false,
+        "metrics": {},
+        "failure_count": 1,
+        "failure_summaries": [
+          {
+            "stage": "parse",
+            "kind": "syntax",
+            "message": "Unexpected token Token('NUMBER', '0') at line 1, column 17.\nExpected one of: \n\t* SEMICOLON\n\t* LSQB\n\t* NE\n\t* GT\n\t* MUL\n\t* EQ\n\t* SUB\n\t* LPAR\n\t* DIV\n\t* ADD\n\t* LT\nPrevious tokens: [Token('NAME', 'if')]\n",
+            "detail": "UnexpectedToken"
+          }
+        ]
+      },
+      {
+        "index": 5,
+        "success": false,
+        "metrics": {},
+        "failure_count": 1,
+        "failure_summaries": [
+          {
+            "stage": "parse",
+            "kind": "syntax",
+            "message": "No terminal matches '.' in the current parser context, at line 1 col 37\n\nrisk_score = max(min(0.7*risk_a +  0. 3*risk_b, 1), 0);\n                                    ^\nExpected one of: \n\t* SEMICOLON\n\t* LSQB\n\t* GT\n\t* LPAR\n\t* DIV\n\t* ADD\n\t* LT\n\t* NE\n\t* EQ\n\t* MUL\n\t* SUB\n\t* RSQB\n\t* COMMA\n\t* RPAR\n\nPrevious tokens: Token('NUMBER', '0')\n",
+            "detail": "UnexpectedCharacters"
+          }
+        ]
+      },
+      {
+        "index": 6,
+        "success": false,
+        "metrics": {},
+        "failure_count": 1,
+        "failure_summaries": [
+          {
+            "stage": "parse",
+            "kind": "syntax",
+            "message": "Unexpected token Token('NUMBER', '0.0') at line 1, column 17.\nExpected one of: \n\t* SEMICOLON\n\t* LSQB\n\t* NE\n\t* GT\n\t* MUL\n\t* EQ\n\t* SUB\n\t* LPAR\n\t* DIV\n\t* ADD\n\t* LT\nPrevious tokens: [Token('NAME', 'if')]\n",
+            "detail": "UnexpectedToken"
+          }
+        ]
+      },
+      {
+        "index": 7,
+        "success": true,
+        "metrics": {
+          "neg_mse": -0.009511765220936677
+        },
+        "failure_count": 0,
+        "failure_summaries": []
+      },
+      {
+        "index": 8,
+        "success": false,
+        "metrics": {},
+        "failure_count": 1,
+        "failure_summaries": [
+          {
+            "stage": "parse",
+            "kind": "syntax",
+            "message": "Unexpected token Token('NUMBER', '0.9') at line 1, column 17.\nExpected one of: \n\t* SEMICOLON\n\t* LSQB\n\t* NE\n\t* GT\n\t* MUL\n\t* EQ\n\t* SUB\n\t* LPAR\n\t* DIV\n\t* ADD\n\t* LT\nPrevious tokens: [Token('NAME', 'if')]\n",
+            "detail": "UnexpectedToken"
+          }
+        ]
+      },
+      {
+        "index": 9,
+        "success": true,
+        "metrics": {
+          "neg_mse": -0.009511765220936677
+        },
+        "failure_count": 0,
+        "failure_summaries": []
+      }
+    ],
+    "best": {
+      "success": true,
+      "metrics": {
+        "neg_mse": -0.009511765220936677
+      },
+      "failure_count": 0
+    },
+    "final": {
+      "success": true,
+      "metrics": {
+        "neg_mse": -0.009511765220936677
+      },
+      "failure_count": 0
+    }
+  },
+  "semantic_summaries": {
+    "enabled": false,
+    "per_iteration": [
+      {
+        "index": 0,
+        "semantic_trace_summary": null
+      },
+      {
+        "index": 1,
+        "semantic_trace_summary": null
+      },
+      {
+        "index": 2,
+        "semantic_trace_summary": null
+      },
+      {
+        "index": 3,
+        "semantic_trace_summary": null
+      },
+      {
+        "index": 4,
+        "semantic_trace_summary": null
+      },
+      {
+        "index": 5,
+        "semantic_trace_summary": null
+      },
+      {
+        "index": 6,
+        "semantic_trace_summary": null
+      },
+      {
+        "index": 7,
+        "semantic_trace_summary": null
+      },
+      {
+        "index": 8,
+        "semantic_trace_summary": null
+      },
+      {
+        "index": 9,
+        "semantic_trace_summary": null
+      }
+    ]
+  }
+}

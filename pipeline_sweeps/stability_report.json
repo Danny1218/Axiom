@@ -1,0 +1,81 @@
+{
+  "aggregate": {
+    "best": {
+      "best_ax_path": "C:\\Users\\Block\\OneDrive\\Desktop\\Coding\\Onxy Projects\\Axiom\\pipeline_sweeps\\risk_score_run_1\\restart_1\\best.ax",
+      "label": "C:\\Users\\Block\\OneDrive\\Desktop\\Coding\\Onxy Projects\\Axiom\\pipeline_sweeps\\risk_score_run_1.json",
+      "metric_display": "neg_mse=-6.52498e-17",
+      "primary_metric": -6.524976639343545e-17,
+      "sort_key": "neg_mse"
+    },
+    "convergence_reason_counts": {
+      "metric_threshold_met": 3
+    },
+    "exact_hit_count": 3,
+    "near_hit_count": 3,
+    "run_count": 3,
+    "summary_text": "Copilot stability — 3 run(s)\n  exact_hit: 3 / 3\n  near_hit:  3 / 3\n  convergence: metric_threshold_met=3\n  winning_restart: 1=3\nBest: neg_mse=-6.52498e-17 @ C:\\Users\\Block\\OneDrive\\Desktop\\Coding\\Onxy Projects\\Axiom\\pipeline_sweeps\\risk_score_run_1\\restart_1\\best.ax\n  run: C:\\Users\\Block\\OneDrive\\Desktop\\Coding\\Onxy Projects\\Axiom\\pipeline_sweeps\\risk_score_run_1.json",
+    "winning_restart_counts": {
+      "1": 3
+    }
+  },
+  "discovery": {
+    "json_files_probed_pipeline": 18,
+    "patterns": "**/search_report.json (kind axiom.copilot.search_report, excluding paths under restart_*/); **/*.json with restarts.per_restart (pipeline summary); directories with restart_*/ children (multi-restart artifact bundle)",
+    "pipeline_json_matched": 3,
+    "pipeline_json_skipped_duplicate_artifact_dir": 0,
+    "pipeline_root_dir_ingested": 0,
+    "pipeline_root_dir_skipped_covered": 3,
+    "run_snapshots_total_before_display": 3,
+    "scan_roots": [
+      "C:\\Users\\Block\\OneDrive\\Desktop\\Coding\\Onxy Projects\\Axiom\\pipeline_sweeps"
+    ],
+    "search_dir_ingested": 0,
+    "search_dir_skipped_covered": 0,
+    "search_report_paths_skipped_under_restart": 15,
+    "search_report_paths_total": 15
+  },
+  "runs": [
+    {
+      "best_ax_path": "C:\\Users\\Block\\OneDrive\\Desktop\\Coding\\Onxy Projects\\Axiom\\pipeline_sweeps\\risk_score_run_1\\restart_1\\best.ax",
+      "convergence_reason": "metric_threshold_met",
+      "evaluation_mode": "predict_rows",
+      "exact_hit": true,
+      "kind": "pipeline_json",
+      "label": "C:\\Users\\Block\\OneDrive\\Desktop\\Coding\\Onxy Projects\\Axiom\\pipeline_sweeps\\risk_score_run_1.json",
+      "metric_display": "neg_mse=-6.52498e-17",
+      "near_hit": true,
+      "primary_metric": -6.524976639343545e-17,
+      "sort_key": "neg_mse",
+      "success": true,
+      "winning_restart_index": 1
+    },
+    {
+      "best_ax_path": "C:\\Users\\Block\\OneDrive\\Desktop\\Coding\\Onxy Projects\\Axiom\\pipeline_sweeps\\risk_score_run_2\\restart_1\\best.ax",
+      "convergence_reason": "metric_threshold_met",
+      "evaluation_mode": "predict_rows",
+      "exact_hit": true,
+      "kind": "pipeline_json",
+      "label": "C:\\Users\\Block\\OneDrive\\Desktop\\Coding\\Onxy Projects\\Axiom\\pipeline_sweeps\\risk_score_run_2.json",
+      "metric_display": "neg_mse=-6.52498e-17",
+      "near_hit": true,
+      "primary_metric": -6.524976639343545e-17,
+      "sort_key": "neg_mse",
+      "success": true,
+      "winning_restart_index": 1
+    },
+    {
+      "best_ax_path": "C:\\Users\\Block\\OneDrive\\Desktop\\Coding\\Onxy Projects\\Axiom\\pipeline_sweeps\\risk_score_run_3\\restart_1\\best.ax",
+      "convergence_reason": "metric_threshold_met",
+      "evaluation_mode": "predict_rows",
+      "exact_hit": true,
+      "kind": "pipeline_json",
+      "label": "C:\\Users\\Block\\OneDrive\\Desktop\\Coding\\Onxy Projects\\Axiom\\pipeline_sweeps\\risk_score_run_3.json",
+      "metric_display": "neg_mse=-6.52498e-17",
+      "near_hit": true,
+      "primary_metric": -6.524976639343545e-17,
+      "sort_key": "neg_mse",
+      "success": true,
+      "winning_restart_index": 1
+    }
+  ]
+}

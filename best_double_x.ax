@@ -1,0 +1,4 @@
+ax
+y_0 = x * neural([x]);
+y_1 = neural(y_0);
+y = y_1[0];

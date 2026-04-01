@@ -7,17 +7,17 @@
   },
   "draft_summary": {
     "task_count": 10,
-    "compile_success_rate": 0.5,
-    "metric_success_rate": 0.2,
-    "compile_ok_count": 5,
-    "metric_ok_count": 2
+    "compile_success_rate": 0.3,
+    "metric_success_rate": 0.0,
+    "compile_ok_count": 3,
+    "metric_ok_count": 0
   },
   "search_summary": {
     "task_count": 10,
-    "compile_success_rate": 0.9,
-    "metric_success_rate": 0.7,
-    "compile_ok_count": 9,
-    "metric_ok_count": 7
+    "compile_success_rate": 0.7,
+    "metric_success_rate": 0.4,
+    "compile_ok_count": 7,
+    "metric_ok_count": 4
   },
   "tasks": [
     {
@@ -68,8 +68,8 @@
       "draft_only": {
         "task_id": "risk_score",
         "mode": "draft_only",
-        "source": "risk_score = 0;\nif (0 <= risk_a && risk_a <= 1 && 0 <= risk_b && risk_b <= 1){\n    risk_score = min(1, 07*risk_a+0.3*risk_b);\n}else{\n    risk_score=0;\n}",
-        "compile_ok": false,
+        "source": "if (0 < risk_a + risk_b) {\n    risk_score = min(1, 07 * risk_A + 03 * risk_B);\n} else {\n    \n    risk_score=0;\n}",
+        "compile_ok": true,
         "metric_ok": false,
         "converged": null,
         "iterations_run": null,
@@ -77,10 +77,12 @@
         "backend_kind": "expert_backend",
         "winner_origin": "model_draft",
         "evaluation": {
-          "success": false,
-          "compile_stage_reached": "parse",
+          "success": true,
+          "compile_stage_reached": "predict",
           "mode": "predict_rows",
-          "metrics": {}
+          "metrics": {
+            "neg_mse": -0.34062499999999996
+          }
         }
       },
       "search": {
@@ -110,7 +112,7 @@
       "draft_only": {
         "task_id": "piecewise_threshold",
         "mode": "draft_only",
-        "source": "if (x != 0.0 0) {\n  y = 2 * x;\n} else { \n  y = -1.0 0;\n}",
+        "source": "if (x != 0) {\n  y = 2 * x;\n} else if (x > -1 && x < 0 || x > 1) {\n  // This case covers both x < -1 and x > 2\n  y = abs(x);\n} else {\n  y=0;\n}",
         "compile_ok": false,
         "metric_ok": false,
         "converged": null,
@@ -128,7 +130,7 @@
       "search": {
         "task_id": "piecewise_threshold",
         "mode": "search",
-        "source": "if (x != 0.0) {\n    if(x > 0.0) {\n        y=x;\n    } \n    else {\n        // Handle negative values here if necessary\n        y=0.0;\n    }\n} \nelse {\n    y=0.00001; // Small value to handle zero case\n}",
+        "source": "if (x != 0) {\n  y = 2 * x;\n} else { \n  y = -1;\n}",
         "compile_ok": true,
         "metric_ok": false,
         "converged": true,
@@ -141,7 +143,7 @@
           "compile_stage_reached": "predict",
           "mode": "predict_rows",
           "metrics": {
-            "neg_mse": -2.5000007618677905e-11
+            "neg_mse": -5.290000002384186
           }
         }
       }
@@ -152,8 +154,8 @@
       "draft_only": {
         "task_id": "three_input_affine",
         "mode": "draft_only",
-        "source": "score = 0 * a + (0.5) * b + (0 * c);",
-        "compile_ok": true,
+        "source": "if (a < 0 || a > 1) {\n    score = 1;\n} else if (b < 0 && b > 1 || c < 0 & c > 1){\n    score = -1;\n} \nelse {\n    score=0.5*a+0.3*b+0.2*c;\n}",
+        "compile_ok": false,
         "metric_ok": false,
         "converged": null,
         "iterations_run": null,
@@ -161,12 +163,10 @@
         "backend_kind": "expert_backend",
         "winner_origin": "model_draft",
         "evaluation": {
-          "success": true,
-          "compile_stage_reached": "predict",
+          "success": false,
+          "compile_stage_reached": "parse",
           "mode": "predict_rows",
-          "metrics": {
-            "neg_mse": -0.45400000000000007
-          }
+          "metrics": {}
         }
       },
       "search": {
@@ -238,41 +238,37 @@
       "draft_only": {
         "task_id": "max_of_two",
         "mode": "draft_only",
-        "source": "if (a > b) {\n    score = a;\n} else { \n    score = b;\n}",
-        "compile_ok": true,
-        "metric_ok": true,
+        "source": "if (a > b) {\n    score = a;\n} else if (a < b) {\n     score = b;\n} else { \n    score = 0;\n}",
+        "compile_ok": false,
+        "metric_ok": false,
         "converged": null,
         "iterations_run": null,
         "producing_backend_name": "onyx_qwen",
         "backend_kind": "expert_backend",
         "winner_origin": "model_draft",
         "evaluation": {
-          "success": true,
-          "compile_stage_reached": "predict",
+          "success": false,
+          "compile_stage_reached": "parse",
           "mode": "predict_rows",
-          "metrics": {
-            "neg_mse": -1.8189893899933295e-15
-          }
+          "metrics": {}
         }
       },
       "search": {
         "task_id": "max_of_two",
         "mode": "search",
-        "source": "score = max(a,b);",
-        "compile_ok": true,
-        "metric_ok": true,
-        "converged": true,
-        "iterations_run": 1,
+        "source": "if (a > b) {\n    score = a;\n} else if (a < b) {\n     score = b;\n} else { \n    score = 0;\n}",
+        "compile_ok": false,
+        "metric_ok": false,
+        "converged": false,
+        "iterations_run": 4,
         "producing_backend_name": "onyx_qwen",
         "backend_kind": "expert_backend",
         "winner_origin": "model_draft",
         "evaluation": {
-          "success": true,
-          "compile_stage_reached": "predict",
+          "success": false,
+          "compile_stage_reached": "parse",
           "mode": "predict_rows",
-          "metrics": {
-            "neg_mse": -1.8189893899933295e-15
-          }
+          "metrics": {}
         }
       }
     },
@@ -282,41 +278,37 @@
       "draft_only": {
         "task_id": "minmax_blend",
         "mode": "draft_only",
-        "source": "score = max( min(a +  b,  1.0  ),  0.0  );",
-        "compile_ok": true,
-        "metric_ok": true,
+        "source": "if (a + b < 0 || a + b > 1) {\n    score = 0;\n} \nelse {\n    score= min(a +b , 1);\n}",
+        "compile_ok": false,
+        "metric_ok": false,
         "converged": null,
         "iterations_run": null,
         "producing_backend_name": "onyx_qwen",
         "backend_kind": "expert_backend",
         "winner_origin": "model_draft",
         "evaluation": {
-          "success": true,
-          "compile_stage_reached": "predict",
+          "success": false,
+          "compile_stage_reached": "parse",
           "mode": "predict_rows",
-          "metrics": {
-            "neg_mse": -4.54747351733497e-16
-          }
+          "metrics": {}
         }
       },
       "search": {
         "task_id": "minmax_blend",
         "mode": "search",
-        "source": "score = max( min(a +  b,  1.0  ),  0.0  );",
-        "compile_ok": true,
-        "metric_ok": true,
-        "converged": true,
-        "iterations_run": 1,
+        "source": "if (a + b < 0 || a + b > 1) {\n    score = 0;\n} \nelse {\n    score= min(1, a+b);\n}",
+        "compile_ok": false,
+        "metric_ok": false,
+        "converged": false,
+        "iterations_run": 4,
         "producing_backend_name": "onyx_qwen",
         "backend_kind": "expert_backend",
         "winner_origin": "model_draft",
         "evaluation": {
-          "success": true,
-          "compile_stage_reached": "predict",
+          "success": false,
+          "compile_stage_reached": "parse",
           "mode": "predict_rows",
-          "metrics": {
-            "neg_mse": -4.54747351733497e-16
-          }
+          "metrics": {}
         }
       }
     },
@@ -370,7 +362,7 @@
       "draft_only": {
         "task_id": "nested_piecewise",
         "mode": "draft_only",
-        "source": "if (x<0.0){\n    y=0.0\n}else{\n    if(x<1.0 0){\n        y=x\n    }else{\n        y=1.0\n    }\n}",
+        "source": "if (x<0.0){\n    y=0.0;}\nelse{\n    if(x<1.0 0){\n        y=x;}else{y=1.0;}",
         "compile_ok": false,
         "metric_ok": false,
         "converged": null,
@@ -388,7 +380,7 @@
       "search": {
         "task_id": "nested_piecewise",
         "mode": "search",
-        "source": "if (x<0.0){\n    y=0.0\n}else{\n    if (0.9999<x<1){\n        y=x\n    }else{\n        y=1.0\n    }\n}",
+        "source": "if (x != 0.0 && x < 2.0) {\n    y == x;\n} else if (x >= -1.0 && x <= -0.9) {\n    // This case should not occur based on given constraints\n    y == 0.0;\n} else {\n    \n    y == -1.0;\n}",
         "compile_ok": false,
         "metric_ok": false,
         "converged": false,
@@ -410,7 +402,7 @@
       "draft_only": {
         "task_id": "three_way_maxmin",
         "mode": "draft_only",
-        "source": "if (a < b) {\n    if ((a < c)) {\n        score = a;\n    } \n    else {\n        score= c;\n    }\n} \nelse {\n    if((b<c)){\n        score=b;\n    }\n    else{\n        score=c;\n    }\n\n}",
+        "source": "if (a < b) {\n    if ((a < c)) {\n        score = a;\n    } \n    else {\n        score= c;\n    }\n} \nelse {\n    if((b<c)){\n        score=b;\n    }\n    else{\n        score=c;\n    }\n}",
         "compile_ok": true,
         "metric_ok": false,
         "converged": null,
@@ -430,9 +422,9 @@
       "search": {
         "task_id": "three_way_maxmin",
         "mode": "search",
-        "source": "score = max( min(a, b ), c );",
+        "source": "if (a < b) {\n    if ((a < c)) {\n        score = a;\n    } \n    else {\n        score= c;\n    }\n} \nelse {\n    if((b<c)){\n        score=b;\n    }\n    else{\n        score=c;\n    }\n}",
         "compile_ok": true,
-        "metric_ok": true,
+        "metric_ok": false,
         "converged": true,
         "iterations_run": 1,
         "producing_backend_name": "onyx_qwen",
@@ -443,7 +435,7 @@
           "compile_stage_reached": "predict",
           "mode": "predict_rows",
           "metrics": {
-            "neg_mse": -7.105427304661443e-18
+            "neg_mse": -3.9079999997615813
           }
         }
       }

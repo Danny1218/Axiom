@@ -1,0 +1,3233 @@
+{
+  "schema_version": 1,
+  "kind": "axiom.copilot.iterations",
+  "goal": "Write a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));",
+  "domain_context": null,
+  "backend_name": "onyx_qwen",
+  "evaluation_mode": "predict_rows",
+  "max_iterations_config": 10,
+  "iteration_count": 10,
+  "score_sort_key": "neg_mse",
+  "converged": false,
+  "convergence_reason": "metric_budget_exhausted",
+  "metric_repair": {
+    "enabled": true,
+    "threshold_effective": -1e-09,
+    "metric_repair_if_below_config": null
+  },
+  "iterations": [
+    {
+      "index": 0,
+      "candidate_source": "risk_score = min(1, max(0, 1 - abs(risk_a - risk_b)));",
+      "success": true,
+      "compile_stage_reached": "predict",
+      "metrics": {
+        "neg_mse": -0.3979176451795244
+      },
+      "program_metrics": [
+        {
+          "name": "neg_mse",
+          "value": -0.3979176451795244
+        }
+      ],
+      "failure_summaries": [],
+      "warnings": [],
+      "producing_expert": {
+        "expert_call": "draft",
+        "backend_name": "onyx_qwen",
+        "metadata": {
+          "model": "onyx-qwen-production-v1",
+          "raw_chars": 64,
+          "extraction_mode": "fenced_ax",
+          "code_line_count": 1
+        },
+        "explanation": null
+      },
+      "producing_payload": {
+        "type": "draft",
+        "goal": "Write a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));",
+        "context": {
+          "domain_context": "",
+          "example_input_rows": [
+            {
+              "risk_a": 0.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 1.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": 0.5,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 0.5
+            },
+            {
+              "risk_a": 0.2,
+              "risk_b": 0.4
+            },
+            {
+              "risk_a": 0.5,
+              "risk_b": 0.5
+            },
+            {
+              "risk_a": 0.1,
+              "risk_b": 0.7
+            },
+            {
+              "risk_a": 0.3,
+              "risk_b": 0.1
+            },
+            {
+              "risk_a": 0.1,
+              "risk_b": 0.1
+            },
+            {
+              "risk_a": 1.0,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": -1.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": -0.5,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": 2.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 1.5,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 2.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 3.5
+            }
+          ],
+          "expected_outputs": [
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 0.7
+            },
+            {
+              "risk_score": 0.3
+            },
+            {
+              "risk_score": 0.35
+            },
+            {
+              "risk_score": 0.15
+            },
+            {
+              "risk_score": 0.26
+            },
+            {
+              "risk_score": 0.5
+            },
+            {
+              "risk_score": 0.28
+            },
+            {
+              "risk_score": 0.24
+            },
+            {
+              "risk_score": 0.1
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 0.6
+            },
+            {
+              "risk_score": 1.0
+            }
+          ],
+          "exact_symbolic_examples_task": true,
+          "_onyx_completion_overrides": {
+            "temperature": 0.0
+          }
+        }
+      },
+      "outgoing_repair_error_report": "## Goal\nWrite a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nrisk_score = min(1, max(0, 1 - abs(risk_a - risk_b)));\n```\n\n## Metric report (program runs but may be suboptimal)\n\n```json\n{\n  \"metrics\": {\n    \"neg_mse\": -0.3979176451795244\n  },\n  \"program_metrics\": [\n    {\n      \"name\": \"neg_mse\",\n      \"value\": -0.3979176451795244\n    }\n  ]\n}\n```\n\n\n## Row-wise mismatches\n\nOrdered **worst-first** (by `row_max_abs_error`). Use these concrete input/output deltas to fix coefficients or structure.\n\n```json\n[\n  {\n    \"abs_error\": {\n      \"risk_score\": 1.0\n    },\n    \"expected\": {\n      \"risk_score\": 0.0\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 0.0,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 1.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 1.0\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 2.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 2.0,\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.0\n    },\n    \"row_max_abs_error\": 1.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 1.0\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 1.5,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 1.5,\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.0\n    },\n    \"row_max_abs_error\": 1.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 1.0\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 3.5\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 3.5,\n      \"risk_score\": 0.0\n    },\n    \"row_max_abs_error\": 1.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.9\n    },\n    \"expected\": {\n      \"risk_score\": 0.1\n    },\n    \"inputs\": {\n      \"risk_a\": 0.1,\n      \"risk_b\": 0.1\n    },\n    \"predicted\": {\n      \"risk_a\": 0.10000000149011612,\n      \"risk_b\": 0.10000000149011612,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.9\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.7\n    },\n    \"expected\": {\n      \"risk_score\": 0.7\n    },\n    \"inputs\": {\n      \"risk_a\": 1.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 1.0,\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.0\n    },\n    \"row_max_abs_error\": 0.7\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.6\n    },\n    \"expected\": {\n      \"risk_score\": 0.6\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 2.0\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 2.0,\n      \"risk_score\": 0.0\n    },\n    \"row_max_abs_error\": 0.6\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.5599999523162842\n    },\n    \"expected\": {\n      \"risk_score\": 0.24\n    },\n    \"inputs\": {\n      \"risk_a\": 0.3,\n      \"risk_b\": 0.1\n    },\n    \"predicted\": {\n      \"risk_a\": 0.30000001192092896,\n      \"risk_b\": 0.10000000149011612,\n      \"risk_score\": 0.7999999523162842\n    },\n    \"row_max_abs_error\": 0.5599999523162842\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.540000011920929\n    },\n    \"expected\": {\n      \"risk_score\": 0.26\n    },\n    \"inputs\": {\n      \"risk_a\": 0.2,\n      \"risk_b\": 0.4\n    },\n    \"predicted\": {\n      \"risk_a\": 0.20000000298023224,\n      \"risk_b\": 0.4000000059604645,\n      \"risk_score\": 0.800000011920929\n    },\n    \"row_max_abs_error\": 0.540000011920929\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.5\n    },\n    \"expected\": {\n      \"risk_score\": 0.5\n    },\n    \"inputs\": {\n      \"risk_a\": 0.5,\n      \"risk_b\": 0.5\n    },\n    \"predicted\": {\n      \"risk_a\": 0.5,\n      \"risk_b\": 0.5,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.5\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.35\n    },\n    \"expected\": {\n      \"risk_score\": 0.15\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 0.5\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 0.5,\n      \"risk_score\": 0.5\n    },\n    \"row_max_abs_error\": 0.35\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.3\n    },\n    \"expected\": {\n      \"risk_score\": 0.3\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 1.0\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 1.0,\n      \"risk_score\": 0.0\n    },\n    \"row_max_abs_error\": 0.3\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.15000000000000002\n    },\n    \"expected\": {\n      \"risk_score\": 0.35\n    },\n    \"inputs\": {\n      \"risk_a\": 0.5,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 0.5,\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.5\n    },\n    \"row_max_abs_error\": 0.15000000000000002\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.12000003576278684\n    },\n    \"expected\": {\n      \"risk_score\": 0.28\n    },\n    \"inputs\": {\n      \"risk_a\": 0.1,\n      \"risk_b\": 0.7\n    },\n    \"predicted\": {\n      \"risk_a\": 0.10000000149011612,\n      \"risk_b\": 0.699999988079071,\n      \"risk_score\": 0.40000003576278687\n    },\n    \"row_max_abs_error\": 0.12000003576278684\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 1.0,\n      \"risk_b\": 1.0\n    },\n    \"predicted\": {\n      \"risk_a\": 1.0,\n      \"risk_b\": 1.0,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 0.0\n    },\n    \"inputs\": {\n      \"risk_a\": -1.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": -1.0,\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.0\n    },\n    \"row_max_abs_error\": 0.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 0.0\n    },\n    \"inputs\": {\n      \"risk_a\": -0.5,\n      \"risk_b\": 1.0\n    },\n    \"predicted\": {\n      \"risk_a\": -0.5,\n      \"risk_b\": 1.0,\n      \"risk_score\": 0.0\n    },\n    \"row_max_abs_error\": 0.0\n  }\n]\n```\n\n\n## Symbolic mapping hint\nThis task is defined by explicit input/output examples with numeric targets. Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+      "semantic_trace_summary": null,
+      "row_comparisons": [
+        {
+          "inputs": {
+            "risk_a": 0.0,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 1.0,
+            "risk_a": 0.0,
+            "risk_b": 0.0
+          },
+          "expected": {
+            "risk_score": 0.0
+          },
+          "abs_error": {
+            "risk_score": 1.0
+          },
+          "row_max_abs_error": 1.0
+        },
+        {
+          "inputs": {
+            "risk_a": 2.0,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_a": 2.0,
+            "risk_b": 0.0
+          },
+          "expected": {
+            "risk_score": 1.0
+          },
+          "abs_error": {
+            "risk_score": 1.0
+          },
+          "row_max_abs_error": 1.0
+        },
+        {
+          "inputs": {
+            "risk_a": 1.5,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_a": 1.5,
+            "risk_b": 0.0
+          },
+          "expected": {
+            "risk_score": 1.0
+          },
+          "abs_error": {
+            "risk_score": 1.0
+          },
+          "row_max_abs_error": 1.0
+        },
+        {
+          "inputs": {
+            "risk_a": 0.0,
+            "risk_b": 3.5
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_a": 0.0,
+            "risk_b": 3.5
+          },
+          "expected": {
+            "risk_score": 1.0
+          },
+          "abs_error": {
+            "risk_score": 1.0
+          },
+          "row_max_abs_error": 1.0
+        },
+        {
+          "inputs": {
+            "risk_a": 0.1,
+            "risk_b": 0.1
+          },
+          "predicted": {
+            "risk_score": 1.0,
+            "risk_a": 0.10000000149011612,
+            "risk_b": 0.10000000149011612
+          },
+          "expected": {
+            "risk_score": 0.1
+          },
+          "abs_error": {
+            "risk_score": 0.9
+          },
+          "row_max_abs_error": 0.9
+        },
+        {
+          "inputs": {
+            "risk_a": 1.0,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_a": 1.0,
+            "risk_b": 0.0
+          },
+          "expected": {
+            "risk_score": 0.7
+          },
+          "abs_error": {
+            "risk_score": 0.7
+          },
+          "row_max_abs_error": 0.7
+        },
+        {
+          "inputs": {
+            "risk_a": 0.0,
+            "risk_b": 2.0
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_a": 0.0,
+            "risk_b": 2.0
+          },
+          "expected": {
+            "risk_score": 0.6
+          },
+          "abs_error": {
+            "risk_score": 0.6
+          },
+          "row_max_abs_error": 0.6
+        },
+        {
+          "inputs": {
+            "risk_a": 0.3,
+            "risk_b": 0.1
+          },
+          "predicted": {
+            "risk_score": 0.7999999523162842,
+            "risk_a": 0.30000001192092896,
+            "risk_b": 0.10000000149011612
+          },
+          "expected": {
+            "risk_score": 0.24
+          },
+          "abs_error": {
+            "risk_score": 0.5599999523162842
+          },
+          "row_max_abs_error": 0.5599999523162842
+        },
+        {
+          "inputs": {
+            "risk_a": 0.2,
+            "risk_b": 0.4
+          },
+          "predicted": {
+            "risk_score": 0.800000011920929,
+            "risk_a": 0.20000000298023224,
+            "risk_b": 0.4000000059604645
+          },
+          "expected": {
+            "risk_score": 0.26
+          },
+          "abs_error": {
+            "risk_score": 0.540000011920929
+          },
+          "row_max_abs_error": 0.540000011920929
+        },
+        {
+          "inputs": {
+            "risk_a": 0.5,
+            "risk_b": 0.5
+          },
+          "predicted": {
+            "risk_score": 1.0,
+            "risk_a": 0.5,
+            "risk_b": 0.5
+          },
+          "expected": {
+            "risk_score": 0.5
+          },
+          "abs_error": {
+            "risk_score": 0.5
+          },
+          "row_max_abs_error": 0.5
+        },
+        {
+          "inputs": {
+            "risk_a": 0.0,
+            "risk_b": 0.5
+          },
+          "predicted": {
+            "risk_score": 0.5,
+            "risk_a": 0.0,
+            "risk_b": 0.5
+          },
+          "expected": {
+            "risk_score": 0.15
+          },
+          "abs_error": {
+            "risk_score": 0.35
+          },
+          "row_max_abs_error": 0.35
+        },
+        {
+          "inputs": {
+            "risk_a": 0.0,
+            "risk_b": 1.0
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_a": 0.0,
+            "risk_b": 1.0
+          },
+          "expected": {
+            "risk_score": 0.3
+          },
+          "abs_error": {
+            "risk_score": 0.3
+          },
+          "row_max_abs_error": 0.3
+        },
+        {
+          "inputs": {
+            "risk_a": 0.5,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 0.5,
+            "risk_a": 0.5,
+            "risk_b": 0.0
+          },
+          "expected": {
+            "risk_score": 0.35
+          },
+          "abs_error": {
+            "risk_score": 0.15000000000000002
+          },
+          "row_max_abs_error": 0.15000000000000002
+        },
+        {
+          "inputs": {
+            "risk_a": 0.1,
+            "risk_b": 0.7
+          },
+          "predicted": {
+            "risk_score": 0.40000003576278687,
+            "risk_a": 0.10000000149011612,
+            "risk_b": 0.699999988079071
+          },
+          "expected": {
+            "risk_score": 0.28
+          },
+          "abs_error": {
+            "risk_score": 0.12000003576278684
+          },
+          "row_max_abs_error": 0.12000003576278684
+        },
+        {
+          "inputs": {
+            "risk_a": 1.0,
+            "risk_b": 1.0
+          },
+          "predicted": {
+            "risk_score": 1.0,
+            "risk_a": 1.0,
+            "risk_b": 1.0
+          },
+          "expected": {
+            "risk_score": 1.0
+          },
+          "abs_error": {
+            "risk_score": 0.0
+          },
+          "row_max_abs_error": 0.0
+        },
+        {
+          "inputs": {
+            "risk_a": -1.0,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_a": -1.0,
+            "risk_b": 0.0
+          },
+          "expected": {
+            "risk_score": 0.0
+          },
+          "abs_error": {
+            "risk_score": 0.0
+          },
+          "row_max_abs_error": 0.0
+        },
+        {
+          "inputs": {
+            "risk_a": -0.5,
+            "risk_b": 1.0
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_a": -0.5,
+            "risk_b": 1.0
+          },
+          "expected": {
+            "risk_score": 0.0
+          },
+          "abs_error": {
+            "risk_score": 0.0
+          },
+          "row_max_abs_error": 0.0
+        }
+      ],
+      "ranking_penalty": 0.0,
+      "adjusted_sort_score": -0.3979176451795244
+    },
+    {
+      "index": 1,
+      "candidate_source": "risk_score = max(min(1.7 * abs(risk_b), 1.3 * abs(risks_a)), 0);",
+      "success": true,
+      "compile_stage_reached": "predict",
+      "metrics": {
+        "neg_mse": -0.32638823529411765
+      },
+      "program_metrics": [
+        {
+          "name": "neg_mse",
+          "value": -0.32638823529411765
+        }
+      ],
+      "failure_summaries": [],
+      "warnings": [],
+      "producing_expert": {
+        "expert_call": "repair",
+        "backend_name": "onyx_qwen",
+        "metadata": {
+          "model": "onyx-qwen-production-v1",
+          "raw_chars": 76,
+          "extraction_mode": "fenced_ax",
+          "code_line_count": 1
+        },
+        "explanation": null
+      },
+      "producing_payload": {
+        "type": "repair",
+        "goal": "Write a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));",
+        "current_program": "risk_score = min(1, max(0, 1 - abs(risk_a - risk_b)));",
+        "error_report": "## Goal\nWrite a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nrisk_score = min(1, max(0, 1 - abs(risk_a - risk_b)));\n```\n\n## Metric report (program runs but may be suboptimal)\n\n```json\n{\n  \"metrics\": {\n    \"neg_mse\": -0.3979176451795244\n  },\n  \"program_metrics\": [\n    {\n      \"name\": \"neg_mse\",\n      \"value\": -0.3979176451795244\n    }\n  ]\n}\n```\n\n\n## Row-wise mismatches\n\nOrdered **worst-first** (by `row_max_abs_error`). Use these concrete input/output deltas to fix coefficients or structure.\n\n```json\n[\n  {\n    \"abs_error\": {\n      \"risk_score\": 1.0\n    },\n    \"expected\": {\n      \"risk_score\": 0.0\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 0.0,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 1.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 1.0\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 2.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 2.0,\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.0\n    },\n    \"row_max_abs_error\": 1.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 1.0\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 1.5,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 1.5,\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.0\n    },\n    \"row_max_abs_error\": 1.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 1.0\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 3.5\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 3.5,\n      \"risk_score\": 0.0\n    },\n    \"row_max_abs_error\": 1.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.9\n    },\n    \"expected\": {\n      \"risk_score\": 0.1\n    },\n    \"inputs\": {\n      \"risk_a\": 0.1,\n      \"risk_b\": 0.1\n    },\n    \"predicted\": {\n      \"risk_a\": 0.10000000149011612,\n      \"risk_b\": 0.10000000149011612,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.9\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.7\n    },\n    \"expected\": {\n      \"risk_score\": 0.7\n    },\n    \"inputs\": {\n      \"risk_a\": 1.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 1.0,\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.0\n    },\n    \"row_max_abs_error\": 0.7\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.6\n    },\n    \"expected\": {\n      \"risk_score\": 0.6\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 2.0\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 2.0,\n      \"risk_score\": 0.0\n    },\n    \"row_max_abs_error\": 0.6\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.5599999523162842\n    },\n    \"expected\": {\n      \"risk_score\": 0.24\n    },\n    \"inputs\": {\n      \"risk_a\": 0.3,\n      \"risk_b\": 0.1\n    },\n    \"predicted\": {\n      \"risk_a\": 0.30000001192092896,\n      \"risk_b\": 0.10000000149011612,\n      \"risk_score\": 0.7999999523162842\n    },\n    \"row_max_abs_error\": 0.5599999523162842\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.540000011920929\n    },\n    \"expected\": {\n      \"risk_score\": 0.26\n    },\n    \"inputs\": {\n      \"risk_a\": 0.2,\n      \"risk_b\": 0.4\n    },\n    \"predicted\": {\n      \"risk_a\": 0.20000000298023224,\n      \"risk_b\": 0.4000000059604645,\n      \"risk_score\": 0.800000011920929\n    },\n    \"row_max_abs_error\": 0.540000011920929\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.5\n    },\n    \"expected\": {\n      \"risk_score\": 0.5\n    },\n    \"inputs\": {\n      \"risk_a\": 0.5,\n      \"risk_b\": 0.5\n    },\n    \"predicted\": {\n      \"risk_a\": 0.5,\n      \"risk_b\": 0.5,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.5\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.35\n    },\n    \"expected\": {\n      \"risk_score\": 0.15\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 0.5\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 0.5,\n      \"risk_score\": 0.5\n    },\n    \"row_max_abs_error\": 0.35\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.3\n    },\n    \"expected\": {\n      \"risk_score\": 0.3\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 1.0\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 1.0,\n      \"risk_score\": 0.0\n    },\n    \"row_max_abs_error\": 0.3\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.15000000000000002\n    },\n    \"expected\": {\n      \"risk_score\": 0.35\n    },\n    \"inputs\": {\n      \"risk_a\": 0.5,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 0.5,\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.5\n    },\n    \"row_max_abs_error\": 0.15000000000000002\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.12000003576278684\n    },\n    \"expected\": {\n      \"risk_score\": 0.28\n    },\n    \"inputs\": {\n      \"risk_a\": 0.1,\n      \"risk_b\": 0.7\n    },\n    \"predicted\": {\n      \"risk_a\": 0.10000000149011612,\n      \"risk_b\": 0.699999988079071,\n      \"risk_score\": 0.40000003576278687\n    },\n    \"row_max_abs_error\": 0.12000003576278684\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 1.0,\n      \"risk_b\": 1.0\n    },\n    \"predicted\": {\n      \"risk_a\": 1.0,\n      \"risk_b\": 1.0,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 0.0\n    },\n    \"inputs\": {\n      \"risk_a\": -1.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": -1.0,\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.0\n    },\n    \"row_max_abs_error\": 0.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 0.0\n    },\n    \"inputs\": {\n      \"risk_a\": -0.5,\n      \"risk_b\": 1.0\n    },\n    \"predicted\": {\n      \"risk_a\": -0.5,\n      \"risk_b\": 1.0,\n      \"risk_score\": 0.0\n    },\n    \"row_max_abs_error\": 0.0\n  }\n]\n```\n\n\n## Symbolic mapping hint\nThis task is defined by explicit input/output examples with numeric targets. Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+        "context": {
+          "example_input_rows": [
+            {
+              "risk_a": 0.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 1.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": 0.5,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 0.5
+            },
+            {
+              "risk_a": 0.2,
+              "risk_b": 0.4
+            },
+            {
+              "risk_a": 0.5,
+              "risk_b": 0.5
+            },
+            {
+              "risk_a": 0.1,
+              "risk_b": 0.7
+            },
+            {
+              "risk_a": 0.3,
+              "risk_b": 0.1
+            },
+            {
+              "risk_a": 0.1,
+              "risk_b": 0.1
+            },
+            {
+              "risk_a": 1.0,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": -1.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": -0.5,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": 2.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 1.5,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 2.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 3.5
+            }
+          ],
+          "expected_outputs": [
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 0.7
+            },
+            {
+              "risk_score": 0.3
+            },
+            {
+              "risk_score": 0.35
+            },
+            {
+              "risk_score": 0.15
+            },
+            {
+              "risk_score": 0.26
+            },
+            {
+              "risk_score": 0.5
+            },
+            {
+              "risk_score": 0.28
+            },
+            {
+              "risk_score": 0.24
+            },
+            {
+              "risk_score": 0.1
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 0.6
+            },
+            {
+              "risk_score": 1.0
+            }
+          ],
+          "evaluation_mode": "predict_rows",
+          "exact_symbolic_examples_task": true,
+          "_onyx_completion_overrides": {
+            "temperature": 0.0
+          }
+        }
+      },
+      "outgoing_repair_error_report": "## Goal\nWrite a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nrisk_score = max(min(1.7 * abs(risk_b), 1.3 * abs(risks_a)), 0);\n```\n\n## Metric report (program runs but may be suboptimal)\n\n```json\n{\n  \"metrics\": {\n    \"neg_mse\": -0.32638823529411765\n  },\n  \"program_metrics\": [\n    {\n      \"name\": \"neg_mse\",\n      \"value\": -0.32638823529411765\n    }\n  ]\n}\n```\n\n\n## Row-wise mismatches\n\nOrdered **worst-first** (by `row_max_abs_error`). Use these concrete input/output deltas to fix coefficients or structure.\n\n```json\n[\n  {\n    \"abs_error\": {\n      \"risk_score\": 1.0\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 1.0,\n      \"risk_b\": 1.0\n    },\n    \"predicted\": {\n      \"risk_b\": 1.0,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 1.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 1.0\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 2.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 1.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 1.0\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 1.5,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 1.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 1.0\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 3.5\n    },\n    \"predicted\": {\n      \"risk_b\": 3.5,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 1.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.7\n    },\n    \"expected\": {\n      \"risk_score\": 0.7\n    },\n    \"inputs\": {\n      \"risk_a\": 1.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 0.7\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.6\n    },\n    \"expected\": {\n      \"risk_score\": 0.6\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 2.0\n    },\n    \"predicted\": {\n      \"risk_b\": 2.0,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 0.6\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.5\n    },\n    \"expected\": {\n      \"risk_score\": 0.5\n    },\n    \"inputs\": {\n      \"risk_a\": 0.5,\n      \"risk_b\": 0.5\n    },\n    \"predicted\": {\n      \"risk_b\": 0.5,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 0.5\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.35\n    },\n    \"expected\": {\n      \"risk_score\": 0.35\n    },\n    \"inputs\": {\n      \"risk_a\": 0.5,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 0.35\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.3\n    },\n    \"expected\": {\n      \"risk_score\": 0.3\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 1.0\n    },\n    \"predicted\": {\n      \"risk_b\": 1.0,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 0.3\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.28\n    },\n    \"expected\": {\n      \"risk_score\": 0.28\n    },\n    \"inputs\": {\n      \"risk_a\": 0.1,\n      \"risk_b\": 0.7\n    },\n    \"predicted\": {\n      \"risk_b\": 0.699999988079071,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 0.28\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.26\n    },\n    \"expected\": {\n      \"risk_score\": 0.26\n    },\n    \"inputs\": {\n      \"risk_a\": 0.2,\n      \"risk_b\": 0.4\n    },\n    \"predicted\": {\n      \"risk_b\": 0.4000000059604645,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 0.26\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.24\n    },\n    \"expected\": {\n      \"risk_score\": 0.24\n    },\n    \"inputs\": {\n      \"risk_a\": 0.3,\n      \"risk_b\": 0.1\n    },\n    \"predicted\": {\n      \"risk_b\": 0.10000000149011612,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 0.24\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.15\n    },\n    \"expected\": {\n      \"risk_score\": 0.15\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 0.5\n    },\n    \"predicted\": {\n      \"risk_b\": 0.5,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 0.15\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.1\n    },\n    \"expected\": {\n      \"risk_score\": 0.1\n    },\n    \"inputs\": {\n      \"risk_a\": 0.1,\n      \"risk_b\": 0.1\n    },\n    \"predicted\": {\n      \"risk_b\": 0.10000000149011612,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 0.1\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 0.0\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 0.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 0.0\n    },\n    \"inputs\": {\n      \"risk_a\": -1.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 0.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 0.0\n    },\n    \"inputs\": {\n      \"risk_a\": -0.5,\n      \"risk_b\": 1.0\n    },\n    \"predicted\": {\n      \"risk_b\": 1.0,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 0.0\n  }\n]\n```\n\n\n## Symbolic mapping hint\nThis task is defined by explicit input/output examples with numeric targets. Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+      "semantic_trace_summary": null,
+      "row_comparisons": [
+        {
+          "inputs": {
+            "risk_a": 1.0,
+            "risk_b": 1.0
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_b": 1.0,
+            "risks_a": 0.0
+          },
+          "expected": {
+            "risk_score": 1.0
+          },
+          "abs_error": {
+            "risk_score": 1.0
+          },
+          "row_max_abs_error": 1.0
+        },
+        {
+          "inputs": {
+            "risk_a": 2.0,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_b": 0.0,
+            "risks_a": 0.0
+          },
+          "expected": {
+            "risk_score": 1.0
+          },
+          "abs_error": {
+            "risk_score": 1.0
+          },
+          "row_max_abs_error": 1.0
+        },
+        {
+          "inputs": {
+            "risk_a": 1.5,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_b": 0.0,
+            "risks_a": 0.0
+          },
+          "expected": {
+            "risk_score": 1.0
+          },
+          "abs_error": {
+            "risk_score": 1.0
+          },
+          "row_max_abs_error": 1.0
+        },
+        {
+          "inputs": {
+            "risk_a": 0.0,
+            "risk_b": 3.5
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_b": 3.5,
+            "risks_a": 0.0
+          },
+          "expected": {
+            "risk_score": 1.0
+          },
+          "abs_error": {
+            "risk_score": 1.0
+          },
+          "row_max_abs_error": 1.0
+        },
+        {
+          "inputs": {
+            "risk_a": 1.0,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_b": 0.0,
+            "risks_a": 0.0
+          },
+          "expected": {
+            "risk_score": 0.7
+          },
+          "abs_error": {
+            "risk_score": 0.7
+          },
+          "row_max_abs_error": 0.7
+        },
+        {
+          "inputs": {
+            "risk_a": 0.0,
+            "risk_b": 2.0
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_b": 2.0,
+            "risks_a": 0.0
+          },
+          "expected": {
+            "risk_score": 0.6
+          },
+          "abs_error": {
+            "risk_score": 0.6
+          },
+          "row_max_abs_error": 0.6
+        },
+        {
+          "inputs": {
+            "risk_a": 0.5,
+            "risk_b": 0.5
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_b": 0.5,
+            "risks_a": 0.0
+          },
+          "expected": {
+            "risk_score": 0.5
+          },
+          "abs_error": {
+            "risk_score": 0.5
+          },
+          "row_max_abs_error": 0.5
+        },
+        {
+          "inputs": {
+            "risk_a": 0.5,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_b": 0.0,
+            "risks_a": 0.0
+          },
+          "expected": {
+            "risk_score": 0.35
+          },
+          "abs_error": {
+            "risk_score": 0.35
+          },
+          "row_max_abs_error": 0.35
+        },
+        {
+          "inputs": {
+            "risk_a": 0.0,
+            "risk_b": 1.0
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_b": 1.0,
+            "risks_a": 0.0
+          },
+          "expected": {
+            "risk_score": 0.3
+          },
+          "abs_error": {
+            "risk_score": 0.3
+          },
+          "row_max_abs_error": 0.3
+        },
+        {
+          "inputs": {
+            "risk_a": 0.1,
+            "risk_b": 0.7
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_b": 0.699999988079071,
+            "risks_a": 0.0
+          },
+          "expected": {
+            "risk_score": 0.28
+          },
+          "abs_error": {
+            "risk_score": 0.28
+          },
+          "row_max_abs_error": 0.28
+        },
+        {
+          "inputs": {
+            "risk_a": 0.2,
+            "risk_b": 0.4
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_b": 0.4000000059604645,
+            "risks_a": 0.0
+          },
+          "expected": {
+            "risk_score": 0.26
+          },
+          "abs_error": {
+            "risk_score": 0.26
+          },
+          "row_max_abs_error": 0.26
+        },
+        {
+          "inputs": {
+            "risk_a": 0.3,
+            "risk_b": 0.1
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_b": 0.10000000149011612,
+            "risks_a": 0.0
+          },
+          "expected": {
+            "risk_score": 0.24
+          },
+          "abs_error": {
+            "risk_score": 0.24
+          },
+          "row_max_abs_error": 0.24
+        },
+        {
+          "inputs": {
+            "risk_a": 0.0,
+            "risk_b": 0.5
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_b": 0.5,
+            "risks_a": 0.0
+          },
+          "expected": {
+            "risk_score": 0.15
+          },
+          "abs_error": {
+            "risk_score": 0.15
+          },
+          "row_max_abs_error": 0.15
+        },
+        {
+          "inputs": {
+            "risk_a": 0.1,
+            "risk_b": 0.1
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_b": 0.10000000149011612,
+            "risks_a": 0.0
+          },
+          "expected": {
+            "risk_score": 0.1
+          },
+          "abs_error": {
+            "risk_score": 0.1
+          },
+          "row_max_abs_error": 0.1
+        },
+        {
+          "inputs": {
+            "risk_a": 0.0,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_b": 0.0,
+            "risks_a": 0.0
+          },
+          "expected": {
+            "risk_score": 0.0
+          },
+          "abs_error": {
+            "risk_score": 0.0
+          },
+          "row_max_abs_error": 0.0
+        },
+        {
+          "inputs": {
+            "risk_a": -1.0,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_b": 0.0,
+            "risks_a": 0.0
+          },
+          "expected": {
+            "risk_score": 0.0
+          },
+          "abs_error": {
+            "risk_score": 0.0
+          },
+          "row_max_abs_error": 0.0
+        },
+        {
+          "inputs": {
+            "risk_a": -0.5,
+            "risk_b": 1.0
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_b": 1.0,
+            "risks_a": 0.0
+          },
+          "expected": {
+            "risk_score": 0.0
+          },
+          "abs_error": {
+            "risk_score": 0.0
+          },
+          "row_max_abs_error": 0.0
+        }
+      ],
+      "ranking_penalty": 0.0,
+      "adjusted_sort_score": -0.32638823529411765
+    },
+    {
+      "index": 2,
+      "candidate_source": "risk_score = if (0.7*risk_a +  0. 3*risk_b > 1. ) then 1. else if (0.<= 0.         *risk_a + 1.  *risk_b <= 1.) then 0.   else 0.;",
+      "success": false,
+      "compile_stage_reached": "parse",
+      "metrics": {},
+      "program_metrics": [],
+      "failure_summaries": [
+        {
+          "stage": "parse",
+          "kind": "syntax",
+          "message": "No terminal matches '.' in the current parser context, at line 1 col 33\n\nrisk_score = if (0.7*risk_a +  0. 3*risk_b > 1. ) then 1. else if (0.<= \n                                ^\nExpected one of: \n\t* SEMICOLON\n\t* LPAR\n\t* LT\n\t* GT\n\t* RPAR\n\t* ADD\n\t* LSQB\n\t* DIV\n\t* RSQB\n\t* NE\n\t* SUB\n\t* MUL\n\t* COMMA\n\t* EQ\n\nPrevious tokens: Token('NUMBER', '0')\n",
+          "detail": "UnexpectedCharacters"
+        }
+      ],
+      "warnings": [],
+      "producing_expert": {
+        "expert_call": "repair",
+        "backend_name": "onyx_qwen",
+        "metadata": {
+          "model": "onyx-qwen-production-v1",
+          "raw_chars": 141,
+          "extraction_mode": "fenced_ax",
+          "code_line_count": 1
+        },
+        "explanation": null
+      },
+      "producing_payload": {
+        "type": "repair",
+        "goal": "Write a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));",
+        "current_program": "risk_score = max(min(1.7 * abs(risk_b), 1.3 * abs(risks_a)), 0);",
+        "error_report": "## Goal\nWrite a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nrisk_score = max(min(1.7 * abs(risk_b), 1.3 * abs(risks_a)), 0);\n```\n\n## Metric report (program runs but may be suboptimal)\n\n```json\n{\n  \"metrics\": {\n    \"neg_mse\": -0.32638823529411765\n  },\n  \"program_metrics\": [\n    {\n      \"name\": \"neg_mse\",\n      \"value\": -0.32638823529411765\n    }\n  ]\n}\n```\n\n\n## Row-wise mismatches\n\nOrdered **worst-first** (by `row_max_abs_error`). Use these concrete input/output deltas to fix coefficients or structure.\n\n```json\n[\n  {\n    \"abs_error\": {\n      \"risk_score\": 1.0\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 1.0,\n      \"risk_b\": 1.0\n    },\n    \"predicted\": {\n      \"risk_b\": 1.0,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 1.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 1.0\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 2.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 1.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 1.0\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 1.5,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 1.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 1.0\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 3.5\n    },\n    \"predicted\": {\n      \"risk_b\": 3.5,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 1.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.7\n    },\n    \"expected\": {\n      \"risk_score\": 0.7\n    },\n    \"inputs\": {\n      \"risk_a\": 1.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 0.7\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.6\n    },\n    \"expected\": {\n      \"risk_score\": 0.6\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 2.0\n    },\n    \"predicted\": {\n      \"risk_b\": 2.0,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 0.6\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.5\n    },\n    \"expected\": {\n      \"risk_score\": 0.5\n    },\n    \"inputs\": {\n      \"risk_a\": 0.5,\n      \"risk_b\": 0.5\n    },\n    \"predicted\": {\n      \"risk_b\": 0.5,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 0.5\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.35\n    },\n    \"expected\": {\n      \"risk_score\": 0.35\n    },\n    \"inputs\": {\n      \"risk_a\": 0.5,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 0.35\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.3\n    },\n    \"expected\": {\n      \"risk_score\": 0.3\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 1.0\n    },\n    \"predicted\": {\n      \"risk_b\": 1.0,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 0.3\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.28\n    },\n    \"expected\": {\n      \"risk_score\": 0.28\n    },\n    \"inputs\": {\n      \"risk_a\": 0.1,\n      \"risk_b\": 0.7\n    },\n    \"predicted\": {\n      \"risk_b\": 0.699999988079071,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 0.28\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.26\n    },\n    \"expected\": {\n      \"risk_score\": 0.26\n    },\n    \"inputs\": {\n      \"risk_a\": 0.2,\n      \"risk_b\": 0.4\n    },\n    \"predicted\": {\n      \"risk_b\": 0.4000000059604645,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 0.26\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.24\n    },\n    \"expected\": {\n      \"risk_score\": 0.24\n    },\n    \"inputs\": {\n      \"risk_a\": 0.3,\n      \"risk_b\": 0.1\n    },\n    \"predicted\": {\n      \"risk_b\": 0.10000000149011612,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 0.24\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.15\n    },\n    \"expected\": {\n      \"risk_score\": 0.15\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 0.5\n    },\n    \"predicted\": {\n      \"risk_b\": 0.5,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 0.15\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.1\n    },\n    \"expected\": {\n      \"risk_score\": 0.1\n    },\n    \"inputs\": {\n      \"risk_a\": 0.1,\n      \"risk_b\": 0.1\n    },\n    \"predicted\": {\n      \"risk_b\": 0.10000000149011612,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 0.1\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 0.0\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 0.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 0.0\n    },\n    \"inputs\": {\n      \"risk_a\": -1.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 0.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 0.0\n    },\n    \"inputs\": {\n      \"risk_a\": -0.5,\n      \"risk_b\": 1.0\n    },\n    \"predicted\": {\n      \"risk_b\": 1.0,\n      \"risk_score\": 0.0,\n      \"risks_a\": 0.0\n    },\n    \"row_max_abs_error\": 0.0\n  }\n]\n```\n\n\n## Symbolic mapping hint\nThis task is defined by explicit input/output examples with numeric targets. Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+        "context": {
+          "example_input_rows": [
+            {
+              "risk_a": 0.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 1.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": 0.5,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 0.5
+            },
+            {
+              "risk_a": 0.2,
+              "risk_b": 0.4
+            },
+            {
+              "risk_a": 0.5,
+              "risk_b": 0.5
+            },
+            {
+              "risk_a": 0.1,
+              "risk_b": 0.7
+            },
+            {
+              "risk_a": 0.3,
+              "risk_b": 0.1
+            },
+            {
+              "risk_a": 0.1,
+              "risk_b": 0.1
+            },
+            {
+              "risk_a": 1.0,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": -1.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": -0.5,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": 2.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 1.5,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 2.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 3.5
+            }
+          ],
+          "expected_outputs": [
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 0.7
+            },
+            {
+              "risk_score": 0.3
+            },
+            {
+              "risk_score": 0.35
+            },
+            {
+              "risk_score": 0.15
+            },
+            {
+              "risk_score": 0.26
+            },
+            {
+              "risk_score": 0.5
+            },
+            {
+              "risk_score": 0.28
+            },
+            {
+              "risk_score": 0.24
+            },
+            {
+              "risk_score": 0.1
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 0.6
+            },
+            {
+              "risk_score": 1.0
+            }
+          ],
+          "evaluation_mode": "predict_rows",
+          "exact_symbolic_examples_task": true,
+          "_onyx_completion_overrides": {
+            "temperature": 0.0
+          }
+        }
+      },
+      "outgoing_repair_error_report": "## Goal\nWrite a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nrisk_score = if (0.7*risk_a +  0. 3*risk_b > 1. ) then 1. else if (0.<= 0.         *risk_a + 1.  *risk_b <= 1.) then 0.   else 0.;\n```\n\n## Structured compile / evaluation failures\n\n1. stage='parse' kind='syntax' detail='UnexpectedCharacters'\n   message: No terminal matches '.' in the current parser context, at line 1 col 33\n\nrisk_score = if (0.7*risk_a +  0. 3*risk_b > 1. ) then 1. else if (0.<= \n                                ^\nExpected one of: \n\t* SEMICOLON\n\t* LPAR\n\t* LT\n\t* GT\n\t* RPAR\n\t* ADD\n\t* LSQB\n\t* DIV\n\t* RSQB\n\t* NE\n\t* SUB\n\t* MUL\n\t* COMMA\n\t* EQ\n\nPrevious tokens: Token('NUMBER', '0')\n\n## Symbolic mapping hint\nThis task is defined by explicit input/output examples with numeric targets. Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+      "semantic_trace_summary": null,
+      "ranking_penalty": 0.0
+    },
+    {
+      "index": 3,
+      "candidate_source": "risk_score = max(min(0.7* risk_a +0.3* risk_b, 1. ), 0. );",
+      "success": false,
+      "compile_stage_reached": "parse",
+      "metrics": {},
+      "program_metrics": [],
+      "failure_summaries": [
+        {
+          "stage": "parse",
+          "kind": "syntax",
+          "message": "No terminal matches '.' in the current parser context, at line 1 col 49\n\nre = max(min(0.7* risk_a +0.3* risk_b, 1. ), 0. );\n                                        ^\nExpected one of: \n\t* SEMICOLON\n\t* LPAR\n\t* LT\n\t* GT\n\t* RPAR\n\t* ADD\n\t* LSQB\n\t* DIV\n\t* RSQB\n\t* NE\n\t* SUB\n\t* MUL\n\t* COMMA\n\t* EQ\n\nPrevious tokens: Token('NUMBER', '1')\n",
+          "detail": "UnexpectedCharacters"
+        }
+      ],
+      "warnings": [],
+      "producing_expert": {
+        "expert_call": "repair",
+        "backend_name": "onyx_qwen",
+        "metadata": {
+          "model": "onyx-qwen-production-v1",
+          "raw_chars": 71,
+          "extraction_mode": "fenced_ax",
+          "code_line_count": 1
+        },
+        "explanation": null
+      },
+      "producing_payload": {
+        "type": "repair",
+        "goal": "Write a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));",
+        "current_program": "risk_score = if (0.7*risk_a +  0. 3*risk_b > 1. ) then 1. else if (0.<= 0.         *risk_a + 1.  *risk_b <= 1.) then 0.   else 0.;",
+        "error_report": "## Goal\nWrite a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nrisk_score = if (0.7*risk_a +  0. 3*risk_b > 1. ) then 1. else if (0.<= 0.         *risk_a + 1.  *risk_b <= 1.) then 0.   else 0.;\n```\n\n## Structured compile / evaluation failures\n\n1. stage='parse' kind='syntax' detail='UnexpectedCharacters'\n   message: No terminal matches '.' in the current parser context, at line 1 col 33\n\nrisk_score = if (0.7*risk_a +  0. 3*risk_b > 1. ) then 1. else if (0.<= \n                                ^\nExpected one of: \n\t* SEMICOLON\n\t* LPAR\n\t* LT\n\t* GT\n\t* RPAR\n\t* ADD\n\t* LSQB\n\t* DIV\n\t* RSQB\n\t* NE\n\t* SUB\n\t* MUL\n\t* COMMA\n\t* EQ\n\nPrevious tokens: Token('NUMBER', '0')\n\n## Symbolic mapping hint\nThis task is defined by explicit input/output examples with numeric targets. Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+        "context": {
+          "example_input_rows": [
+            {
+              "risk_a": 0.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 1.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": 0.5,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 0.5
+            },
+            {
+              "risk_a": 0.2,
+              "risk_b": 0.4
+            },
+            {
+              "risk_a": 0.5,
+              "risk_b": 0.5
+            },
+            {
+              "risk_a": 0.1,
+              "risk_b": 0.7
+            },
+            {
+              "risk_a": 0.3,
+              "risk_b": 0.1
+            },
+            {
+              "risk_a": 0.1,
+              "risk_b": 0.1
+            },
+            {
+              "risk_a": 1.0,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": -1.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": -0.5,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": 2.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 1.5,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 2.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 3.5
+            }
+          ],
+          "expected_outputs": [
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 0.7
+            },
+            {
+              "risk_score": 0.3
+            },
+            {
+              "risk_score": 0.35
+            },
+            {
+              "risk_score": 0.15
+            },
+            {
+              "risk_score": 0.26
+            },
+            {
+              "risk_score": 0.5
+            },
+            {
+              "risk_score": 0.28
+            },
+            {
+              "risk_score": 0.24
+            },
+            {
+              "risk_score": 0.1
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 0.6
+            },
+            {
+              "risk_score": 1.0
+            }
+          ],
+          "evaluation_mode": "predict_rows",
+          "exact_symbolic_examples_task": true,
+          "_onyx_completion_overrides": {
+            "temperature": 0.0
+          }
+        }
+      },
+      "outgoing_repair_error_report": "## Goal\nWrite a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nrisk_score = max(min(0.7* risk_a +0.3* risk_b, 1. ), 0. );\n```\n\n## Structured compile / evaluation failures\n\n1. stage='parse' kind='syntax' detail='UnexpectedCharacters'\n   message: No terminal matches '.' in the current parser context, at line 1 col 49\n\nre = max(min(0.7* risk_a +0.3* risk_b, 1. ), 0. );\n                                        ^\nExpected one of: \n\t* SEMICOLON\n\t* LPAR\n\t* LT\n\t* GT\n\t* RPAR\n\t* ADD\n\t* LSQB\n\t* DIV\n\t* RSQB\n\t* NE\n\t* SUB\n\t* MUL\n\t* COMMA\n\t* EQ\n\nPrevious tokens: Token('NUMBER', '1')\n\n## Symbolic mapping hint\nThis task is defined by explicit input/output examples with numeric targets. Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+      "semantic_trace_summary": null,
+      "ranking_penalty": 0.0
+    },
+    {
+      "index": 4,
+      "candidate_source": "risk_score = if 0. < 0. 7 * risk_A + 0 . 3 * risk_B then min(0.  7 *风险_a +  0.    3 *风险_b,  1.) else 0.;",
+      "success": false,
+      "compile_stage_reached": "parse",
+      "metrics": {},
+      "program_metrics": [],
+      "failure_summaries": [
+        {
+          "stage": "parse",
+          "kind": "syntax",
+          "message": "Unexpected token Token('NUMBER', '0') at line 1, column 17.\nExpected one of: \n\t* SEMICOLON\n\t* LPAR\n\t* LT\n\t* NE\n\t* SUB\n\t* GT\n\t* MUL\n\t* ADD\n\t* LSQB\n\t* DIV\n\t* EQ\nPrevious tokens: [Token('NAME', 'if')]\n",
+          "detail": "UnexpectedToken"
+        }
+      ],
+      "warnings": [],
+      "producing_expert": {
+        "expert_call": "repair",
+        "backend_name": "onyx_qwen",
+        "metadata": {
+          "model": "onyx-qwen-production-v1",
+          "raw_chars": 115,
+          "extraction_mode": "fenced_ax",
+          "code_line_count": 1
+        },
+        "explanation": null
+      },
+      "producing_payload": {
+        "type": "repair",
+        "goal": "Write a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));",
+        "current_program": "risk_score = max(min(0.7* risk_a +0.3* risk_b, 1. ), 0. );",
+        "error_report": "## Goal\nWrite a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nrisk_score = max(min(0.7* risk_a +0.3* risk_b, 1. ), 0. );\n```\n\n## Structured compile / evaluation failures\n\n1. stage='parse' kind='syntax' detail='UnexpectedCharacters'\n   message: No terminal matches '.' in the current parser context, at line 1 col 49\n\nre = max(min(0.7* risk_a +0.3* risk_b, 1. ), 0. );\n                                        ^\nExpected one of: \n\t* SEMICOLON\n\t* LPAR\n\t* LT\n\t* GT\n\t* RPAR\n\t* ADD\n\t* LSQB\n\t* DIV\n\t* RSQB\n\t* NE\n\t* SUB\n\t* MUL\n\t* COMMA\n\t* EQ\n\nPrevious tokens: Token('NUMBER', '1')\n\n## Symbolic mapping hint\nThis task is defined by explicit input/output examples with numeric targets. Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+        "context": {
+          "example_input_rows": [
+            {
+              "risk_a": 0.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 1.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": 0.5,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 0.5
+            },
+            {
+              "risk_a": 0.2,
+              "risk_b": 0.4
+            },
+            {
+              "risk_a": 0.5,
+              "risk_b": 0.5
+            },
+            {
+              "risk_a": 0.1,
+              "risk_b": 0.7
+            },
+            {
+              "risk_a": 0.3,
+              "risk_b": 0.1
+            },
+            {
+              "risk_a": 0.1,
+              "risk_b": 0.1
+            },
+            {
+              "risk_a": 1.0,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": -1.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": -0.5,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": 2.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 1.5,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 2.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 3.5
+            }
+          ],
+          "expected_outputs": [
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 0.7
+            },
+            {
+              "risk_score": 0.3
+            },
+            {
+              "risk_score": 0.35
+            },
+            {
+              "risk_score": 0.15
+            },
+            {
+              "risk_score": 0.26
+            },
+            {
+              "risk_score": 0.5
+            },
+            {
+              "risk_score": 0.28
+            },
+            {
+              "risk_score": 0.24
+            },
+            {
+              "risk_score": 0.1
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 0.6
+            },
+            {
+              "risk_score": 1.0
+            }
+          ],
+          "evaluation_mode": "predict_rows",
+          "exact_symbolic_examples_task": true,
+          "_onyx_completion_overrides": {
+            "temperature": 0.0
+          }
+        }
+      },
+      "outgoing_repair_error_report": "## Goal\nWrite a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nrisk_score = if 0. < 0. 7 * risk_A + 0 . 3 * risk_B then min(0.  7 *风险_a +  0.    3 *风险_b,  1.) else 0.;\n```\n\n## Structured compile / evaluation failures\n\n1. stage='parse' kind='syntax' detail='UnexpectedToken'\n   message: Unexpected token Token('NUMBER', '0') at line 1, column 17.\nExpected one of: \n\t* SEMICOLON\n\t* LPAR\n\t* LT\n\t* NE\n\t* SUB\n\t* GT\n\t* MUL\n\t* ADD\n\t* LSQB\n\t* DIV\n\t* EQ\nPrevious tokens: [Token('NAME', 'if')]\n\n## Symbolic mapping hint\nThis task is defined by explicit input/output examples with numeric targets. Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+      "semantic_trace_summary": null,
+      "ranking_penalty": 0.0
+    },
+    {
+      "index": 5,
+      "candidate_source": "risk_score = max(min(0.7*risk_a + 3*risk_b, 1), 0);",
+      "success": true,
+      "compile_stage_reached": "predict",
+      "metrics": {
+        "neg_mse": -0.22554705867206354
+      },
+      "program_metrics": [
+        {
+          "name": "neg_mse",
+          "value": -0.22554705867206354
+        }
+      ],
+      "failure_summaries": [],
+      "warnings": [],
+      "producing_expert": {
+        "expert_call": "repair",
+        "backend_name": "onyx_qwen",
+        "metadata": {
+          "model": "onyx-qwen-production-v1",
+          "raw_chars": 64,
+          "extraction_mode": "fenced_ax",
+          "code_line_count": 1
+        },
+        "explanation": null
+      },
+      "producing_payload": {
+        "type": "repair",
+        "goal": "Write a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));",
+        "current_program": "risk_score = if 0. < 0. 7 * risk_A + 0 . 3 * risk_B then min(0.  7 *风险_a +  0.    3 *风险_b,  1.) else 0.;",
+        "error_report": "## Goal\nWrite a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nrisk_score = if 0. < 0. 7 * risk_A + 0 . 3 * risk_B then min(0.  7 *风险_a +  0.    3 *风险_b,  1.) else 0.;\n```\n\n## Structured compile / evaluation failures\n\n1. stage='parse' kind='syntax' detail='UnexpectedToken'\n   message: Unexpected token Token('NUMBER', '0') at line 1, column 17.\nExpected one of: \n\t* SEMICOLON\n\t* LPAR\n\t* LT\n\t* NE\n\t* SUB\n\t* GT\n\t* MUL\n\t* ADD\n\t* LSQB\n\t* DIV\n\t* EQ\nPrevious tokens: [Token('NAME', 'if')]\n\n## Symbolic mapping hint\nThis task is defined by explicit input/output examples with numeric targets. Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+        "context": {
+          "example_input_rows": [
+            {
+              "risk_a": 0.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 1.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": 0.5,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 0.5
+            },
+            {
+              "risk_a": 0.2,
+              "risk_b": 0.4
+            },
+            {
+              "risk_a": 0.5,
+              "risk_b": 0.5
+            },
+            {
+              "risk_a": 0.1,
+              "risk_b": 0.7
+            },
+            {
+              "risk_a": 0.3,
+              "risk_b": 0.1
+            },
+            {
+              "risk_a": 0.1,
+              "risk_b": 0.1
+            },
+            {
+              "risk_a": 1.0,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": -1.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": -0.5,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": 2.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 1.5,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 2.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 3.5
+            }
+          ],
+          "expected_outputs": [
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 0.7
+            },
+            {
+              "risk_score": 0.3
+            },
+            {
+              "risk_score": 0.35
+            },
+            {
+              "risk_score": 0.15
+            },
+            {
+              "risk_score": 0.26
+            },
+            {
+              "risk_score": 0.5
+            },
+            {
+              "risk_score": 0.28
+            },
+            {
+              "risk_score": 0.24
+            },
+            {
+              "risk_score": 0.1
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 0.6
+            },
+            {
+              "risk_score": 1.0
+            }
+          ],
+          "evaluation_mode": "predict_rows",
+          "exact_symbolic_examples_task": true,
+          "_onyx_completion_overrides": {
+            "temperature": 0.0
+          }
+        }
+      },
+      "outgoing_repair_error_report": "## Goal\nWrite a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nrisk_score = max(min(0.7*risk_a + 3*risk_b, 1), 0);\n```\n\n## Metric report (program runs but may be suboptimal)\n\n```json\n{\n  \"metrics\": {\n    \"neg_mse\": -0.22554705867206354\n  },\n  \"program_metrics\": [\n    {\n      \"name\": \"neg_mse\",\n      \"value\": -0.22554705867206354\n    }\n  ]\n}\n```\n\n\n## Row-wise mismatches\n\nOrdered **worst-first** (by `row_max_abs_error`). Use these concrete input/output deltas to fix coefficients or structure.\n\n```json\n[\n  {\n    \"abs_error\": {\n      \"risk_score\": 1.0\n    },\n    \"expected\": {\n      \"risk_score\": 0.0\n    },\n    \"inputs\": {\n      \"risk_a\": -0.5,\n      \"risk_b\": 1.0\n    },\n    \"predicted\": {\n      \"risk_a\": -0.5,\n      \"risk_b\": 1.0,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 1.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.85\n    },\n    \"expected\": {\n      \"risk_score\": 0.15\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 0.5\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 0.5,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.85\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.74\n    },\n    \"expected\": {\n      \"risk_score\": 0.26\n    },\n    \"inputs\": {\n      \"risk_a\": 0.2,\n      \"risk_b\": 0.4\n    },\n    \"predicted\": {\n      \"risk_a\": 0.20000000298023224,\n      \"risk_b\": 0.4000000059604645,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.74\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.72\n    },\n    \"expected\": {\n      \"risk_score\": 0.28\n    },\n    \"inputs\": {\n      \"risk_a\": 0.1,\n      \"risk_b\": 0.7\n    },\n    \"predicted\": {\n      \"risk_a\": 0.10000000149011612,\n      \"risk_b\": 0.699999988079071,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.72\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.7\n    },\n    \"expected\": {\n      \"risk_score\": 0.3\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 1.0\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 1.0,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.7\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.5\n    },\n    \"expected\": {\n      \"risk_score\": 0.5\n    },\n    \"inputs\": {\n      \"risk_a\": 0.5,\n      \"risk_b\": 0.5\n    },\n    \"predicted\": {\n      \"risk_a\": 0.5,\n      \"risk_b\": 0.5,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.5\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.4\n    },\n    \"expected\": {\n      \"risk_score\": 0.6\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 2.0\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 2.0,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.4\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.2700000047683716\n    },\n    \"expected\": {\n      \"risk_score\": 0.1\n    },\n    \"inputs\": {\n      \"risk_a\": 0.1,\n      \"risk_b\": 0.1\n    },\n    \"predicted\": {\n      \"risk_a\": 0.10000000149011612,\n      \"risk_b\": 0.10000000149011612,\n      \"risk_score\": 0.3700000047683716\n    },\n    \"row_max_abs_error\": 0.2700000047683716\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.26999999046325684\n    },\n    \"expected\": {\n      \"risk_score\": 0.24\n    },\n    \"inputs\": {\n      \"risk_a\": 0.3,\n      \"risk_b\": 0.1\n    },\n    \"predicted\": {\n      \"risk_a\": 0.30000001192092896,\n      \"risk_b\": 0.10000000149011612,\n      \"risk_score\": 0.5099999904632568\n    },\n    \"row_max_abs_error\": 0.26999999046325684\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 1.1920928910669204e-08\n    },\n    \"expected\": {\n      \"risk_score\": 0.7\n    },\n    \"inputs\": {\n      \"risk_a\": 1.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 1.0,\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.699999988079071\n    },\n    \"row_max_abs_error\": 1.1920928910669204e-08\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 5.960464455334602e-09\n    },\n    \"expected\": {\n      \"risk_score\": 0.35\n    },\n    \"inputs\": {\n      \"risk_a\": 0.5,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 0.5,\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.3499999940395355\n    },\n    \"row_max_abs_error\": 5.960464455334602e-09\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 0.0\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.0\n    },\n    \"row_max_abs_error\": 0.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 1.0,\n      \"risk_b\": 1.0\n    },\n    \"predicted\": {\n      \"risk_a\": 1.0,\n      \"risk_b\": 1.0,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 0.0\n    },\n    \"inputs\": {\n      \"risk_a\": -1.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": -1.0,\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.0\n    },\n    \"row_max_abs_error\": 0.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 2.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 2.0,\n      \"risk_b\": 0.0,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 1.5,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 1.5,\n      \"risk_b\": 0.0,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 3.5\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 3.5,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.0\n  }\n]\n```\n\n\n## Symbolic mapping hint\nThis task is defined by explicit input/output examples with numeric targets. Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+      "semantic_trace_summary": null,
+      "row_comparisons": [
+        {
+          "inputs": {
+            "risk_a": -0.5,
+            "risk_b": 1.0
+          },
+          "predicted": {
+            "risk_score": 1.0,
+            "risk_a": -0.5,
+            "risk_b": 1.0
+          },
+          "expected": {
+            "risk_score": 0.0
+          },
+          "abs_error": {
+            "risk_score": 1.0
+          },
+          "row_max_abs_error": 1.0
+        },
+        {
+          "inputs": {
+            "risk_a": 0.0,
+            "risk_b": 0.5
+          },
+          "predicted": {
+            "risk_score": 1.0,
+            "risk_a": 0.0,
+            "risk_b": 0.5
+          },
+          "expected": {
+            "risk_score": 0.15
+          },
+          "abs_error": {
+            "risk_score": 0.85
+          },
+          "row_max_abs_error": 0.85
+        },
+        {
+          "inputs": {
+            "risk_a": 0.2,
+            "risk_b": 0.4
+          },
+          "predicted": {
+            "risk_score": 1.0,
+            "risk_a": 0.20000000298023224,
+            "risk_b": 0.4000000059604645
+          },
+          "expected": {
+            "risk_score": 0.26
+          },
+          "abs_error": {
+            "risk_score": 0.74
+          },
+          "row_max_abs_error": 0.74
+        },
+        {
+          "inputs": {
+            "risk_a": 0.1,
+            "risk_b": 0.7
+          },
+          "predicted": {
+            "risk_score": 1.0,
+            "risk_a": 0.10000000149011612,
+            "risk_b": 0.699999988079071
+          },
+          "expected": {
+            "risk_score": 0.28
+          },
+          "abs_error": {
+            "risk_score": 0.72
+          },
+          "row_max_abs_error": 0.72
+        },
+        {
+          "inputs": {
+            "risk_a": 0.0,
+            "risk_b": 1.0
+          },
+          "predicted": {
+            "risk_score": 1.0,
+            "risk_a": 0.0,
+            "risk_b": 1.0
+          },
+          "expected": {
+            "risk_score": 0.3
+          },
+          "abs_error": {
+            "risk_score": 0.7
+          },
+          "row_max_abs_error": 0.7
+        },
+        {
+          "inputs": {
+            "risk_a": 0.5,
+            "risk_b": 0.5
+          },
+          "predicted": {
+            "risk_score": 1.0,
+            "risk_a": 0.5,
+            "risk_b": 0.5
+          },
+          "expected": {
+            "risk_score": 0.5
+          },
+          "abs_error": {
+            "risk_score": 0.5
+          },
+          "row_max_abs_error": 0.5
+        },
+        {
+          "inputs": {
+            "risk_a": 0.0,
+            "risk_b": 2.0
+          },
+          "predicted": {
+            "risk_score": 1.0,
+            "risk_a": 0.0,
+            "risk_b": 2.0
+          },
+          "expected": {
+            "risk_score": 0.6
+          },
+          "abs_error": {
+            "risk_score": 0.4
+          },
+          "row_max_abs_error": 0.4
+        },
+        {
+          "inputs": {
+            "risk_a": 0.1,
+            "risk_b": 0.1
+          },
+          "predicted": {
+            "risk_score": 0.3700000047683716,
+            "risk_a": 0.10000000149011612,
+            "risk_b": 0.10000000149011612
+          },
+          "expected": {
+            "risk_score": 0.1
+          },
+          "abs_error": {
+            "risk_score": 0.2700000047683716
+          },
+          "row_max_abs_error": 0.2700000047683716
+        },
+        {
+          "inputs": {
+            "risk_a": 0.3,
+            "risk_b": 0.1
+          },
+          "predicted": {
+            "risk_score": 0.5099999904632568,
+            "risk_a": 0.30000001192092896,
+            "risk_b": 0.10000000149011612
+          },
+          "expected": {
+            "risk_score": 0.24
+          },
+          "abs_error": {
+            "risk_score": 0.26999999046325684
+          },
+          "row_max_abs_error": 0.26999999046325684
+        },
+        {
+          "inputs": {
+            "risk_a": 1.0,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 0.699999988079071,
+            "risk_a": 1.0,
+            "risk_b": 0.0
+          },
+          "expected": {
+            "risk_score": 0.7
+          },
+          "abs_error": {
+            "risk_score": 1.1920928910669204e-08
+          },
+          "row_max_abs_error": 1.1920928910669204e-08
+        },
+        {
+          "inputs": {
+            "risk_a": 0.5,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 0.3499999940395355,
+            "risk_a": 0.5,
+            "risk_b": 0.0
+          },
+          "expected": {
+            "risk_score": 0.35
+          },
+          "abs_error": {
+            "risk_score": 5.960464455334602e-09
+          },
+          "row_max_abs_error": 5.960464455334602e-09
+        },
+        {
+          "inputs": {
+            "risk_a": 0.0,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_a": 0.0,
+            "risk_b": 0.0
+          },
+          "expected": {
+            "risk_score": 0.0
+          },
+          "abs_error": {
+            "risk_score": 0.0
+          },
+          "row_max_abs_error": 0.0
+        },
+        {
+          "inputs": {
+            "risk_a": 1.0,
+            "risk_b": 1.0
+          },
+          "predicted": {
+            "risk_score": 1.0,
+            "risk_a": 1.0,
+            "risk_b": 1.0
+          },
+          "expected": {
+            "risk_score": 1.0
+          },
+          "abs_error": {
+            "risk_score": 0.0
+          },
+          "row_max_abs_error": 0.0
+        },
+        {
+          "inputs": {
+            "risk_a": -1.0,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_a": -1.0,
+            "risk_b": 0.0
+          },
+          "expected": {
+            "risk_score": 0.0
+          },
+          "abs_error": {
+            "risk_score": 0.0
+          },
+          "row_max_abs_error": 0.0
+        },
+        {
+          "inputs": {
+            "risk_a": 2.0,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 1.0,
+            "risk_a": 2.0,
+            "risk_b": 0.0
+          },
+          "expected": {
+            "risk_score": 1.0
+          },
+          "abs_error": {
+            "risk_score": 0.0
+          },
+          "row_max_abs_error": 0.0
+        },
+        {
+          "inputs": {
+            "risk_a": 1.5,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 1.0,
+            "risk_a": 1.5,
+            "risk_b": 0.0
+          },
+          "expected": {
+            "risk_score": 1.0
+          },
+          "abs_error": {
+            "risk_score": 0.0
+          },
+          "row_max_abs_error": 0.0
+        },
+        {
+          "inputs": {
+            "risk_a": 0.0,
+            "risk_b": 3.5
+          },
+          "predicted": {
+            "risk_score": 1.0,
+            "risk_a": 0.0,
+            "risk_b": 3.5
+          },
+          "expected": {
+            "risk_score": 1.0
+          },
+          "abs_error": {
+            "risk_score": 0.0
+          },
+          "row_max_abs_error": 0.0
+        }
+      ],
+      "ranking_penalty": 0.0,
+      "adjusted_sort_score": -0.22554705867206354
+    },
+    {
+      "index": 6,
+      "candidate_source": "risk_score = if 0.9 <= 0.  then 0. : if 0 < 0. then 0 : if 1 >= 0.   then 0 else if 0 > 0.     then 0 \nelse if 0 == 0.       then 0",
+      "success": false,
+      "compile_stage_reached": "parse",
+      "metrics": {},
+      "program_metrics": [],
+      "failure_summaries": [
+        {
+          "stage": "parse",
+          "kind": "syntax",
+          "message": "Unexpected token Token('NUMBER', '0.9') at line 1, column 17.\nExpected one of: \n\t* SEMICOLON\n\t* LPAR\n\t* LT\n\t* NE\n\t* SUB\n\t* GT\n\t* MUL\n\t* ADD\n\t* LSQB\n\t* DIV\n\t* EQ\nPrevious tokens: [Token('NAME', 'if')]\n",
+          "detail": "UnexpectedToken"
+        }
+      ],
+      "warnings": [],
+      "producing_expert": {
+        "expert_call": "repair",
+        "backend_name": "onyx_qwen",
+        "metadata": {
+          "model": "onyx-qwen-production-v1",
+          "raw_chars": 144,
+          "extraction_mode": "fenced_ax",
+          "code_line_count": 2
+        },
+        "explanation": null
+      },
+      "producing_payload": {
+        "type": "repair",
+        "goal": "Write a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));",
+        "current_program": "risk_score = max(min(0.7*risk_a + 3*risk_b, 1), 0);",
+        "error_report": "## Goal\nWrite a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nrisk_score = max(min(0.7*risk_a + 3*risk_b, 1), 0);\n```\n\n## Metric report (program runs but may be suboptimal)\n\n```json\n{\n  \"metrics\": {\n    \"neg_mse\": -0.22554705867206354\n  },\n  \"program_metrics\": [\n    {\n      \"name\": \"neg_mse\",\n      \"value\": -0.22554705867206354\n    }\n  ]\n}\n```\n\n\n## Row-wise mismatches\n\nOrdered **worst-first** (by `row_max_abs_error`). Use these concrete input/output deltas to fix coefficients or structure.\n\n```json\n[\n  {\n    \"abs_error\": {\n      \"risk_score\": 1.0\n    },\n    \"expected\": {\n      \"risk_score\": 0.0\n    },\n    \"inputs\": {\n      \"risk_a\": -0.5,\n      \"risk_b\": 1.0\n    },\n    \"predicted\": {\n      \"risk_a\": -0.5,\n      \"risk_b\": 1.0,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 1.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.85\n    },\n    \"expected\": {\n      \"risk_score\": 0.15\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 0.5\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 0.5,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.85\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.74\n    },\n    \"expected\": {\n      \"risk_score\": 0.26\n    },\n    \"inputs\": {\n      \"risk_a\": 0.2,\n      \"risk_b\": 0.4\n    },\n    \"predicted\": {\n      \"risk_a\": 0.20000000298023224,\n      \"risk_b\": 0.4000000059604645,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.74\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.72\n    },\n    \"expected\": {\n      \"risk_score\": 0.28\n    },\n    \"inputs\": {\n      \"risk_a\": 0.1,\n      \"risk_b\": 0.7\n    },\n    \"predicted\": {\n      \"risk_a\": 0.10000000149011612,\n      \"risk_b\": 0.699999988079071,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.72\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.7\n    },\n    \"expected\": {\n      \"risk_score\": 0.3\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 1.0\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 1.0,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.7\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.5\n    },\n    \"expected\": {\n      \"risk_score\": 0.5\n    },\n    \"inputs\": {\n      \"risk_a\": 0.5,\n      \"risk_b\": 0.5\n    },\n    \"predicted\": {\n      \"risk_a\": 0.5,\n      \"risk_b\": 0.5,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.5\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.4\n    },\n    \"expected\": {\n      \"risk_score\": 0.6\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 2.0\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 2.0,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.4\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.2700000047683716\n    },\n    \"expected\": {\n      \"risk_score\": 0.1\n    },\n    \"inputs\": {\n      \"risk_a\": 0.1,\n      \"risk_b\": 0.1\n    },\n    \"predicted\": {\n      \"risk_a\": 0.10000000149011612,\n      \"risk_b\": 0.10000000149011612,\n      \"risk_score\": 0.3700000047683716\n    },\n    \"row_max_abs_error\": 0.2700000047683716\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.26999999046325684\n    },\n    \"expected\": {\n      \"risk_score\": 0.24\n    },\n    \"inputs\": {\n      \"risk_a\": 0.3,\n      \"risk_b\": 0.1\n    },\n    \"predicted\": {\n      \"risk_a\": 0.30000001192092896,\n      \"risk_b\": 0.10000000149011612,\n      \"risk_score\": 0.5099999904632568\n    },\n    \"row_max_abs_error\": 0.26999999046325684\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 1.1920928910669204e-08\n    },\n    \"expected\": {\n      \"risk_score\": 0.7\n    },\n    \"inputs\": {\n      \"risk_a\": 1.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 1.0,\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.699999988079071\n    },\n    \"row_max_abs_error\": 1.1920928910669204e-08\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 5.960464455334602e-09\n    },\n    \"expected\": {\n      \"risk_score\": 0.35\n    },\n    \"inputs\": {\n      \"risk_a\": 0.5,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 0.5,\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.3499999940395355\n    },\n    \"row_max_abs_error\": 5.960464455334602e-09\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 0.0\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.0\n    },\n    \"row_max_abs_error\": 0.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 1.0,\n      \"risk_b\": 1.0\n    },\n    \"predicted\": {\n      \"risk_a\": 1.0,\n      \"risk_b\": 1.0,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 0.0\n    },\n    \"inputs\": {\n      \"risk_a\": -1.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": -1.0,\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.0\n    },\n    \"row_max_abs_error\": 0.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 2.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 2.0,\n      \"risk_b\": 0.0,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 1.5,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 1.5,\n      \"risk_b\": 0.0,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 3.5\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 3.5,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.0\n  }\n]\n```\n\n\n## Symbolic mapping hint\nThis task is defined by explicit input/output examples with numeric targets. Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+        "context": {
+          "example_input_rows": [
+            {
+              "risk_a": 0.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 1.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": 0.5,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 0.5
+            },
+            {
+              "risk_a": 0.2,
+              "risk_b": 0.4
+            },
+            {
+              "risk_a": 0.5,
+              "risk_b": 0.5
+            },
+            {
+              "risk_a": 0.1,
+              "risk_b": 0.7
+            },
+            {
+              "risk_a": 0.3,
+              "risk_b": 0.1
+            },
+            {
+              "risk_a": 0.1,
+              "risk_b": 0.1
+            },
+            {
+              "risk_a": 1.0,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": -1.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": -0.5,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": 2.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 1.5,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 2.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 3.5
+            }
+          ],
+          "expected_outputs": [
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 0.7
+            },
+            {
+              "risk_score": 0.3
+            },
+            {
+              "risk_score": 0.35
+            },
+            {
+              "risk_score": 0.15
+            },
+            {
+              "risk_score": 0.26
+            },
+            {
+              "risk_score": 0.5
+            },
+            {
+              "risk_score": 0.28
+            },
+            {
+              "risk_score": 0.24
+            },
+            {
+              "risk_score": 0.1
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 0.6
+            },
+            {
+              "risk_score": 1.0
+            }
+          ],
+          "evaluation_mode": "predict_rows",
+          "exact_symbolic_examples_task": true,
+          "_onyx_completion_overrides": {
+            "temperature": 0.0
+          }
+        }
+      },
+      "outgoing_repair_error_report": "## Goal\nWrite a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nrisk_score = if 0.9 <= 0.  then 0. : if 0 < 0. then 0 : if 1 >= 0.   then 0 else if 0 > 0.     then 0 \nelse if 0 == 0.       then 0\n```\n\n## Structured compile / evaluation failures\n\n1. stage='parse' kind='syntax' detail='UnexpectedToken'\n   message: Unexpected token Token('NUMBER', '0.9') at line 1, column 17.\nExpected one of: \n\t* SEMICOLON\n\t* LPAR\n\t* LT\n\t* NE\n\t* SUB\n\t* GT\n\t* MUL\n\t* ADD\n\t* LSQB\n\t* DIV\n\t* EQ\nPrevious tokens: [Token('NAME', 'if')]\n\n## Symbolic mapping hint\nThis task is defined by explicit input/output examples with numeric targets. Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+      "semantic_trace_summary": null,
+      "ranking_penalty": 0.0
+    },
+    {
+      "index": 7,
+      "candidate_source": "risk_score = max(min(0.7*risk_a +  0.2*risk_b, 1), 0);",
+      "success": true,
+      "compile_stage_reached": "predict",
+      "metrics": {
+        "neg_mse": -0.009511765220936677
+      },
+      "program_metrics": [
+        {
+          "name": "neg_mse",
+          "value": -0.009511765220936677
+        }
+      ],
+      "failure_summaries": [],
+      "warnings": [],
+      "producing_expert": {
+        "expert_call": "repair",
+        "backend_name": "onyx_qwen",
+        "metadata": {
+          "model": "onyx-qwen-production-v1",
+          "raw_chars": 67,
+          "extraction_mode": "fenced_ax",
+          "code_line_count": 1
+        },
+        "explanation": null
+      },
+      "producing_payload": {
+        "type": "repair",
+        "goal": "Write a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));",
+        "current_program": "risk_score = if 0.9 <= 0.  then 0. : if 0 < 0. then 0 : if 1 >= 0.   then 0 else if 0 > 0.     then 0 \nelse if 0 == 0.       then 0",
+        "error_report": "## Goal\nWrite a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nrisk_score = if 0.9 <= 0.  then 0. : if 0 < 0. then 0 : if 1 >= 0.   then 0 else if 0 > 0.     then 0 \nelse if 0 == 0.       then 0\n```\n\n## Structured compile / evaluation failures\n\n1. stage='parse' kind='syntax' detail='UnexpectedToken'\n   message: Unexpected token Token('NUMBER', '0.9') at line 1, column 17.\nExpected one of: \n\t* SEMICOLON\n\t* LPAR\n\t* LT\n\t* NE\n\t* SUB\n\t* GT\n\t* MUL\n\t* ADD\n\t* LSQB\n\t* DIV\n\t* EQ\nPrevious tokens: [Token('NAME', 'if')]\n\n## Symbolic mapping hint\nThis task is defined by explicit input/output examples with numeric targets. Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+        "context": {
+          "example_input_rows": [
+            {
+              "risk_a": 0.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 1.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": 0.5,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 0.5
+            },
+            {
+              "risk_a": 0.2,
+              "risk_b": 0.4
+            },
+            {
+              "risk_a": 0.5,
+              "risk_b": 0.5
+            },
+            {
+              "risk_a": 0.1,
+              "risk_b": 0.7
+            },
+            {
+              "risk_a": 0.3,
+              "risk_b": 0.1
+            },
+            {
+              "risk_a": 0.1,
+              "risk_b": 0.1
+            },
+            {
+              "risk_a": 1.0,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": -1.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": -0.5,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": 2.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 1.5,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 2.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 3.5
+            }
+          ],
+          "expected_outputs": [
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 0.7
+            },
+            {
+              "risk_score": 0.3
+            },
+            {
+              "risk_score": 0.35
+            },
+            {
+              "risk_score": 0.15
+            },
+            {
+              "risk_score": 0.26
+            },
+            {
+              "risk_score": 0.5
+            },
+            {
+              "risk_score": 0.28
+            },
+            {
+              "risk_score": 0.24
+            },
+            {
+              "risk_score": 0.1
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 0.6
+            },
+            {
+              "risk_score": 1.0
+            }
+          ],
+          "evaluation_mode": "predict_rows",
+          "exact_symbolic_examples_task": true,
+          "_onyx_completion_overrides": {
+            "temperature": 0.0
+          }
+        }
+      },
+      "outgoing_repair_error_report": "## Goal\nWrite a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nrisk_score = max(min(0.7*risk_a +  0.2*risk_b, 1), 0);\n```\n\n## Metric report (program runs but may be suboptimal)\n\n```json\n{\n  \"metrics\": {\n    \"neg_mse\": -0.009511765220936677\n  },\n  \"program_metrics\": [\n    {\n      \"name\": \"neg_mse\",\n      \"value\": -0.009511765220936677\n    }\n  ]\n}\n```\n\n\n## Row-wise mismatches\n\nOrdered **worst-first** (by `row_max_abs_error`). Use these concrete input/output deltas to fix coefficients or structure.\n\n```json\n[\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.30000001192092896\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 3.5\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 3.5,\n      \"risk_score\": 0.699999988079071\n    },\n    \"row_max_abs_error\": 0.30000001192092896\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.1999999940395355\n    },\n    \"expected\": {\n      \"risk_score\": 0.6\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 2.0\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 2.0,\n      \"risk_score\": 0.4000000059604645\n    },\n    \"row_max_abs_error\": 0.1999999940395355\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.10000002384185791\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 1.0,\n      \"risk_b\": 1.0\n    },\n    \"predicted\": {\n      \"risk_a\": 1.0,\n      \"risk_b\": 1.0,\n      \"risk_score\": 0.8999999761581421\n    },\n    \"row_max_abs_error\": 0.10000002384185791\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.09999999701976775\n    },\n    \"expected\": {\n      \"risk_score\": 0.3\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 1.0\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 1.0,\n      \"risk_score\": 0.20000000298023224\n    },\n    \"row_max_abs_error\": 0.09999999701976775\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.06999999165534976\n    },\n    \"expected\": {\n      \"risk_score\": 0.28\n    },\n    \"inputs\": {\n      \"risk_a\": 0.1,\n      \"risk_b\": 0.7\n    },\n    \"predicted\": {\n      \"risk_a\": 0.10000000149011612,\n      \"risk_b\": 0.699999988079071,\n      \"risk_score\": 0.21000000834465027\n    },\n    \"row_max_abs_error\": 0.06999999165534976\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.050000011920928955\n    },\n    \"expected\": {\n      \"risk_score\": 0.5\n    },\n    \"inputs\": {\n      \"risk_a\": 0.5,\n      \"risk_b\": 0.5\n    },\n    \"predicted\": {\n      \"risk_a\": 0.5,\n      \"risk_b\": 0.5,\n      \"risk_score\": 0.44999998807907104\n    },\n    \"row_max_abs_error\": 0.050000011920928955\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.049999998509883875\n    },\n    \"expected\": {\n      \"risk_score\": 0.15\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 0.5\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 0.5,\n      \"risk_score\": 0.10000000149011612\n    },\n    \"row_max_abs_error\": 0.049999998509883875\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.040000001192092904\n    },\n    \"expected\": {\n      \"risk_score\": 0.26\n    },\n    \"inputs\": {\n      \"risk_a\": 0.2,\n      \"risk_b\": 0.4\n    },\n    \"predicted\": {\n      \"risk_a\": 0.20000000298023224,\n      \"risk_b\": 0.4000000059604645,\n      \"risk_score\": 0.2199999988079071\n    },\n    \"row_max_abs_error\": 0.040000001192092904\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.009999996423721319\n    },\n    \"expected\": {\n      \"risk_score\": 0.1\n    },\n    \"inputs\": {\n      \"risk_a\": 0.1,\n      \"risk_b\": 0.1\n    },\n    \"predicted\": {\n      \"risk_a\": 0.10000000149011612,\n      \"risk_b\": 0.10000000149011612,\n      \"risk_score\": 0.09000000357627869\n    },\n    \"row_max_abs_error\": 0.009999996423721319\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.009999995827674857\n    },\n    \"expected\": {\n      \"risk_score\": 0.24\n    },\n    \"inputs\": {\n      \"risk_a\": 0.3,\n      \"risk_b\": 0.1\n    },\n    \"predicted\": {\n      \"risk_a\": 0.30000001192092896,\n      \"risk_b\": 0.10000000149011612,\n      \"risk_score\": 0.23000000417232513\n    },\n    \"row_max_abs_error\": 0.009999995827674857\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 1.1920928910669204e-08\n    },\n    \"expected\": {\n      \"risk_score\": 0.7\n    },\n    \"inputs\": {\n      \"risk_a\": 1.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 1.0,\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.699999988079071\n    },\n    \"row_max_abs_error\": 1.1920928910669204e-08\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 5.960464455334602e-09\n    },\n    \"expected\": {\n      \"risk_score\": 0.35\n    },\n    \"inputs\": {\n      \"risk_a\": 0.5,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 0.5,\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.3499999940395355\n    },\n    \"row_max_abs_error\": 5.960464455334602e-09\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 0.0\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.0\n    },\n    \"row_max_abs_error\": 0.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 0.0\n    },\n    \"inputs\": {\n      \"risk_a\": -1.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": -1.0,\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.0\n    },\n    \"row_max_abs_error\": 0.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 0.0\n    },\n    \"inputs\": {\n      \"risk_a\": -0.5,\n      \"risk_b\": 1.0\n    },\n    \"predicted\": {\n      \"risk_a\": -0.5,\n      \"risk_b\": 1.0,\n      \"risk_score\": 0.0\n    },\n    \"row_max_abs_error\": 0.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 2.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 2.0,\n      \"risk_b\": 0.0,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 1.5,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 1.5,\n      \"risk_b\": 0.0,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.0\n  }\n]\n```\n\n\n## Symbolic mapping hint\nThis task is defined by explicit input/output examples with numeric targets. Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+      "semantic_trace_summary": null,
+      "row_comparisons": [
+        {
+          "inputs": {
+            "risk_a": 0.0,
+            "risk_b": 3.5
+          },
+          "predicted": {
+            "risk_score": 0.699999988079071,
+            "risk_a": 0.0,
+            "risk_b": 3.5
+          },
+          "expected": {
+            "risk_score": 1.0
+          },
+          "abs_error": {
+            "risk_score": 0.30000001192092896
+          },
+          "row_max_abs_error": 0.30000001192092896
+        },
+        {
+          "inputs": {
+            "risk_a": 0.0,
+            "risk_b": 2.0
+          },
+          "predicted": {
+            "risk_score": 0.4000000059604645,
+            "risk_a": 0.0,
+            "risk_b": 2.0
+          },
+          "expected": {
+            "risk_score": 0.6
+          },
+          "abs_error": {
+            "risk_score": 0.1999999940395355
+          },
+          "row_max_abs_error": 0.1999999940395355
+        },
+        {
+          "inputs": {
+            "risk_a": 1.0,
+            "risk_b": 1.0
+          },
+          "predicted": {
+            "risk_score": 0.8999999761581421,
+            "risk_a": 1.0,
+            "risk_b": 1.0
+          },
+          "expected": {
+            "risk_score": 1.0
+          },
+          "abs_error": {
+            "risk_score": 0.10000002384185791
+          },
+          "row_max_abs_error": 0.10000002384185791
+        },
+        {
+          "inputs": {
+            "risk_a": 0.0,
+            "risk_b": 1.0
+          },
+          "predicted": {
+            "risk_score": 0.20000000298023224,
+            "risk_a": 0.0,
+            "risk_b": 1.0
+          },
+          "expected": {
+            "risk_score": 0.3
+          },
+          "abs_error": {
+            "risk_score": 0.09999999701976775
+          },
+          "row_max_abs_error": 0.09999999701976775
+        },
+        {
+          "inputs": {
+            "risk_a": 0.1,
+            "risk_b": 0.7
+          },
+          "predicted": {
+            "risk_score": 0.21000000834465027,
+            "risk_a": 0.10000000149011612,
+            "risk_b": 0.699999988079071
+          },
+          "expected": {
+            "risk_score": 0.28
+          },
+          "abs_error": {
+            "risk_score": 0.06999999165534976
+          },
+          "row_max_abs_error": 0.06999999165534976
+        },
+        {
+          "inputs": {
+            "risk_a": 0.5,
+            "risk_b": 0.5
+          },
+          "predicted": {
+            "risk_score": 0.44999998807907104,
+            "risk_a": 0.5,
+            "risk_b": 0.5
+          },
+          "expected": {
+            "risk_score": 0.5
+          },
+          "abs_error": {
+            "risk_score": 0.050000011920928955
+          },
+          "row_max_abs_error": 0.050000011920928955
+        },
+        {
+          "inputs": {
+            "risk_a": 0.0,
+            "risk_b": 0.5
+          },
+          "predicted": {
+            "risk_score": 0.10000000149011612,
+            "risk_a": 0.0,
+            "risk_b": 0.5
+          },
+          "expected": {
+            "risk_score": 0.15
+          },
+          "abs_error": {
+            "risk_score": 0.049999998509883875
+          },
+          "row_max_abs_error": 0.049999998509883875
+        },
+        {
+          "inputs": {
+            "risk_a": 0.2,
+            "risk_b": 0.4
+          },
+          "predicted": {
+            "risk_score": 0.2199999988079071,
+            "risk_a": 0.20000000298023224,
+            "risk_b": 0.4000000059604645
+          },
+          "expected": {
+            "risk_score": 0.26
+          },
+          "abs_error": {
+            "risk_score": 0.040000001192092904
+          },
+          "row_max_abs_error": 0.040000001192092904
+        },
+        {
+          "inputs": {
+            "risk_a": 0.1,
+            "risk_b": 0.1
+          },
+          "predicted": {
+            "risk_score": 0.09000000357627869,
+            "risk_a": 0.10000000149011612,
+            "risk_b": 0.10000000149011612
+          },
+          "expected": {
+            "risk_score": 0.1
+          },
+          "abs_error": {
+            "risk_score": 0.009999996423721319
+          },
+          "row_max_abs_error": 0.009999996423721319
+        },
+        {
+          "inputs": {
+            "risk_a": 0.3,
+            "risk_b": 0.1
+          },
+          "predicted": {
+            "risk_score": 0.23000000417232513,
+            "risk_a": 0.30000001192092896,
+            "risk_b": 0.10000000149011612
+          },
+          "expected": {
+            "risk_score": 0.24
+          },
+          "abs_error": {
+            "risk_score": 0.009999995827674857
+          },
+          "row_max_abs_error": 0.009999995827674857
+        },
+        {
+          "inputs": {
+            "risk_a": 1.0,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 0.699999988079071,
+            "risk_a": 1.0,
+            "risk_b": 0.0
+          },
+          "expected": {
+            "risk_score": 0.7
+          },
+          "abs_error": {
+            "risk_score": 1.1920928910669204e-08
+          },
+          "row_max_abs_error": 1.1920928910669204e-08
+        },
+        {
+          "inputs": {
+            "risk_a": 0.5,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 0.3499999940395355,
+            "risk_a": 0.5,
+            "risk_b": 0.0
+          },
+          "expected": {
+            "risk_score": 0.35
+          },
+          "abs_error": {
+            "risk_score": 5.960464455334602e-09
+          },
+          "row_max_abs_error": 5.960464455334602e-09
+        },
+        {
+          "inputs": {
+            "risk_a": 0.0,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_a": 0.0,
+            "risk_b": 0.0
+          },
+          "expected": {
+            "risk_score": 0.0
+          },
+          "abs_error": {
+            "risk_score": 0.0
+          },
+          "row_max_abs_error": 0.0
+        },
+        {
+          "inputs": {
+            "risk_a": -1.0,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_a": -1.0,
+            "risk_b": 0.0
+          },
+          "expected": {
+            "risk_score": 0.0
+          },
+          "abs_error": {
+            "risk_score": 0.0
+          },
+          "row_max_abs_error": 0.0
+        },
+        {
+          "inputs": {
+            "risk_a": -0.5,
+            "risk_b": 1.0
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_a": -0.5,
+            "risk_b": 1.0
+          },
+          "expected": {
+            "risk_score": 0.0
+          },
+          "abs_error": {
+            "risk_score": 0.0
+          },
+          "row_max_abs_error": 0.0
+        },
+        {
+          "inputs": {
+            "risk_a": 2.0,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 1.0,
+            "risk_a": 2.0,
+            "risk_b": 0.0
+          },
+          "expected": {
+            "risk_score": 1.0
+          },
+          "abs_error": {
+            "risk_score": 0.0
+          },
+          "row_max_abs_error": 0.0
+        },
+        {
+          "inputs": {
+            "risk_a": 1.5,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 1.0,
+            "risk_a": 1.5,
+            "risk_b": 0.0
+          },
+          "expected": {
+            "risk_score": 1.0
+          },
+          "abs_error": {
+            "risk_score": 0.0
+          },
+          "row_max_abs_error": 0.0
+        }
+      ],
+      "ranking_penalty": 0.0,
+      "adjusted_sort_score": -0.009511765220936677
+    },
+    {
+      "index": 8,
+      "candidate_source": "risk_score = if 0.9 <= 0.  then 0. : if 1. >= 0. then 1. : if (0.7* risk_a +   0. * risk_b) < 0.     then 0.: if (0.* risk_a +    0. + 0.) > 1.     then max(0., 0.): if (0.+ 0. >= 1. ) then 1.: if (1. >= (0. +   1.)) then 1.; if ((0.7 + 0.). * risk_a) < 1. then max(1., 0.) : if ((0 + 0). * risk_b + 0) <  1.  then max( 1.,  0.) else max((0.7+0)*risk_a +  (0+0)* risk_b , 0);",
+      "success": false,
+      "compile_stage_reached": "parse",
+      "metrics": {},
+      "program_metrics": [],
+      "failure_summaries": [
+        {
+          "stage": "parse",
+          "kind": "syntax",
+          "message": "Unexpected token Token('NUMBER', '0.9') at line 1, column 17.\nExpected one of: \n\t* SEMICOLON\n\t* LPAR\n\t* LT\n\t* NE\n\t* SUB\n\t* GT\n\t* MUL\n\t* ADD\n\t* LSQB\n\t* DIV\n\t* EQ\nPrevious tokens: [Token('NAME', 'if')]\n",
+          "detail": "UnexpectedToken"
+        }
+      ],
+      "warnings": [],
+      "producing_expert": {
+        "expert_call": "repair",
+        "backend_name": "onyx_qwen",
+        "metadata": {
+          "model": "onyx-qwen-production-v1",
+          "raw_chars": 387,
+          "extraction_mode": "fenced_ax",
+          "code_line_count": 1
+        },
+        "explanation": null
+      },
+      "producing_payload": {
+        "type": "repair",
+        "goal": "Write a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));",
+        "current_program": "risk_score = max(min(0.7*risk_a +  0.2*risk_b, 1), 0);",
+        "error_report": "## Goal\nWrite a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nrisk_score = max(min(0.7*risk_a +  0.2*risk_b, 1), 0);\n```\n\n## Metric report (program runs but may be suboptimal)\n\n```json\n{\n  \"metrics\": {\n    \"neg_mse\": -0.009511765220936677\n  },\n  \"program_metrics\": [\n    {\n      \"name\": \"neg_mse\",\n      \"value\": -0.009511765220936677\n    }\n  ]\n}\n```\n\n\n## Row-wise mismatches\n\nOrdered **worst-first** (by `row_max_abs_error`). Use these concrete input/output deltas to fix coefficients or structure.\n\n```json\n[\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.30000001192092896\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 3.5\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 3.5,\n      \"risk_score\": 0.699999988079071\n    },\n    \"row_max_abs_error\": 0.30000001192092896\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.1999999940395355\n    },\n    \"expected\": {\n      \"risk_score\": 0.6\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 2.0\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 2.0,\n      \"risk_score\": 0.4000000059604645\n    },\n    \"row_max_abs_error\": 0.1999999940395355\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.10000002384185791\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 1.0,\n      \"risk_b\": 1.0\n    },\n    \"predicted\": {\n      \"risk_a\": 1.0,\n      \"risk_b\": 1.0,\n      \"risk_score\": 0.8999999761581421\n    },\n    \"row_max_abs_error\": 0.10000002384185791\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.09999999701976775\n    },\n    \"expected\": {\n      \"risk_score\": 0.3\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 1.0\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 1.0,\n      \"risk_score\": 0.20000000298023224\n    },\n    \"row_max_abs_error\": 0.09999999701976775\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.06999999165534976\n    },\n    \"expected\": {\n      \"risk_score\": 0.28\n    },\n    \"inputs\": {\n      \"risk_a\": 0.1,\n      \"risk_b\": 0.7\n    },\n    \"predicted\": {\n      \"risk_a\": 0.10000000149011612,\n      \"risk_b\": 0.699999988079071,\n      \"risk_score\": 0.21000000834465027\n    },\n    \"row_max_abs_error\": 0.06999999165534976\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.050000011920928955\n    },\n    \"expected\": {\n      \"risk_score\": 0.5\n    },\n    \"inputs\": {\n      \"risk_a\": 0.5,\n      \"risk_b\": 0.5\n    },\n    \"predicted\": {\n      \"risk_a\": 0.5,\n      \"risk_b\": 0.5,\n      \"risk_score\": 0.44999998807907104\n    },\n    \"row_max_abs_error\": 0.050000011920928955\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.049999998509883875\n    },\n    \"expected\": {\n      \"risk_score\": 0.15\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 0.5\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 0.5,\n      \"risk_score\": 0.10000000149011612\n    },\n    \"row_max_abs_error\": 0.049999998509883875\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.040000001192092904\n    },\n    \"expected\": {\n      \"risk_score\": 0.26\n    },\n    \"inputs\": {\n      \"risk_a\": 0.2,\n      \"risk_b\": 0.4\n    },\n    \"predicted\": {\n      \"risk_a\": 0.20000000298023224,\n      \"risk_b\": 0.4000000059604645,\n      \"risk_score\": 0.2199999988079071\n    },\n    \"row_max_abs_error\": 0.040000001192092904\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.009999996423721319\n    },\n    \"expected\": {\n      \"risk_score\": 0.1\n    },\n    \"inputs\": {\n      \"risk_a\": 0.1,\n      \"risk_b\": 0.1\n    },\n    \"predicted\": {\n      \"risk_a\": 0.10000000149011612,\n      \"risk_b\": 0.10000000149011612,\n      \"risk_score\": 0.09000000357627869\n    },\n    \"row_max_abs_error\": 0.009999996423721319\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.009999995827674857\n    },\n    \"expected\": {\n      \"risk_score\": 0.24\n    },\n    \"inputs\": {\n      \"risk_a\": 0.3,\n      \"risk_b\": 0.1\n    },\n    \"predicted\": {\n      \"risk_a\": 0.30000001192092896,\n      \"risk_b\": 0.10000000149011612,\n      \"risk_score\": 0.23000000417232513\n    },\n    \"row_max_abs_error\": 0.009999995827674857\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 1.1920928910669204e-08\n    },\n    \"expected\": {\n      \"risk_score\": 0.7\n    },\n    \"inputs\": {\n      \"risk_a\": 1.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 1.0,\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.699999988079071\n    },\n    \"row_max_abs_error\": 1.1920928910669204e-08\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 5.960464455334602e-09\n    },\n    \"expected\": {\n      \"risk_score\": 0.35\n    },\n    \"inputs\": {\n      \"risk_a\": 0.5,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 0.5,\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.3499999940395355\n    },\n    \"row_max_abs_error\": 5.960464455334602e-09\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 0.0\n    },\n    \"inputs\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 0.0,\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.0\n    },\n    \"row_max_abs_error\": 0.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 0.0\n    },\n    \"inputs\": {\n      \"risk_a\": -1.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": -1.0,\n      \"risk_b\": 0.0,\n      \"risk_score\": 0.0\n    },\n    \"row_max_abs_error\": 0.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 0.0\n    },\n    \"inputs\": {\n      \"risk_a\": -0.5,\n      \"risk_b\": 1.0\n    },\n    \"predicted\": {\n      \"risk_a\": -0.5,\n      \"risk_b\": 1.0,\n      \"risk_score\": 0.0\n    },\n    \"row_max_abs_error\": 0.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 2.0,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 2.0,\n      \"risk_b\": 0.0,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.0\n  },\n  {\n    \"abs_error\": {\n      \"risk_score\": 0.0\n    },\n    \"expected\": {\n      \"risk_score\": 1.0\n    },\n    \"inputs\": {\n      \"risk_a\": 1.5,\n      \"risk_b\": 0.0\n    },\n    \"predicted\": {\n      \"risk_a\": 1.5,\n      \"risk_b\": 0.0,\n      \"risk_score\": 1.0\n    },\n    \"row_max_abs_error\": 0.0\n  }\n]\n```\n\n\n## Symbolic mapping hint\nThis task is defined by explicit input/output examples with numeric targets. Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+        "context": {
+          "example_input_rows": [
+            {
+              "risk_a": 0.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 1.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": 0.5,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 0.5
+            },
+            {
+              "risk_a": 0.2,
+              "risk_b": 0.4
+            },
+            {
+              "risk_a": 0.5,
+              "risk_b": 0.5
+            },
+            {
+              "risk_a": 0.1,
+              "risk_b": 0.7
+            },
+            {
+              "risk_a": 0.3,
+              "risk_b": 0.1
+            },
+            {
+              "risk_a": 0.1,
+              "risk_b": 0.1
+            },
+            {
+              "risk_a": 1.0,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": -1.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": -0.5,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": 2.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 1.5,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 2.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 3.5
+            }
+          ],
+          "expected_outputs": [
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 0.7
+            },
+            {
+              "risk_score": 0.3
+            },
+            {
+              "risk_score": 0.35
+            },
+            {
+              "risk_score": 0.15
+            },
+            {
+              "risk_score": 0.26
+            },
+            {
+              "risk_score": 0.5
+            },
+            {
+              "risk_score": 0.28
+            },
+            {
+              "risk_score": 0.24
+            },
+            {
+              "risk_score": 0.1
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 0.6
+            },
+            {
+              "risk_score": 1.0
+            }
+          ],
+          "evaluation_mode": "predict_rows",
+          "exact_symbolic_examples_task": true,
+          "_onyx_completion_overrides": {
+            "temperature": 0.0
+          }
+        }
+      },
+      "outgoing_repair_error_report": "## Goal\nWrite a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nrisk_score = if 0.9 <= 0.  then 0. : if 1. >= 0. then 1. : if (0.7* risk_a +   0. * risk_b) < 0.     then 0.: if (0.* risk_a +    0. + 0.) > 1.     then max(0., 0.): if (0.+ 0. >= 1. ) then 1.: if (1. >= (0. +   1.)) then 1.; if ((0.7 + 0.). * risk_a) < 1. then max(1., 0.) : if ((0 + 0). * risk_b + 0) <  1.  then max( 1.,  0.) else max((0.7+0)*risk_a +  (0+0)* risk_b , 0);\n```\n\n## Structured compile / evaluation failures\n\n1. stage='parse' kind='syntax' detail='UnexpectedToken'\n   message: Unexpected token Token('NUMBER', '0.9') at line 1, column 17.\nExpected one of: \n\t* SEMICOLON\n\t* LPAR\n\t* LT\n\t* NE\n\t* SUB\n\t* GT\n\t* MUL\n\t* ADD\n\t* LSQB\n\t* DIV\n\t* EQ\nPrevious tokens: [Token('NAME', 'if')]\n\n## Symbolic mapping hint\nThis task is defined by explicit input/output examples with numeric targets. Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+      "semantic_trace_summary": null,
+      "ranking_penalty": 0.0
+    },
+    {
+      "index": 9,
+      "candidate_source": "risk_score = max(min(0.7*risk_a +  0.2*risk_b, 1), 0);",
+      "success": true,
+      "compile_stage_reached": "predict",
+      "metrics": {
+        "neg_mse": -0.009511765220936677
+      },
+      "program_metrics": [
+        {
+          "name": "neg_mse",
+          "value": -0.009511765220936677
+        }
+      ],
+      "failure_summaries": [],
+      "warnings": [],
+      "producing_expert": {
+        "expert_call": "repair",
+        "backend_name": "onyx_qwen",
+        "metadata": {
+          "model": "onyx-qwen-production-v1",
+          "raw_chars": 67,
+          "extraction_mode": "fenced_ax",
+          "code_line_count": 1
+        },
+        "explanation": null
+      },
+      "producing_payload": {
+        "type": "repair",
+        "goal": "Write a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));",
+        "current_program": "risk_score = if 0.9 <= 0.  then 0. : if 1. >= 0. then 1. : if (0.7* risk_a +   0. * risk_b) < 0.     then 0.: if (0.* risk_a +    0. + 0.) > 1.     then max(0., 0.): if (0.+ 0. >= 1. ) then 1.: if (1. >= (0. +   1.)) then 1.; if ((0.7 + 0.). * risk_a) < 1. then max(1., 0.) : if ((0 + 0). * risk_b + 0) <  1.  then max( 1.,  0.) else max((0.7+0)*risk_a +  (0+0)* risk_b , 0);",
+        "error_report": "## Goal\nWrite a valid Axiom .ax program in this repo's DSL that computes risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nrisk_score = if 0.9 <= 0.  then 0. : if 1. >= 0. then 1. : if (0.7* risk_a +   0. * risk_b) < 0.     then 0.: if (0.* risk_a +    0. + 0.) > 1.     then max(0., 0.): if (0.+ 0. >= 1. ) then 1.: if (1. >= (0. +   1.)) then 1.; if ((0.7 + 0.). * risk_a) < 1. then max(1., 0.) : if ((0 + 0). * risk_b + 0) <  1.  then max( 1.,  0.) else max((0.7+0)*risk_a +  (0+0)* risk_b , 0);\n```\n\n## Structured compile / evaluation failures\n\n1. stage='parse' kind='syntax' detail='UnexpectedToken'\n   message: Unexpected token Token('NUMBER', '0.9') at line 1, column 17.\nExpected one of: \n\t* SEMICOLON\n\t* LPAR\n\t* LT\n\t* NE\n\t* SUB\n\t* GT\n\t* MUL\n\t* ADD\n\t* LSQB\n\t* DIV\n\t* EQ\nPrevious tokens: [Token('NAME', 'if')]\n\n## Symbolic mapping hint\nThis task is defined by explicit input/output examples with numeric targets. Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+        "context": {
+          "example_input_rows": [
+            {
+              "risk_a": 0.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 1.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": 0.5,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 0.5
+            },
+            {
+              "risk_a": 0.2,
+              "risk_b": 0.4
+            },
+            {
+              "risk_a": 0.5,
+              "risk_b": 0.5
+            },
+            {
+              "risk_a": 0.1,
+              "risk_b": 0.7
+            },
+            {
+              "risk_a": 0.3,
+              "risk_b": 0.1
+            },
+            {
+              "risk_a": 0.1,
+              "risk_b": 0.1
+            },
+            {
+              "risk_a": 1.0,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": -1.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": -0.5,
+              "risk_b": 1.0
+            },
+            {
+              "risk_a": 2.0,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 1.5,
+              "risk_b": 0.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 2.0
+            },
+            {
+              "risk_a": 0.0,
+              "risk_b": 3.5
+            }
+          ],
+          "expected_outputs": [
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 0.7
+            },
+            {
+              "risk_score": 0.3
+            },
+            {
+              "risk_score": 0.35
+            },
+            {
+              "risk_score": 0.15
+            },
+            {
+              "risk_score": 0.26
+            },
+            {
+              "risk_score": 0.5
+            },
+            {
+              "risk_score": 0.28
+            },
+            {
+              "risk_score": 0.24
+            },
+            {
+              "risk_score": 0.1
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 0.0
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 1.0
+            },
+            {
+              "risk_score": 0.6
+            },
+            {
+              "risk_score": 1.0
+            }
+          ],
+          "evaluation_mode": "predict_rows",
+          "exact_symbolic_examples_task": true,
+          "_onyx_completion_overrides": {
+            "temperature": 0.0
+          }
+        }
+      },
+      "outgoing_repair_error_report": null,
+      "semantic_trace_summary": null,
+      "row_comparisons": [
+        {
+          "inputs": {
+            "risk_a": 0.0,
+            "risk_b": 3.5
+          },
+          "predicted": {
+            "risk_score": 0.699999988079071,
+            "risk_a": 0.0,
+            "risk_b": 3.5
+          },
+          "expected": {
+            "risk_score": 1.0
+          },
+          "abs_error": {
+            "risk_score": 0.30000001192092896
+          },
+          "row_max_abs_error": 0.30000001192092896
+        },
+        {
+          "inputs": {
+            "risk_a": 0.0,
+            "risk_b": 2.0
+          },
+          "predicted": {
+            "risk_score": 0.4000000059604645,
+            "risk_a": 0.0,
+            "risk_b": 2.0
+          },
+          "expected": {
+            "risk_score": 0.6
+          },
+          "abs_error": {
+            "risk_score": 0.1999999940395355
+          },
+          "row_max_abs_error": 0.1999999940395355
+        },
+        {
+          "inputs": {
+            "risk_a": 1.0,
+            "risk_b": 1.0
+          },
+          "predicted": {
+            "risk_score": 0.8999999761581421,
+            "risk_a": 1.0,
+            "risk_b": 1.0
+          },
+          "expected": {
+            "risk_score": 1.0
+          },
+          "abs_error": {
+            "risk_score": 0.10000002384185791
+          },
+          "row_max_abs_error": 0.10000002384185791
+        },
+        {
+          "inputs": {
+            "risk_a": 0.0,
+            "risk_b": 1.0
+          },
+          "predicted": {
+            "risk_score": 0.20000000298023224,
+            "risk_a": 0.0,
+            "risk_b": 1.0
+          },
+          "expected": {
+            "risk_score": 0.3
+          },
+          "abs_error": {
+            "risk_score": 0.09999999701976775
+          },
+          "row_max_abs_error": 0.09999999701976775
+        },
+        {
+          "inputs": {
+            "risk_a": 0.1,
+            "risk_b": 0.7
+          },
+          "predicted": {
+            "risk_score": 0.21000000834465027,
+            "risk_a": 0.10000000149011612,
+            "risk_b": 0.699999988079071
+          },
+          "expected": {
+            "risk_score": 0.28
+          },
+          "abs_error": {
+            "risk_score": 0.06999999165534976
+          },
+          "row_max_abs_error": 0.06999999165534976
+        },
+        {
+          "inputs": {
+            "risk_a": 0.5,
+            "risk_b": 0.5
+          },
+          "predicted": {
+            "risk_score": 0.44999998807907104,
+            "risk_a": 0.5,
+            "risk_b": 0.5
+          },
+          "expected": {
+            "risk_score": 0.5
+          },
+          "abs_error": {
+            "risk_score": 0.050000011920928955
+          },
+          "row_max_abs_error": 0.050000011920928955
+        },
+        {
+          "inputs": {
+            "risk_a": 0.0,
+            "risk_b": 0.5
+          },
+          "predicted": {
+            "risk_score": 0.10000000149011612,
+            "risk_a": 0.0,
+            "risk_b": 0.5
+          },
+          "expected": {
+            "risk_score": 0.15
+          },
+          "abs_error": {
+            "risk_score": 0.049999998509883875
+          },
+          "row_max_abs_error": 0.049999998509883875
+        },
+        {
+          "inputs": {
+            "risk_a": 0.2,
+            "risk_b": 0.4
+          },
+          "predicted": {
+            "risk_score": 0.2199999988079071,
+            "risk_a": 0.20000000298023224,
+            "risk_b": 0.4000000059604645
+          },
+          "expected": {
+            "risk_score": 0.26
+          },
+          "abs_error": {
+            "risk_score": 0.040000001192092904
+          },
+          "row_max_abs_error": 0.040000001192092904
+        },
+        {
+          "inputs": {
+            "risk_a": 0.1,
+            "risk_b": 0.1
+          },
+          "predicted": {
+            "risk_score": 0.09000000357627869,
+            "risk_a": 0.10000000149011612,
+            "risk_b": 0.10000000149011612
+          },
+          "expected": {
+            "risk_score": 0.1
+          },
+          "abs_error": {
+            "risk_score": 0.009999996423721319
+          },
+          "row_max_abs_error": 0.009999996423721319
+        },
+        {
+          "inputs": {
+            "risk_a": 0.3,
+            "risk_b": 0.1
+          },
+          "predicted": {
+            "risk_score": 0.23000000417232513,
+            "risk_a": 0.30000001192092896,
+            "risk_b": 0.10000000149011612
+          },
+          "expected": {
+            "risk_score": 0.24
+          },
+          "abs_error": {
+            "risk_score": 0.009999995827674857
+          },
+          "row_max_abs_error": 0.009999995827674857
+        },
+        {
+          "inputs": {
+            "risk_a": 1.0,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 0.699999988079071,
+            "risk_a": 1.0,
+            "risk_b": 0.0
+          },
+          "expected": {
+            "risk_score": 0.7
+          },
+          "abs_error": {
+            "risk_score": 1.1920928910669204e-08
+          },
+          "row_max_abs_error": 1.1920928910669204e-08
+        },
+        {
+          "inputs": {
+            "risk_a": 0.5,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 0.3499999940395355,
+            "risk_a": 0.5,
+            "risk_b": 0.0
+          },
+          "expected": {
+            "risk_score": 0.35
+          },
+          "abs_error": {
+            "risk_score": 5.960464455334602e-09
+          },
+          "row_max_abs_error": 5.960464455334602e-09
+        },
+        {
+          "inputs": {
+            "risk_a": 0.0,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_a": 0.0,
+            "risk_b": 0.0
+          },
+          "expected": {
+            "risk_score": 0.0
+          },
+          "abs_error": {
+            "risk_score": 0.0
+          },
+          "row_max_abs_error": 0.0
+        },
+        {
+          "inputs": {
+            "risk_a": -1.0,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_a": -1.0,
+            "risk_b": 0.0
+          },
+          "expected": {
+            "risk_score": 0.0
+          },
+          "abs_error": {
+            "risk_score": 0.0
+          },
+          "row_max_abs_error": 0.0
+        },
+        {
+          "inputs": {
+            "risk_a": -0.5,
+            "risk_b": 1.0
+          },
+          "predicted": {
+            "risk_score": 0.0,
+            "risk_a": -0.5,
+            "risk_b": 1.0
+          },
+          "expected": {
+            "risk_score": 0.0
+          },
+          "abs_error": {
+            "risk_score": 0.0
+          },
+          "row_max_abs_error": 0.0
+        },
+        {
+          "inputs": {
+            "risk_a": 2.0,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 1.0,
+            "risk_a": 2.0,
+            "risk_b": 0.0
+          },
+          "expected": {
+            "risk_score": 1.0
+          },
+          "abs_error": {
+            "risk_score": 0.0
+          },
+          "row_max_abs_error": 0.0
+        },
+        {
+          "inputs": {
+            "risk_a": 1.5,
+            "risk_b": 0.0
+          },
+          "predicted": {
+            "risk_score": 1.0,
+            "risk_a": 1.5,
+            "risk_b": 0.0
+          },
+          "expected": {
+            "risk_score": 1.0
+          },
+          "abs_error": {
+            "risk_score": 0.0
+          },
+          "row_max_abs_error": 0.0
+        }
+      ],
+      "ranking_penalty": 0.0,
+      "adjusted_sort_score": -0.009511765220936677
+    }
+  ]
+}

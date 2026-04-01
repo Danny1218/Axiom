@@ -1,0 +1,1 @@
+score = max( min(a, b ), c );

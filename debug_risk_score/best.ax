@@ -1,0 +1,1 @@
+risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));

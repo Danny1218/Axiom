@@ -1,0 +1,258 @@
+{
+  "schema_version": 1,
+  "kind": "axiom.copilot.search_report",
+  "goal": "Write .ax so y = a * b + a + 1.0.",
+  "domain_context": null,
+  "backend_name": "onyx_qwen",
+  "converged": false,
+  "convergence_reason": "failure",
+  "metric_repair": {
+    "enabled": true,
+    "threshold_effective": -1e-09,
+    "metric_repair_if_below_config": null
+  },
+  "iteration_count": 10,
+  "evaluation_mode": "predict_rows",
+  "max_iterations_config": 10,
+  "score_sort_key": "neg_mse",
+  "artifact_files": {
+    "best_ax": "best.ax",
+    "iterations": "iterations.json",
+    "search_report": "search_report.json"
+  },
+  "best_evaluation": {
+    "success": false,
+    "source": "if (a < 0 || b < 0){\n    y = -1;\n}else{\n    if (a < b){\n        y = a*b+a+1;\n    }else{\n        y = b*a+b+1;\n        \n    }\n\n}",
+    "compile_stage_reached": "parse",
+    "mode": "predict_rows",
+    "failures": [
+      {
+        "stage": "parse",
+        "kind": "syntax",
+        "message": "No terminal matches '|' in the current parser context, at line 1 col 11\n\nif (a < 0 || b < 0){\n          ^\nExpected one of: \n\t* SEMICOLON\n\t* RPAR\n\t* EQ\n\t* LPAR\n\t* MUL\n\t* COMMA\n\t* DIV\n\t* LT\n\t* RSQB\n\t* GT\n\t* LSQB\n\t* SUB\n\t* ADD\n\t* NE\n\nPrevious tokens: Token('NUMBER', '0')\n",
+        "detail": "UnexpectedCharacters"
+      }
+    ],
+    "warnings": [],
+    "metrics": {},
+    "program_metrics": [],
+    "ranking_penalty": 0.0
+  },
+  "final_evaluation": {
+    "success": false,
+    "source": "if ( a < 0 ) {\n    y=-1;\n} else if ( b <  0 ) { \n    y=-2;\n} else { \n    if ( a == 0 ) y=b+1;\n    else if ( a != 0 ) \n        y=a*b+a+2;\n}",
+    "compile_stage_reached": "parse",
+    "mode": "predict_rows",
+    "failures": [
+      {
+        "stage": "parse",
+        "kind": "syntax",
+        "message": "Unexpected token Token('IF', 'if') at line 3, column 8.\nExpected one of: \n\t* LBRACE\nPrevious tokens: [Token('ELSE', 'else')]\n",
+        "detail": "UnexpectedToken"
+      }
+    ],
+    "warnings": [],
+    "metrics": {},
+    "program_metrics": [],
+    "ranking_penalty": 0.0
+  },
+  "failures_metrics_summary": {
+    "per_iteration": [
+      {
+        "index": 0,
+        "success": false,
+        "metrics": {},
+        "failure_count": 1,
+        "failure_summaries": [
+          {
+            "stage": "parse",
+            "kind": "syntax",
+            "message": "No terminal matches '|' in the current parser context, at line 1 col 11\n\nif (a < 0 || b < 0){\n          ^\nExpected one of: \n\t* SEMICOLON\n\t* RPAR\n\t* EQ\n\t* LPAR\n\t* MUL\n\t* COMMA\n\t* DIV\n\t* LT\n\t* RSQB\n\t* GT\n\t* LSQB\n\t* SUB\n\t* ADD\n\t* NE\n\nPrevious tokens: Token('NUMBER', '0')\n",
+            "detail": "UnexpectedCharacters"
+          }
+        ]
+      },
+      {
+        "index": 1,
+        "success": false,
+        "metrics": {},
+        "failure_count": 1,
+        "failure_summaries": [
+          {
+            "stage": "parse",
+            "kind": "syntax",
+            "message": "Unexpected token Token('EQUAL', '=') at line 1, column 8.\nExpected one of: \n\t* STRING_SQ\n\t* SUB\n\t* LSQB\n\t* NAME\n\t* STRING_DQ\n\t* LPAR\n\t* NUMBER\nPrevious tokens: [Token('GT', '>')]\n",
+            "detail": "UnexpectedToken"
+          }
+        ]
+      },
+      {
+        "index": 2,
+        "success": false,
+        "metrics": {},
+        "failure_count": 1,
+        "failure_summaries": [
+          {
+            "stage": "parse",
+            "kind": "syntax",
+            "message": "No terminal matches '|' in the current parser context, at line 1 col 11\n\nif (a < 0 || b < 0){\n          ^\nExpected one of: \n\t* SEMICOLON\n\t* RPAR\n\t* EQ\n\t* LPAR\n\t* MUL\n\t* COMMA\n\t* DIV\n\t* LT\n\t* RSQB\n\t* GT\n\t* LSQB\n\t* SUB\n\t* ADD\n\t* NE\n\nPrevious tokens: Token('NUMBER', '0')\n",
+            "detail": "UnexpectedCharacters"
+          }
+        ]
+      },
+      {
+        "index": 3,
+        "success": false,
+        "metrics": {},
+        "failure_count": 1,
+        "failure_summaries": [
+          {
+            "stage": "parse",
+            "kind": "syntax",
+            "message": "Unexpected token Token('EQUAL', '=') at line 1, column 8.\nExpected one of: \n\t* STRING_SQ\n\t* SUB\n\t* LSQB\n\t* NAME\n\t* STRING_DQ\n\t* LPAR\n\t* NUMBER\nPrevious tokens: [Token('GT', '>')]\n",
+            "detail": "UnexpectedToken"
+          }
+        ]
+      },
+      {
+        "index": 4,
+        "success": false,
+        "metrics": {},
+        "failure_count": 1,
+        "failure_summaries": [
+          {
+            "stage": "parse",
+            "kind": "syntax",
+            "message": "No terminal matches '|' in the current parser context, at line 1 col 11\n\nif (a < 0 || b < 0){\n          ^\nExpected one of: \n\t* SEMICOLON\n\t* RPAR\n\t* EQ\n\t* LPAR\n\t* MUL\n\t* COMMA\n\t* DIV\n\t* LT\n\t* RSQB\n\t* GT\n\t* LSQB\n\t* SUB\n\t* ADD\n\t* NE\n\nPrevious tokens: Token('NUMBER', '0')\n",
+            "detail": "UnexpectedCharacters"
+          }
+        ]
+      },
+      {
+        "index": 5,
+        "success": false,
+        "metrics": {},
+        "failure_count": 1,
+        "failure_summaries": [
+          {
+            "stage": "parse",
+            "kind": "syntax",
+            "message": "Unexpected token Token('EQUAL', '=') at line 1, column 8.\nExpected one of: \n\t* STRING_SQ\n\t* SUB\n\t* LSQB\n\t* NAME\n\t* STRING_DQ\n\t* LPAR\n\t* NUMBER\nPrevious tokens: [Token('GT', '>')]\n",
+            "detail": "UnexpectedToken"
+          }
+        ]
+      },
+      {
+        "index": 6,
+        "success": false,
+        "metrics": {},
+        "failure_count": 1,
+        "failure_summaries": [
+          {
+            "stage": "parse",
+            "kind": "syntax",
+            "message": "No terminal matches '|' in the current parser context, at line 1 col 11\n\nif (a < 0 || b < 0){\n          ^\nExpected one of: \n\t* SEMICOLON\n\t* RPAR\n\t* EQ\n\t* LPAR\n\t* MUL\n\t* COMMA\n\t* DIV\n\t* LT\n\t* RSQB\n\t* GT\n\t* LSQB\n\t* SUB\n\t* ADD\n\t* NE\n\nPrevious tokens: Token('NUMBER', '0')\n",
+            "detail": "UnexpectedCharacters"
+          }
+        ]
+      },
+      {
+        "index": 7,
+        "success": false,
+        "metrics": {},
+        "failure_count": 1,
+        "failure_summaries": [
+          {
+            "stage": "parse",
+            "kind": "syntax",
+            "message": "Unexpected token Token('EQUAL', '=') at line 1, column 8.\nExpected one of: \n\t* STRING_SQ\n\t* SUB\n\t* LSQB\n\t* NAME\n\t* STRING_DQ\n\t* LPAR\n\t* NUMBER\nPrevious tokens: [Token('GT', '>')]\n",
+            "detail": "UnexpectedToken"
+          }
+        ]
+      },
+      {
+        "index": 8,
+        "success": false,
+        "metrics": {},
+        "failure_count": 1,
+        "failure_summaries": [
+          {
+            "stage": "parse",
+            "kind": "syntax",
+            "message": "No terminal matches '|' in the current parser context, at line 1 col 11\n\nif (a < 0 || b < 0){\n          ^\nExpected one of: \n\t* SEMICOLON\n\t* RPAR\n\t* EQ\n\t* LPAR\n\t* MUL\n\t* COMMA\n\t* DIV\n\t* LT\n\t* RSQB\n\t* GT\n\t* LSQB\n\t* SUB\n\t* ADD\n\t* NE\n\nPrevious tokens: Token('NUMBER', '0')\n",
+            "detail": "UnexpectedCharacters"
+          }
+        ]
+      },
+      {
+        "index": 9,
+        "success": false,
+        "metrics": {},
+        "failure_count": 1,
+        "failure_summaries": [
+          {
+            "stage": "parse",
+            "kind": "syntax",
+            "message": "Unexpected token Token('IF', 'if') at line 3, column 8.\nExpected one of: \n\t* LBRACE\nPrevious tokens: [Token('ELSE', 'else')]\n",
+            "detail": "UnexpectedToken"
+          }
+        ]
+      }
+    ],
+    "best": {
+      "success": false,
+      "metrics": {},
+      "failure_count": 1
+    },
+    "final": {
+      "success": false,
+      "metrics": {},
+      "failure_count": 1
+    }
+  },
+  "semantic_summaries": {
+    "enabled": false,
+    "per_iteration": [
+      {
+        "index": 0,
+        "semantic_trace_summary": null
+      },
+      {
+        "index": 1,
+        "semantic_trace_summary": null
+      },
+      {
+        "index": 2,
+        "semantic_trace_summary": null
+      },
+      {
+        "index": 3,
+        "semantic_trace_summary": null
+      },
+      {
+        "index": 4,
+        "semantic_trace_summary": null
+      },
+      {
+        "index": 5,
+        "semantic_trace_summary": null
+      },
+      {
+        "index": 6,
+        "semantic_trace_summary": null
+      },
+      {
+        "index": 7,
+        "semantic_trace_summary": null
+      },
+      {
+        "index": 8,
+        "semantic_trace_summary": null
+      },
+      {
+        "index": 9,
+        "semantic_trace_summary": null
+      }
+    ]
+  }
+}

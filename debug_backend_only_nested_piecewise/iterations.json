@@ -1,0 +1,847 @@
+{
+  "schema_version": 1,
+  "kind": "axiom.copilot.iterations",
+  "goal": "Write .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.",
+  "domain_context": null,
+  "backend_name": "onyx_qwen",
+  "evaluation_mode": "predict_rows",
+  "max_iterations_config": 10,
+  "iteration_count": 10,
+  "score_sort_key": "neg_mse",
+  "converged": false,
+  "convergence_reason": "failure",
+  "metric_repair": {
+    "enabled": true,
+    "threshold_effective": -1e-09,
+    "metric_repair_if_below_config": null
+  },
+  "iterations": [
+    {
+      "index": 0,
+      "candidate_source": "if (x<0.0){\n    y=0.0\n}else{\n    if(x<1.0 0){\n        y=x\n    }else{\n        y=1.0\n    }\n}",
+      "success": false,
+      "compile_stage_reached": "parse",
+      "metrics": {},
+      "program_metrics": [],
+      "failure_summaries": [
+        {
+          "stage": "parse",
+          "kind": "syntax",
+          "message": "Unexpected token Token('RBRACE', '}') at line 3, column 1.\nExpected one of: \n\t* LT\n\t* LPAR\n\t* LSQB\n\t* SUB\n\t* SEMICOLON\n\t* EQ\n\t* ADD\n\t* GT\n\t* DIV\n\t* MUL\n\t* NE\nPrevious tokens: [Token('NUMBER', '0.0')]\n",
+          "detail": "UnexpectedToken"
+        }
+      ],
+      "warnings": [],
+      "producing_expert": {
+        "expert_call": "draft",
+        "backend_name": "onyx_qwen",
+        "metadata": {
+          "model": "onyx-qwen-production-v1",
+          "raw_chars": 100,
+          "extraction_mode": "fenced_ax",
+          "code_line_count": 9,
+          "normalized_trailing_dot_float": true
+        },
+        "explanation": null
+      },
+      "producing_payload": {
+        "type": "draft",
+        "goal": "Write .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.",
+        "context": {
+          "domain_context": "",
+          "example_input_rows": [
+            {
+              "x": -2.0
+            },
+            {
+              "x": 0.4
+            },
+            {
+              "x": 1.8
+            }
+          ],
+          "expected_outputs": [
+            {
+              "y": 0.0
+            },
+            {
+              "y": 0.4
+            },
+            {
+              "y": 1.0
+            }
+          ]
+        }
+      },
+      "outgoing_repair_error_report": "## Goal\nWrite .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nif (x<0.0){\n    y=0.0\n}else{\n    if(x<1.0 0){\n        y=x\n    }else{\n        y=1.0\n    }\n}\n```\n\n## Structured compile / evaluation failures\n\n1. stage='parse' kind='syntax' detail='UnexpectedToken'\n   message: Unexpected token Token('RBRACE', '}') at line 3, column 1.\nExpected one of: \n\t* LT\n\t* LPAR\n\t* LSQB\n\t* SUB\n\t* SEMICOLON\n\t* EQ\n\t* ADD\n\t* GT\n\t* DIV\n\t* MUL\n\t* NE\nPrevious tokens: [Token('NUMBER', '0.0')]\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+      "semantic_trace_summary": null,
+      "ranking_penalty": 0.0
+    },
+    {
+      "index": 1,
+      "candidate_source": "if (x<-0.0){  \n    y=1\n}else{  \n    if(x>-1.0){    \n        y=x   \n    }else{     \n        y=-1\n    }\n}",
+      "success": false,
+      "compile_stage_reached": "parse",
+      "metrics": {},
+      "program_metrics": [],
+      "failure_summaries": [
+        {
+          "stage": "parse",
+          "kind": "syntax",
+          "message": "Unexpected token Token('RBRACE', '}') at line 3, column 1.\nExpected one of: \n\t* LT\n\t* LPAR\n\t* LSQB\n\t* SUB\n\t* SEMICOLON\n\t* EQ\n\t* ADD\n\t* GT\n\t* DIV\n\t* MUL\n\t* NE\nPrevious tokens: [Token('NUMBER', '1')]\n",
+          "detail": "UnexpectedToken"
+        }
+      ],
+      "warnings": [],
+      "producing_expert": {
+        "expert_call": "repair",
+        "backend_name": "onyx_qwen",
+        "metadata": {
+          "model": "onyx-qwen-production-v1",
+          "raw_chars": 115,
+          "extraction_mode": "fenced_ax",
+          "code_line_count": 9
+        },
+        "explanation": null
+      },
+      "producing_payload": {
+        "type": "repair",
+        "goal": "Write .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.",
+        "current_program": "if (x<0.0){\n    y=0.0\n}else{\n    if(x<1.0 0){\n        y=x\n    }else{\n        y=1.0\n    }\n}",
+        "error_report": "## Goal\nWrite .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nif (x<0.0){\n    y=0.0\n}else{\n    if(x<1.0 0){\n        y=x\n    }else{\n        y=1.0\n    }\n}\n```\n\n## Structured compile / evaluation failures\n\n1. stage='parse' kind='syntax' detail='UnexpectedToken'\n   message: Unexpected token Token('RBRACE', '}') at line 3, column 1.\nExpected one of: \n\t* LT\n\t* LPAR\n\t* LSQB\n\t* SUB\n\t* SEMICOLON\n\t* EQ\n\t* ADD\n\t* GT\n\t* DIV\n\t* MUL\n\t* NE\nPrevious tokens: [Token('NUMBER', '0.0')]\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+        "context": {
+          "example_input_rows": [
+            {
+              "x": -2.0
+            },
+            {
+              "x": 0.4
+            },
+            {
+              "x": 1.8
+            }
+          ],
+          "expected_outputs": [
+            {
+              "y": 0.0
+            },
+            {
+              "y": 0.4
+            },
+            {
+              "y": 1.0
+            }
+          ],
+          "evaluation_mode": "predict_rows"
+        }
+      },
+      "outgoing_repair_error_report": "## Goal\nWrite .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nif (x<-0.0){  \n    y=1\n}else{  \n    if(x>-1.0){    \n        y=x   \n    }else{     \n        y=-1\n    }\n}\n```\n\n## Structured compile / evaluation failures\n\n1. stage='parse' kind='syntax' detail='UnexpectedToken'\n   message: Unexpected token Token('RBRACE', '}') at line 3, column 1.\nExpected one of: \n\t* LT\n\t* LPAR\n\t* LSQB\n\t* SUB\n\t* SEMICOLON\n\t* EQ\n\t* ADD\n\t* GT\n\t* DIV\n\t* MUL\n\t* NE\nPrevious tokens: [Token('NUMBER', '1')]\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+      "semantic_trace_summary": null,
+      "ranking_penalty": 0.0
+    },
+    {
+      "index": 2,
+      "candidate_source": "if (x <- 0.0){\n    y = -1.0;\n} else {\n\tif (x > -1.0){\n\t    y = x ;\n\t} else {\n\t    y =  0.0 ;\n\t}\n}",
+      "success": true,
+      "compile_stage_reached": "predict",
+      "metrics": {
+        "neg_mse": -0.5466666412353524
+      },
+      "program_metrics": [
+        {
+          "name": "neg_mse",
+          "value": -0.5466666412353524
+        }
+      ],
+      "failure_summaries": [],
+      "warnings": [],
+      "producing_expert": {
+        "expert_call": "repair",
+        "backend_name": "onyx_qwen",
+        "metadata": {
+          "model": "onyx-qwen-production-v1",
+          "raw_chars": 105,
+          "extraction_mode": "fenced_ax",
+          "code_line_count": 9,
+          "normalized_trailing_dot_float": true
+        },
+        "explanation": null
+      },
+      "producing_payload": {
+        "type": "repair",
+        "goal": "Write .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.",
+        "current_program": "if (x<-0.0){  \n    y=1\n}else{  \n    if(x>-1.0){    \n        y=x   \n    }else{     \n        y=-1\n    }\n}",
+        "error_report": "## Goal\nWrite .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nif (x<-0.0){  \n    y=1\n}else{  \n    if(x>-1.0){    \n        y=x   \n    }else{     \n        y=-1\n    }\n}\n```\n\n## Structured compile / evaluation failures\n\n1. stage='parse' kind='syntax' detail='UnexpectedToken'\n   message: Unexpected token Token('RBRACE', '}') at line 3, column 1.\nExpected one of: \n\t* LT\n\t* LPAR\n\t* LSQB\n\t* SUB\n\t* SEMICOLON\n\t* EQ\n\t* ADD\n\t* GT\n\t* DIV\n\t* MUL\n\t* NE\nPrevious tokens: [Token('NUMBER', '1')]\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+        "context": {
+          "example_input_rows": [
+            {
+              "x": -2.0
+            },
+            {
+              "x": 0.4
+            },
+            {
+              "x": 1.8
+            }
+          ],
+          "expected_outputs": [
+            {
+              "y": 0.0
+            },
+            {
+              "y": 0.4
+            },
+            {
+              "y": 1.0
+            }
+          ],
+          "evaluation_mode": "predict_rows"
+        }
+      },
+      "outgoing_repair_error_report": "## Goal\nWrite .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nif (x <- 0.0){\n    y = -1.0;\n} else {\n\tif (x > -1.0){\n\t    y = x ;\n\t} else {\n\t    y =  0.0 ;\n\t}\n}\n```\n\n## Metric report (program runs but may be suboptimal)\n\n```json\n{\n  \"metrics\": {\n    \"neg_mse\": -0.5466666412353524\n  },\n  \"program_metrics\": [\n    {\n      \"name\": \"neg_mse\",\n      \"value\": -0.5466666412353524\n    }\n  ]\n}\n```\n\n\n## Row-wise mismatches\n\nOrdered **worst-first** (by `row_max_abs_error`). Use these concrete input/output deltas to fix coefficients or structure.\n\n```json\n[\n  {\n    \"abs_error\": {\n      \"y\": 1.0\n    },\n    \"expected\": {\n      \"y\": 0.0\n    },\n    \"inputs\": {\n      \"x\": -2.0\n    },\n    \"predicted\": {\n      \"x\": -2.0,\n      \"y\": -1.0\n    },\n    \"row_max_abs_error\": 1.0\n  },\n  {\n    \"abs_error\": {\n      \"y\": 0.7999999523162842\n    },\n    \"expected\": {\n      \"y\": 1.0\n    },\n    \"inputs\": {\n      \"x\": 1.8\n    },\n    \"predicted\": {\n      \"x\": 1.7999999523162842,\n      \"y\": 1.7999999523162842\n    },\n    \"row_max_abs_error\": 0.7999999523162842\n  },\n  {\n    \"abs_error\": {\n      \"y\": 5.960464455334602e-09\n    },\n    \"expected\": {\n      \"y\": 0.4\n    },\n    \"inputs\": {\n      \"x\": 0.4\n    },\n    \"predicted\": {\n      \"x\": 0.4000000059604645,\n      \"y\": 0.4000000059604645\n    },\n    \"row_max_abs_error\": 5.960464455334602e-09\n  }\n]\n```\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+      "semantic_trace_summary": null,
+      "row_comparisons": [
+        {
+          "inputs": {
+            "x": -2.0
+          },
+          "predicted": {
+            "x": -2.0,
+            "y": -1.0
+          },
+          "expected": {
+            "y": 0.0
+          },
+          "abs_error": {
+            "y": 1.0
+          },
+          "row_max_abs_error": 1.0
+        },
+        {
+          "inputs": {
+            "x": 1.8
+          },
+          "predicted": {
+            "x": 1.7999999523162842,
+            "y": 1.7999999523162842
+          },
+          "expected": {
+            "y": 1.0
+          },
+          "abs_error": {
+            "y": 0.7999999523162842
+          },
+          "row_max_abs_error": 0.7999999523162842
+        },
+        {
+          "inputs": {
+            "x": 0.4
+          },
+          "predicted": {
+            "x": 0.4000000059604645,
+            "y": 0.4000000059604645
+          },
+          "expected": {
+            "y": 0.4
+          },
+          "abs_error": {
+            "y": 5.960464455334602e-09
+          },
+          "row_max_abs_error": 5.960464455334602e-09
+        }
+      ],
+      "ranking_penalty": 0.0,
+      "adjusted_sort_score": -0.5466666412353524
+    },
+    {
+      "index": 3,
+      "candidate_source": "if (x<-0.0){ \n    y =0.0 ; \n} else { \n    if ( x>-1.0 ){ \n        y=x ; \n    } else { \n        y=0.0 \n    } \n}",
+      "success": false,
+      "compile_stage_reached": "parse",
+      "metrics": {},
+      "program_metrics": [],
+      "failure_summaries": [
+        {
+          "stage": "parse",
+          "kind": "syntax",
+          "message": "Unexpected token Token('RBRACE', '}') at line 8, column 5.\nExpected one of: \n\t* LT\n\t* LPAR\n\t* LSQB\n\t* SUB\n\t* SEMICOLON\n\t* EQ\n\t* ADD\n\t* GT\n\t* DIV\n\t* MUL\n\t* NE\nPrevious tokens: [Token('NUMBER', '0.0')]\n",
+          "detail": "UnexpectedToken"
+        }
+      ],
+      "warnings": [],
+      "producing_expert": {
+        "expert_call": "repair",
+        "backend_name": "onyx_qwen",
+        "metadata": {
+          "model": "onyx-qwen-production-v1",
+          "raw_chars": 121,
+          "extraction_mode": "fenced_ax",
+          "code_line_count": 9
+        },
+        "explanation": null
+      },
+      "producing_payload": {
+        "type": "repair",
+        "goal": "Write .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.",
+        "current_program": "if (x <- 0.0){\n    y = -1.0;\n} else {\n\tif (x > -1.0){\n\t    y = x ;\n\t} else {\n\t    y =  0.0 ;\n\t}\n}",
+        "error_report": "## Goal\nWrite .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nif (x <- 0.0){\n    y = -1.0;\n} else {\n\tif (x > -1.0){\n\t    y = x ;\n\t} else {\n\t    y =  0.0 ;\n\t}\n}\n```\n\n## Metric report (program runs but may be suboptimal)\n\n```json\n{\n  \"metrics\": {\n    \"neg_mse\": -0.5466666412353524\n  },\n  \"program_metrics\": [\n    {\n      \"name\": \"neg_mse\",\n      \"value\": -0.5466666412353524\n    }\n  ]\n}\n```\n\n\n## Row-wise mismatches\n\nOrdered **worst-first** (by `row_max_abs_error`). Use these concrete input/output deltas to fix coefficients or structure.\n\n```json\n[\n  {\n    \"abs_error\": {\n      \"y\": 1.0\n    },\n    \"expected\": {\n      \"y\": 0.0\n    },\n    \"inputs\": {\n      \"x\": -2.0\n    },\n    \"predicted\": {\n      \"x\": -2.0,\n      \"y\": -1.0\n    },\n    \"row_max_abs_error\": 1.0\n  },\n  {\n    \"abs_error\": {\n      \"y\": 0.7999999523162842\n    },\n    \"expected\": {\n      \"y\": 1.0\n    },\n    \"inputs\": {\n      \"x\": 1.8\n    },\n    \"predicted\": {\n      \"x\": 1.7999999523162842,\n      \"y\": 1.7999999523162842\n    },\n    \"row_max_abs_error\": 0.7999999523162842\n  },\n  {\n    \"abs_error\": {\n      \"y\": 5.960464455334602e-09\n    },\n    \"expected\": {\n      \"y\": 0.4\n    },\n    \"inputs\": {\n      \"x\": 0.4\n    },\n    \"predicted\": {\n      \"x\": 0.4000000059604645,\n      \"y\": 0.4000000059604645\n    },\n    \"row_max_abs_error\": 5.960464455334602e-09\n  }\n]\n```\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+        "context": {
+          "example_input_rows": [
+            {
+              "x": -2.0
+            },
+            {
+              "x": 0.4
+            },
+            {
+              "x": 1.8
+            }
+          ],
+          "expected_outputs": [
+            {
+              "y": 0.0
+            },
+            {
+              "y": 0.4
+            },
+            {
+              "y": 1.0
+            }
+          ],
+          "evaluation_mode": "predict_rows"
+        }
+      },
+      "outgoing_repair_error_report": "## Goal\nWrite .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nif (x<-0.0){ \n    y =0.0 ; \n} else { \n    if ( x>-1.0 ){ \n        y=x ; \n    } else { \n        y=0.0 \n    } \n}\n```\n\n## Structured compile / evaluation failures\n\n1. stage='parse' kind='syntax' detail='UnexpectedToken'\n   message: Unexpected token Token('RBRACE', '}') at line 8, column 5.\nExpected one of: \n\t* LT\n\t* LPAR\n\t* LSQB\n\t* SUB\n\t* SEMICOLON\n\t* EQ\n\t* ADD\n\t* GT\n\t* DIV\n\t* MUL\n\t* NE\nPrevious tokens: [Token('NUMBER', '0.0')]\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+      "semantic_trace_summary": null,
+      "ranking_penalty": 0.0
+    },
+    {
+      "index": 4,
+      "candidate_source": "if (x <- 0.0 0) {\n\ty = 0.0;\n} else {\n\tif (x > -1.0 0){\n\t\ty = x;\n\t} else {\n\t\ty = 1.0;\n\t}\n}",
+      "success": false,
+      "compile_stage_reached": "parse",
+      "metrics": {},
+      "program_metrics": [],
+      "failure_summaries": [
+        {
+          "stage": "parse",
+          "kind": "syntax",
+          "message": "Unexpected token Token('NUMBER', '0') at line 1, column 14.\nExpected one of: \n\t* LPAR\n\t* LSQB\n\t* SUB\n\t* ADD\n\t* RPAR\n\t* DIV\n\t* MUL\nPrevious tokens: [Token('NUMBER', '0.0')]\n",
+          "detail": "UnexpectedToken"
+        }
+      ],
+      "warnings": [],
+      "producing_expert": {
+        "expert_call": "repair",
+        "backend_name": "onyx_qwen",
+        "metadata": {
+          "model": "onyx-qwen-production-v1",
+          "raw_chars": 99,
+          "extraction_mode": "fenced_ax",
+          "code_line_count": 9,
+          "normalized_trailing_dot_float": true
+        },
+        "explanation": null
+      },
+      "producing_payload": {
+        "type": "repair",
+        "goal": "Write .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.",
+        "current_program": "if (x<-0.0){ \n    y =0.0 ; \n} else { \n    if ( x>-1.0 ){ \n        y=x ; \n    } else { \n        y=0.0 \n    } \n}",
+        "error_report": "## Goal\nWrite .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nif (x<-0.0){ \n    y =0.0 ; \n} else { \n    if ( x>-1.0 ){ \n        y=x ; \n    } else { \n        y=0.0 \n    } \n}\n```\n\n## Structured compile / evaluation failures\n\n1. stage='parse' kind='syntax' detail='UnexpectedToken'\n   message: Unexpected token Token('RBRACE', '}') at line 8, column 5.\nExpected one of: \n\t* LT\n\t* LPAR\n\t* LSQB\n\t* SUB\n\t* SEMICOLON\n\t* EQ\n\t* ADD\n\t* GT\n\t* DIV\n\t* MUL\n\t* NE\nPrevious tokens: [Token('NUMBER', '0.0')]\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+        "context": {
+          "example_input_rows": [
+            {
+              "x": -2.0
+            },
+            {
+              "x": 0.4
+            },
+            {
+              "x": 1.8
+            }
+          ],
+          "expected_outputs": [
+            {
+              "y": 0.0
+            },
+            {
+              "y": 0.4
+            },
+            {
+              "y": 1.0
+            }
+          ],
+          "evaluation_mode": "predict_rows"
+        }
+      },
+      "outgoing_repair_error_report": "## Goal\nWrite .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nif (x <- 0.0 0) {\n\ty = 0.0;\n} else {\n\tif (x > -1.0 0){\n\t\ty = x;\n\t} else {\n\t\ty = 1.0;\n\t}\n}\n```\n\n## Structured compile / evaluation failures\n\n1. stage='parse' kind='syntax' detail='UnexpectedToken'\n   message: Unexpected token Token('NUMBER', '0') at line 1, column 14.\nExpected one of: \n\t* LPAR\n\t* LSQB\n\t* SUB\n\t* ADD\n\t* RPAR\n\t* DIV\n\t* MUL\nPrevious tokens: [Token('NUMBER', '0.0')]\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+      "semantic_trace_summary": null,
+      "ranking_penalty": 0.0
+    },
+    {
+      "index": 5,
+      "candidate_source": "if (x<-0.0){y=0.0;}\nelse{if(x>-1.0){ y=x;}else{y=1.0;}}",
+      "success": true,
+      "compile_stage_reached": "predict",
+      "metrics": {
+        "neg_mse": -0.213333307902019
+      },
+      "program_metrics": [
+        {
+          "name": "neg_mse",
+          "value": -0.213333307902019
+        }
+      ],
+      "failure_summaries": [],
+      "warnings": [],
+      "producing_expert": {
+        "expert_call": "repair",
+        "backend_name": "onyx_qwen",
+        "metadata": {
+          "model": "onyx-qwen-production-v1",
+          "raw_chars": 69,
+          "extraction_mode": "fenced_ax",
+          "code_line_count": 2
+        },
+        "explanation": null
+      },
+      "producing_payload": {
+        "type": "repair",
+        "goal": "Write .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.",
+        "current_program": "if (x <- 0.0 0) {\n\ty = 0.0;\n} else {\n\tif (x > -1.0 0){\n\t\ty = x;\n\t} else {\n\t\ty = 1.0;\n\t}\n}",
+        "error_report": "## Goal\nWrite .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nif (x <- 0.0 0) {\n\ty = 0.0;\n} else {\n\tif (x > -1.0 0){\n\t\ty = x;\n\t} else {\n\t\ty = 1.0;\n\t}\n}\n```\n\n## Structured compile / evaluation failures\n\n1. stage='parse' kind='syntax' detail='UnexpectedToken'\n   message: Unexpected token Token('NUMBER', '0') at line 1, column 14.\nExpected one of: \n\t* LPAR\n\t* LSQB\n\t* SUB\n\t* ADD\n\t* RPAR\n\t* DIV\n\t* MUL\nPrevious tokens: [Token('NUMBER', '0.0')]\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+        "context": {
+          "example_input_rows": [
+            {
+              "x": -2.0
+            },
+            {
+              "x": 0.4
+            },
+            {
+              "x": 1.8
+            }
+          ],
+          "expected_outputs": [
+            {
+              "y": 0.0
+            },
+            {
+              "y": 0.4
+            },
+            {
+              "y": 1.0
+            }
+          ],
+          "evaluation_mode": "predict_rows"
+        }
+      },
+      "outgoing_repair_error_report": "## Goal\nWrite .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nif (x<-0.0){y=0.0;}\nelse{if(x>-1.0){ y=x;}else{y=1.0;}}\n```\n\n## Metric report (program runs but may be suboptimal)\n\n```json\n{\n  \"metrics\": {\n    \"neg_mse\": -0.213333307902019\n  },\n  \"program_metrics\": [\n    {\n      \"name\": \"neg_mse\",\n      \"value\": -0.213333307902019\n    }\n  ]\n}\n```\n\n\n## Row-wise mismatches\n\nOrdered **worst-first** (by `row_max_abs_error`). Use these concrete input/output deltas to fix coefficients or structure.\n\n```json\n[\n  {\n    \"abs_error\": {\n      \"y\": 0.7999999523162842\n    },\n    \"expected\": {\n      \"y\": 1.0\n    },\n    \"inputs\": {\n      \"x\": 1.8\n    },\n    \"predicted\": {\n      \"x\": 1.7999999523162842,\n      \"y\": 1.7999999523162842\n    },\n    \"row_max_abs_error\": 0.7999999523162842\n  },\n  {\n    \"abs_error\": {\n      \"y\": 5.960464455334602e-09\n    },\n    \"expected\": {\n      \"y\": 0.4\n    },\n    \"inputs\": {\n      \"x\": 0.4\n    },\n    \"predicted\": {\n      \"x\": 0.4000000059604645,\n      \"y\": 0.4000000059604645\n    },\n    \"row_max_abs_error\": 5.960464455334602e-09\n  },\n  {\n    \"abs_error\": {\n      \"y\": 0.0\n    },\n    \"expected\": {\n      \"y\": 0.0\n    },\n    \"inputs\": {\n      \"x\": -2.0\n    },\n    \"predicted\": {\n      \"x\": -2.0,\n      \"y\": 0.0\n    },\n    \"row_max_abs_error\": 0.0\n  }\n]\n```\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+      "semantic_trace_summary": null,
+      "row_comparisons": [
+        {
+          "inputs": {
+            "x": 1.8
+          },
+          "predicted": {
+            "x": 1.7999999523162842,
+            "y": 1.7999999523162842
+          },
+          "expected": {
+            "y": 1.0
+          },
+          "abs_error": {
+            "y": 0.7999999523162842
+          },
+          "row_max_abs_error": 0.7999999523162842
+        },
+        {
+          "inputs": {
+            "x": 0.4
+          },
+          "predicted": {
+            "x": 0.4000000059604645,
+            "y": 0.4000000059604645
+          },
+          "expected": {
+            "y": 0.4
+          },
+          "abs_error": {
+            "y": 5.960464455334602e-09
+          },
+          "row_max_abs_error": 5.960464455334602e-09
+        },
+        {
+          "inputs": {
+            "x": -2.0
+          },
+          "predicted": {
+            "x": -2.0,
+            "y": 0.0
+          },
+          "expected": {
+            "y": 0.0
+          },
+          "abs_error": {
+            "y": 0.0
+          },
+          "row_max_abs_error": 0.0
+        }
+      ],
+      "ranking_penalty": 0.0,
+      "adjusted_sort_score": -0.213333307902019
+    },
+    {
+      "index": 6,
+      "candidate_source": "if (x <- 0.0){\n    y =0.0 ;\n}else{\n    if ( x > -1.0 ){\n        y =x ;\n    }else{\n        y =1.0 ;\n    }\n}",
+      "success": true,
+      "compile_stage_reached": "predict",
+      "metrics": {
+        "neg_mse": -0.213333307902019
+      },
+      "program_metrics": [
+        {
+          "name": "neg_mse",
+          "value": -0.213333307902019
+        }
+      ],
+      "failure_summaries": [],
+      "warnings": [],
+      "producing_expert": {
+        "expert_call": "repair",
+        "backend_name": "onyx_qwen",
+        "metadata": {
+          "model": "onyx-qwen-production-v1",
+          "raw_chars": 116,
+          "extraction_mode": "fenced_ax",
+          "code_line_count": 9,
+          "normalized_trailing_dot_float": true
+        },
+        "explanation": null
+      },
+      "producing_payload": {
+        "type": "repair",
+        "goal": "Write .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.",
+        "current_program": "if (x<-0.0){y=0.0;}\nelse{if(x>-1.0){ y=x;}else{y=1.0;}}",
+        "error_report": "## Goal\nWrite .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nif (x<-0.0){y=0.0;}\nelse{if(x>-1.0){ y=x;}else{y=1.0;}}\n```\n\n## Metric report (program runs but may be suboptimal)\n\n```json\n{\n  \"metrics\": {\n    \"neg_mse\": -0.213333307902019\n  },\n  \"program_metrics\": [\n    {\n      \"name\": \"neg_mse\",\n      \"value\": -0.213333307902019\n    }\n  ]\n}\n```\n\n\n## Row-wise mismatches\n\nOrdered **worst-first** (by `row_max_abs_error`). Use these concrete input/output deltas to fix coefficients or structure.\n\n```json\n[\n  {\n    \"abs_error\": {\n      \"y\": 0.7999999523162842\n    },\n    \"expected\": {\n      \"y\": 1.0\n    },\n    \"inputs\": {\n      \"x\": 1.8\n    },\n    \"predicted\": {\n      \"x\": 1.7999999523162842,\n      \"y\": 1.7999999523162842\n    },\n    \"row_max_abs_error\": 0.7999999523162842\n  },\n  {\n    \"abs_error\": {\n      \"y\": 5.960464455334602e-09\n    },\n    \"expected\": {\n      \"y\": 0.4\n    },\n    \"inputs\": {\n      \"x\": 0.4\n    },\n    \"predicted\": {\n      \"x\": 0.4000000059604645,\n      \"y\": 0.4000000059604645\n    },\n    \"row_max_abs_error\": 5.960464455334602e-09\n  },\n  {\n    \"abs_error\": {\n      \"y\": 0.0\n    },\n    \"expected\": {\n      \"y\": 0.0\n    },\n    \"inputs\": {\n      \"x\": -2.0\n    },\n    \"predicted\": {\n      \"x\": -2.0,\n      \"y\": 0.0\n    },\n    \"row_max_abs_error\": 0.0\n  }\n]\n```\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+        "context": {
+          "example_input_rows": [
+            {
+              "x": -2.0
+            },
+            {
+              "x": 0.4
+            },
+            {
+              "x": 1.8
+            }
+          ],
+          "expected_outputs": [
+            {
+              "y": 0.0
+            },
+            {
+              "y": 0.4
+            },
+            {
+              "y": 1.0
+            }
+          ],
+          "evaluation_mode": "predict_rows"
+        }
+      },
+      "outgoing_repair_error_report": "## Goal\nWrite .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nif (x <- 0.0){\n    y =0.0 ;\n}else{\n    if ( x > -1.0 ){\n        y =x ;\n    }else{\n        y =1.0 ;\n    }\n}\n```\n\n## Metric report (program runs but may be suboptimal)\n\n```json\n{\n  \"metrics\": {\n    \"neg_mse\": -0.213333307902019\n  },\n  \"program_metrics\": [\n    {\n      \"name\": \"neg_mse\",\n      \"value\": -0.213333307902019\n    }\n  ]\n}\n```\n\n\n## Row-wise mismatches\n\nOrdered **worst-first** (by `row_max_abs_error`). Use these concrete input/output deltas to fix coefficients or structure.\n\n```json\n[\n  {\n    \"abs_error\": {\n      \"y\": 0.7999999523162842\n    },\n    \"expected\": {\n      \"y\": 1.0\n    },\n    \"inputs\": {\n      \"x\": 1.8\n    },\n    \"predicted\": {\n      \"x\": 1.7999999523162842,\n      \"y\": 1.7999999523162842\n    },\n    \"row_max_abs_error\": 0.7999999523162842\n  },\n  {\n    \"abs_error\": {\n      \"y\": 5.960464455334602e-09\n    },\n    \"expected\": {\n      \"y\": 0.4\n    },\n    \"inputs\": {\n      \"x\": 0.4\n    },\n    \"predicted\": {\n      \"x\": 0.4000000059604645,\n      \"y\": 0.4000000059604645\n    },\n    \"row_max_abs_error\": 5.960464455334602e-09\n  },\n  {\n    \"abs_error\": {\n      \"y\": 0.0\n    },\n    \"expected\": {\n      \"y\": 0.0\n    },\n    \"inputs\": {\n      \"x\": -2.0\n    },\n    \"predicted\": {\n      \"x\": -2.0,\n      \"y\": 0.0\n    },\n    \"row_max_abs_error\": 0.0\n  }\n]\n```\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+      "semantic_trace_summary": null,
+      "row_comparisons": [
+        {
+          "inputs": {
+            "x": 1.8
+          },
+          "predicted": {
+            "x": 1.7999999523162842,
+            "y": 1.7999999523162842
+          },
+          "expected": {
+            "y": 1.0
+          },
+          "abs_error": {
+            "y": 0.7999999523162842
+          },
+          "row_max_abs_error": 0.7999999523162842
+        },
+        {
+          "inputs": {
+            "x": 0.4
+          },
+          "predicted": {
+            "x": 0.4000000059604645,
+            "y": 0.4000000059604645
+          },
+          "expected": {
+            "y": 0.4
+          },
+          "abs_error": {
+            "y": 5.960464455334602e-09
+          },
+          "row_max_abs_error": 5.960464455334602e-09
+        },
+        {
+          "inputs": {
+            "x": -2.0
+          },
+          "predicted": {
+            "x": -2.0,
+            "y": 0.0
+          },
+          "expected": {
+            "y": 0.0
+          },
+          "abs_error": {
+            "y": 0.0
+          },
+          "row_max_abs_error": 0.0
+        }
+      ],
+      "ranking_penalty": 0.0,
+      "adjusted_sort_score": -0.213333307902019
+    },
+    {
+      "index": 7,
+      "candidate_source": "if (x<-0.0){ \n    y =1; \n}else{ \n    if (0<x<0.01){ \n        y =0; \n    }else{ \n        y=x; \n    }\n}",
+      "success": false,
+      "compile_stage_reached": "parse",
+      "metrics": {},
+      "program_metrics": [],
+      "failure_summaries": [
+        {
+          "stage": "parse",
+          "kind": "syntax",
+          "message": "Unexpected token Token('LT', '<') at line 4, column 12.\nExpected one of: \n\t* RPAR\n",
+          "detail": "UnexpectedToken"
+        }
+      ],
+      "warnings": [],
+      "producing_expert": {
+        "expert_call": "repair",
+        "backend_name": "onyx_qwen",
+        "metadata": {
+          "model": "onyx-qwen-production-v1",
+          "raw_chars": 113,
+          "extraction_mode": "fenced_ax",
+          "code_line_count": 9
+        },
+        "explanation": null
+      },
+      "producing_payload": {
+        "type": "repair",
+        "goal": "Write .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.",
+        "current_program": "if (x <- 0.0){\n    y =0.0 ;\n}else{\n    if ( x > -1.0 ){\n        y =x ;\n    }else{\n        y =1.0 ;\n    }\n}",
+        "error_report": "## Goal\nWrite .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nif (x <- 0.0){\n    y =0.0 ;\n}else{\n    if ( x > -1.0 ){\n        y =x ;\n    }else{\n        y =1.0 ;\n    }\n}\n```\n\n## Metric report (program runs but may be suboptimal)\n\n```json\n{\n  \"metrics\": {\n    \"neg_mse\": -0.213333307902019\n  },\n  \"program_metrics\": [\n    {\n      \"name\": \"neg_mse\",\n      \"value\": -0.213333307902019\n    }\n  ]\n}\n```\n\n\n## Row-wise mismatches\n\nOrdered **worst-first** (by `row_max_abs_error`). Use these concrete input/output deltas to fix coefficients or structure.\n\n```json\n[\n  {\n    \"abs_error\": {\n      \"y\": 0.7999999523162842\n    },\n    \"expected\": {\n      \"y\": 1.0\n    },\n    \"inputs\": {\n      \"x\": 1.8\n    },\n    \"predicted\": {\n      \"x\": 1.7999999523162842,\n      \"y\": 1.7999999523162842\n    },\n    \"row_max_abs_error\": 0.7999999523162842\n  },\n  {\n    \"abs_error\": {\n      \"y\": 5.960464455334602e-09\n    },\n    \"expected\": {\n      \"y\": 0.4\n    },\n    \"inputs\": {\n      \"x\": 0.4\n    },\n    \"predicted\": {\n      \"x\": 0.4000000059604645,\n      \"y\": 0.4000000059604645\n    },\n    \"row_max_abs_error\": 5.960464455334602e-09\n  },\n  {\n    \"abs_error\": {\n      \"y\": 0.0\n    },\n    \"expected\": {\n      \"y\": 0.0\n    },\n    \"inputs\": {\n      \"x\": -2.0\n    },\n    \"predicted\": {\n      \"x\": -2.0,\n      \"y\": 0.0\n    },\n    \"row_max_abs_error\": 0.0\n  }\n]\n```\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+        "context": {
+          "example_input_rows": [
+            {
+              "x": -2.0
+            },
+            {
+              "x": 0.4
+            },
+            {
+              "x": 1.8
+            }
+          ],
+          "expected_outputs": [
+            {
+              "y": 0.0
+            },
+            {
+              "y": 0.4
+            },
+            {
+              "y": 1.0
+            }
+          ],
+          "evaluation_mode": "predict_rows"
+        }
+      },
+      "outgoing_repair_error_report": "## Goal\nWrite .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nif (x<-0.0){ \n    y =1; \n}else{ \n    if (0<x<0.01){ \n        y =0; \n    }else{ \n        y=x; \n    }\n}\n```\n\n## Structured compile / evaluation failures\n\n1. stage='parse' kind='syntax' detail='UnexpectedToken'\n   message: Unexpected token Token('LT', '<') at line 4, column 12.\nExpected one of: \n\t* RPAR\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+      "semantic_trace_summary": null,
+      "ranking_penalty": 0.0
+    },
+    {
+      "index": 8,
+      "candidate_source": "if (x <- 0.0){\n    y =0.0 ;\n} else {\n    \n    if ( x <  0.1 ){\n        y =x ;\n    } else{\n        y =1.0 ;\n    }\n\n}",
+      "success": true,
+      "compile_stage_reached": "predict",
+      "metrics": {
+        "neg_mse": -0.12
+      },
+      "program_metrics": [
+        {
+          "name": "neg_mse",
+          "value": -0.12
+        }
+      ],
+      "failure_summaries": [],
+      "warnings": [],
+      "producing_expert": {
+        "expert_call": "repair",
+        "backend_name": "onyx_qwen",
+        "metadata": {
+          "model": "onyx-qwen-production-v1",
+          "raw_chars": 125,
+          "extraction_mode": "fenced_ax",
+          "code_line_count": 9,
+          "normalized_trailing_dot_float": true
+        },
+        "explanation": null
+      },
+      "producing_payload": {
+        "type": "repair",
+        "goal": "Write .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.",
+        "current_program": "if (x<-0.0){ \n    y =1; \n}else{ \n    if (0<x<0.01){ \n        y =0; \n    }else{ \n        y=x; \n    }\n}",
+        "error_report": "## Goal\nWrite .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nif (x<-0.0){ \n    y =1; \n}else{ \n    if (0<x<0.01){ \n        y =0; \n    }else{ \n        y=x; \n    }\n}\n```\n\n## Structured compile / evaluation failures\n\n1. stage='parse' kind='syntax' detail='UnexpectedToken'\n   message: Unexpected token Token('LT', '<') at line 4, column 12.\nExpected one of: \n\t* RPAR\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+        "context": {
+          "example_input_rows": [
+            {
+              "x": -2.0
+            },
+            {
+              "x": 0.4
+            },
+            {
+              "x": 1.8
+            }
+          ],
+          "expected_outputs": [
+            {
+              "y": 0.0
+            },
+            {
+              "y": 0.4
+            },
+            {
+              "y": 1.0
+            }
+          ],
+          "evaluation_mode": "predict_rows"
+        }
+      },
+      "outgoing_repair_error_report": "## Goal\nWrite .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nif (x <- 0.0){\n    y =0.0 ;\n} else {\n    \n    if ( x <  0.1 ){\n        y =x ;\n    } else{\n        y =1.0 ;\n    }\n\n}\n```\n\n## Metric report (program runs but may be suboptimal)\n\n```json\n{\n  \"metrics\": {\n    \"neg_mse\": -0.12\n  },\n  \"program_metrics\": [\n    {\n      \"name\": \"neg_mse\",\n      \"value\": -0.12\n    }\n  ]\n}\n```\n\n\n## Row-wise mismatches\n\nOrdered **worst-first** (by `row_max_abs_error`). Use these concrete input/output deltas to fix coefficients or structure.\n\n```json\n[\n  {\n    \"abs_error\": {\n      \"y\": 0.6\n    },\n    \"expected\": {\n      \"y\": 0.4\n    },\n    \"inputs\": {\n      \"x\": 0.4\n    },\n    \"predicted\": {\n      \"x\": 0.4000000059604645,\n      \"y\": 1.0\n    },\n    \"row_max_abs_error\": 0.6\n  },\n  {\n    \"abs_error\": {\n      \"y\": 0.0\n    },\n    \"expected\": {\n      \"y\": 0.0\n    },\n    \"inputs\": {\n      \"x\": -2.0\n    },\n    \"predicted\": {\n      \"x\": -2.0,\n      \"y\": 0.0\n    },\n    \"row_max_abs_error\": 0.0\n  },\n  {\n    \"abs_error\": {\n      \"y\": 0.0\n    },\n    \"expected\": {\n      \"y\": 1.0\n    },\n    \"inputs\": {\n      \"x\": 1.8\n    },\n    \"predicted\": {\n      \"x\": 1.7999999523162842,\n      \"y\": 1.0\n    },\n    \"row_max_abs_error\": 0.0\n  }\n]\n```\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+      "semantic_trace_summary": null,
+      "row_comparisons": [
+        {
+          "inputs": {
+            "x": 0.4
+          },
+          "predicted": {
+            "x": 0.4000000059604645,
+            "y": 1.0
+          },
+          "expected": {
+            "y": 0.4
+          },
+          "abs_error": {
+            "y": 0.6
+          },
+          "row_max_abs_error": 0.6
+        },
+        {
+          "inputs": {
+            "x": -2.0
+          },
+          "predicted": {
+            "x": -2.0,
+            "y": 0.0
+          },
+          "expected": {
+            "y": 0.0
+          },
+          "abs_error": {
+            "y": 0.0
+          },
+          "row_max_abs_error": 0.0
+        },
+        {
+          "inputs": {
+            "x": 1.8
+          },
+          "predicted": {
+            "x": 1.7999999523162842,
+            "y": 1.0
+          },
+          "expected": {
+            "y": 1.0
+          },
+          "abs_error": {
+            "y": 0.0
+          },
+          "row_max_abs_error": 0.0
+        }
+      ],
+      "ranking_penalty": 0.0,
+      "adjusted_sort_score": -0.12
+    },
+    {
+      "index": 9,
+      "candidate_source": "if (x<-0.0){ \n    y =1; \n} else { \n    if (0.1>x){ \n        y=x; \n    } else{ \n        y=1; \n    }; \n};",
+      "success": false,
+      "compile_stage_reached": "parse",
+      "metrics": {},
+      "program_metrics": [],
+      "failure_summaries": [
+        {
+          "stage": "parse",
+          "kind": "syntax",
+          "message": "Unexpected token Token('SEMICOLON', ';') at line 8, column 6.\nExpected one of: \n\t* NUMBER\n\t* LPAR\n\t* NAME\n\t* LSQB\n\t* WHILE\n\t* SUB\n\t* RETURN\n\t* IF\n\t* STRING_DQ\n\t* STRING_SQ\n\t* RBRACE\nPrevious tokens: [Token('RBRACE', '}')]\n",
+          "detail": "UnexpectedToken"
+        }
+      ],
+      "warnings": [],
+      "producing_expert": {
+        "expert_call": "repair",
+        "backend_name": "onyx_qwen",
+        "metadata": {
+          "model": "onyx-qwen-production-v1",
+          "raw_chars": 116,
+          "extraction_mode": "fenced_ax",
+          "code_line_count": 9
+        },
+        "explanation": null
+      },
+      "producing_payload": {
+        "type": "repair",
+        "goal": "Write .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.",
+        "current_program": "if (x <- 0.0){\n    y =0.0 ;\n} else {\n    \n    if ( x <  0.1 ){\n        y =x ;\n    } else{\n        y =1.0 ;\n    }\n\n}",
+        "error_report": "## Goal\nWrite .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nif (x <- 0.0){\n    y =0.0 ;\n} else {\n    \n    if ( x <  0.1 ){\n        y =x ;\n    } else{\n        y =1.0 ;\n    }\n\n}\n```\n\n## Metric report (program runs but may be suboptimal)\n\n```json\n{\n  \"metrics\": {\n    \"neg_mse\": -0.12\n  },\n  \"program_metrics\": [\n    {\n      \"name\": \"neg_mse\",\n      \"value\": -0.12\n    }\n  ]\n}\n```\n\n\n## Row-wise mismatches\n\nOrdered **worst-first** (by `row_max_abs_error`). Use these concrete input/output deltas to fix coefficients or structure.\n\n```json\n[\n  {\n    \"abs_error\": {\n      \"y\": 0.6\n    },\n    \"expected\": {\n      \"y\": 0.4\n    },\n    \"inputs\": {\n      \"x\": 0.4\n    },\n    \"predicted\": {\n      \"x\": 0.4000000059604645,\n      \"y\": 1.0\n    },\n    \"row_max_abs_error\": 0.6\n  },\n  {\n    \"abs_error\": {\n      \"y\": 0.0\n    },\n    \"expected\": {\n      \"y\": 0.0\n    },\n    \"inputs\": {\n      \"x\": -2.0\n    },\n    \"predicted\": {\n      \"x\": -2.0,\n      \"y\": 0.0\n    },\n    \"row_max_abs_error\": 0.0\n  },\n  {\n    \"abs_error\": {\n      \"y\": 0.0\n    },\n    \"expected\": {\n      \"y\": 1.0\n    },\n    \"inputs\": {\n      \"x\": 1.8\n    },\n    \"predicted\": {\n      \"x\": 1.7999999523162842,\n      \"y\": 1.0\n    },\n    \"row_max_abs_error\": 0.0\n  }\n]\n```\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+        "context": {
+          "example_input_rows": [
+            {
+              "x": -2.0
+            },
+            {
+              "x": 0.4
+            },
+            {
+              "x": 1.8
+            }
+          ],
+          "expected_outputs": [
+            {
+              "y": 0.0
+            },
+            {
+              "y": 0.4
+            },
+            {
+              "y": 1.0
+            }
+          ],
+          "evaluation_mode": "predict_rows"
+        }
+      },
+      "outgoing_repair_error_report": null,
+      "semantic_trace_summary": null,
+      "ranking_penalty": 0.0
+    }
+  ]
+}

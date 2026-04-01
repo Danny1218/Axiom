@@ -29,6 +29,10 @@ COMPLETION_OVERRIDES_CONTEXT_KEY = "_onyx_completion_overrides"
 
 # --- Deterministic prompt templates (edit here only) ---
 
+RETURN_VALID_AX_SEMICOLON_LINE = (
+    "Return only valid .ax source. Every assignment statement must end with a semicolon."
+)
+
 SYSTEM_DRAFT = (
     "You write programs in THIS repository's custom `.ax` DSL (Axiom engine). "
     "It is NOT Macaulay2, NOT the Axiom computer algebra system, NOT a theorem prover, "
@@ -36,24 +40,21 @@ SYSTEM_DRAFT = (
     "Use JavaScript-like statements terminated with semicolons. "
     "Use `=` for assignment (never `:=`). "
     "Use `if (condition) { ... } else { ... }` and `while (condition) { ... }`. "
-    "Nested control-flow stability (draft + search): you must NOT emit `else if`, `&&`, `||`, "
-    "chained comparisons (e.g. `0.0<x<1.0`), `==` where an assignment is required, or any statement "
-    "missing a terminating `;`. "
+    "Nested control-flow (draft + search): explicitly forbid `else if`, `&&`, `||`, "
+    "chained comparisons such as `a < b < c` or `0.9999<x<1`, `==` in assignment position, and missing semicolons. "
+    "Rewrite `else if` as `else { if (...) { ... } else { ... } }`; split chained bounds with nested `if`/`else`; "
+    "use `y = x;` for assignment, never `y == x`. "
     "Forbidden tokens: `:=`, `>=`, `<=`, `&&`, `||`, `then`, `else if`; float literals must be canonical (e.g. `2.0`, never bare `2.`). "
     "Do not use dotted variable access like `input.a` or `obj.value`; use direct variables only (e.g. `a`, `b`, `c`, `x`, `y`, `score`). "
-    "Do not use `else if` as a single construct. For nested branching, write `else { if (...) { ... } else { ... } }`. "
-    "Do not use chained comparisons like `a < b < c`, `0.0 < x < 1.0`, or `0.9999<x<1`; split them into nested control flow. "
-    "Never use `==` in assignment position (bad: `y == x` ; good: `y = x;`). "
-    "Every assignment/statement must end with `;` (no missing semicolons). "
     "Use only well-formed `if`/`else` branches with braces; do not invent invalid branch structure. "
     "Do not emit malformed literals like `0.0 0` or `1.0 0`. "
     "Comparisons allowed: `>`, `<`, `==`, `!=` only. "
     "Do not use `print`. Do not emit prose, commentary, or explanations unless the user explicitly asks for them. "
-    "Return only valid `.ax` source with a semicolon on every assignment statement. "
     "When you use a markdown fence, use the info string `ax` so the block is ```ax ... ```.\n"
     "Canonical valid examples:\n"
     "  y = x * 2.0;\n"
-    "  risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));"
+    "  risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));\n"
+    + RETURN_VALID_AX_SEMICOLON_LINE
 )
 
 SYSTEM_REPAIR = (
@@ -62,20 +63,17 @@ SYSTEM_REPAIR = (
     "Do not wrap in markdown unless you must; if you fence, use ```ax ... ```. "
     "Match syntax to this repo: `=` assignment, semicolon-terminated statements, `if`/`while` with braces, "
     "`neural(features)` or `neural(features, \"liquid\")`. Never use `:=` or `print`. "
-    "Nested control-flow stability (repair + search): you must NOT emit `else if`, `&&`, `||`, "
-    "chained comparisons (e.g. `0.0<x<1.0`), `==` where an assignment is required, or any statement "
-    "missing a terminating `;`. "
+    "Nested control-flow (repair + search): explicitly forbid `else if`, `&&`, `||`, "
+    "chained comparisons such as `a < b < c` or `0.9999<x<1`, `==` in assignment position, and missing semicolons. "
+    "Rewrite `else if` as `else { if (...) { ... } else { ... } }`; split chained bounds with nested `if`/`else`; "
+    "use `y = x;` for assignment, never `y == x`. "
     "Forbidden: `:=`, `>=`, `<=`, `&&`, `||`, `then`, `else if`; no bare float `2.` — use `2.0`. "
     "Do not use dotted variable access like `input.a` or `obj.value`; use direct variables only (e.g. `a`, `b`, `c`, `x`, `y`, `score`). "
-    "Do not use `else if` as a single construct. For nested branching, write `else { if (...) { ... } else { ... } }`. "
-    "Do not use chained comparisons like `a < b < c`, `0.0 < x < 1.0`, or `0.9999<x<1`; split them into nested control flow. "
-    "Never use `==` in assignment position (bad: `y == x` ; good: `y = x;`). "
-    "Every assignment/statement must end with `;` (no missing semicolons). "
     "Use only well-formed `if`/`else` branches with braces; do not invent invalid branch structure. "
     "Do not emit malformed literals like `0.0 0` or `1.0 0`. "
     "Comparisons: `>`, `<`, `==`, `!=` only; if parse errors mention stray `=`, `|`, or `.`, rewrite to supported operators and canonical floats.\n"
-    "Return only valid `.ax` source with a semicolon on every assignment statement. "
-    "Repair hint — bad → good: `x := 1` → `x = 1.0;` ; `print(y);` → delete or assign to an output variable instead."
+    "Repair hint — bad → good: `x := 1` → `x = 1.0;` ; `print(y);` → delete or assign to an output variable instead.\n"
+    + RETURN_VALID_AX_SEMICOLON_LINE
 )
 
 SYSTEM_SUMMARY = (
@@ -119,7 +117,7 @@ SYNTAX_BAD_GOOD_FEWSHOT = """Few-shot bad → good rewrites:
 
 CONTROL_FLOW_FEWSHOT = """Control-flow few-shot rewrites (grammar-supported only):
 
-Canonical nested `if`/`else` (use this shape for piecewise / range logic — copy structure, adapt conditions):
+Canonical good example (nested piecewise — copy this structure; one condition per `if`, no chaining):
 ```ax
 if (x < 0.0) {
     y = 0.0;
@@ -132,14 +130,14 @@ if (x < 0.0) {
 }
 ```
 
-Bad → good:
-1. bad: `else if (x < 1.0) { ... }`
-   good: `else { if (x < 1.0) { ... } else { ... } }` (never `else if` as one construct)
-2. bad: `if (0.9999<x<1) { y = x; }` — never chained comparisons; rewrite with nested `if`/`else` like the canonical example (split `x` lower/upper bounds into separate conditions).
-3. bad: `if (0.0<x<1.0) { y = x; }` or `if (0.0 < x < 1.0) { ... }`
-   good: nested `if`/`else` as in the canonical example above — never chained comparisons
-4. bad: `y == x` (assignment intent)
-   good: `y = x;`
+Bad → good (nested piecewise — apply these first):
+1. bad: `else if (x < 1.0) { ... }` — good: `else { if (x < 1.0) { ... } else { ... } }` (never `else if`)
+2. bad: `0.9999<x<1` or any `a < b < c` — good: never chain comparisons; use nested `if`/`else` like the canonical example above
+3. bad: `y == x` (assignment intent) — good: `y = x;`
+
+More bad → good:
+4. bad: `if (0.0<x<1.0) { y = x; }` or `if (0.0 < x < 1.0) { ... }`
+   good: nested `if`/`else` as in the canonical example — never chained comparisons
 5. `if (x == 0) then y = 0.0 else y = x;` →
 ```ax
 if (x == 0) { y = 0.0; } else { y = x; }
@@ -320,8 +318,8 @@ def user_prompt_draft(goal: str, context: Mapping[str, Any]) -> str:
             f"{SYNTAX_BAD_GOOD_FEWSHOT}\n\n",
             f"{CONTROL_FLOW_FEWSHOT}\n\n",
             f"{DRAFT_FEWSHOT}\n\n",
-            "Respond with the complete `.ax` program only (fenced with `ax` if you use a fence). "
-            "Return only valid `.ax` source with a semicolon on every assignment statement.",
+            "Respond with the complete `.ax` program only (fenced with `ax` if you use a fence).\n"
+            + RETURN_VALID_AX_SEMICOLON_LINE,
         ]
     )
     return "".join(parts)
@@ -351,8 +349,8 @@ def user_prompt_repair(goal: str, current_program: str, error_report: str, conte
     parts.extend(
         [
             f"Current program:\n```ax\n{current_program.rstrip()}\n```\n\n",
-            "Return the corrected full `.ax` program only (fenced with `ax` if you must). "
-            "Return only valid `.ax` source with a semicolon on every assignment statement.",
+            "Return the corrected full `.ax` program only (fenced with `ax` if you must).\n"
+            + RETURN_VALID_AX_SEMICOLON_LINE,
         ]
     )
     return "".join(parts)

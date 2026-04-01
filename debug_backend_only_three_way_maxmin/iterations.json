@@ -1,0 +1,734 @@
+{
+  "schema_version": 1,
+  "kind": "axiom.copilot.iterations",
+  "goal": "Write a valid Axiom .ax program in this repo's DSL that computes score = max(min(a, b), c);",
+  "domain_context": null,
+  "backend_name": "onyx_qwen",
+  "evaluation_mode": "predict_rows",
+  "max_iterations_config": 10,
+  "iteration_count": 6,
+  "score_sort_key": "neg_mse",
+  "converged": true,
+  "convergence_reason": "metric_threshold_met",
+  "metric_repair": {
+    "enabled": true,
+    "threshold_effective": -1e-09,
+    "metric_repair_if_below_config": null
+  },
+  "iterations": [
+    {
+      "index": 0,
+      "candidate_source": "if (a < b) {\n    if ((a < c)) {\n        score = a;\n    } \n    else {\n        score= c;\n    }\n} \nelse {\n    if((b<c)){\n        score=b;\n    }\n    else{\n        score=c;\n    }\n}",
+      "success": true,
+      "compile_stage_reached": "predict",
+      "metrics": {
+        "neg_mse": -3.9079999997615813
+      },
+      "program_metrics": [
+        {
+          "name": "neg_mse",
+          "value": -3.9079999997615813
+        }
+      ],
+      "failure_summaries": [],
+      "warnings": [],
+      "producing_expert": {
+        "expert_call": "draft",
+        "backend_name": "onyx_qwen",
+        "metadata": {
+          "model": "onyx-qwen-production-v1",
+          "raw_chars": 188,
+          "extraction_mode": "fenced_ax",
+          "code_line_count": 16
+        },
+        "explanation": null
+      },
+      "producing_payload": {
+        "type": "draft",
+        "goal": "Write a valid Axiom .ax program in this repo's DSL that computes score = max(min(a, b), c);",
+        "context": {
+          "domain_context": "",
+          "example_input_rows": [
+            {
+              "a": 1.0,
+              "b": 2.0,
+              "c": 0.5
+            },
+            {
+              "a": -1.0,
+              "b": 3.0,
+              "c": 0.0
+            },
+            {
+              "a": 4.0,
+              "b": 2.0,
+              "c": 3.5
+            },
+            {
+              "a": 0.2,
+              "b": 0.3,
+              "c": 0.4
+            },
+            {
+              "a": 5.0,
+              "b": 6.0,
+              "c": 1.0
+            }
+          ],
+          "expected_outputs": [
+            {
+              "score": 1.0
+            },
+            {
+              "score": 0.0
+            },
+            {
+              "score": 3.5
+            },
+            {
+              "score": 0.4
+            },
+            {
+              "score": 5.0
+            }
+          ],
+          "exact_symbolic_examples_task": true
+        }
+      },
+      "outgoing_repair_error_report": "## Goal\nWrite a valid Axiom .ax program in this repo's DSL that computes score = max(min(a, b), c);\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nif (a < b) {\n    if ((a < c)) {\n        score = a;\n    } \n    else {\n        score= c;\n    }\n} \nelse {\n    if((b<c)){\n        score=b;\n    }\n    else{\n        score=c;\n    }\n}\n```\n\n## Metric report (program runs but may be suboptimal)\n\n```json\n{\n  \"metrics\": {\n    \"neg_mse\": -3.9079999997615813\n  },\n  \"program_metrics\": [\n    {\n      \"name\": \"neg_mse\",\n      \"value\": -3.9079999997615813\n    }\n  ]\n}\n```\n\n\n## Row-wise mismatches\n\nOrdered **worst-first** (by `row_max_abs_error`). Use these concrete input/output deltas to fix coefficients or structure.\n\n```json\n[\n  {\n    \"abs_error\": {\n      \"score\": 4.0\n    },\n    \"expected\": {\n      \"score\": 5.0\n    },\n    \"inputs\": {\n      \"a\": 5.0,\n      \"b\": 6.0,\n      \"c\": 1.0\n    },\n    \"predicted\": {\n      \"a\": 5.0,\n      \"b\": 6.0,\n      \"c\": 1.0,\n      \"score\": 1.0\n    },\n    \"row_max_abs_error\": 4.0\n  },\n  {\n    \"abs_error\": {\n      \"score\": 1.5\n    },\n    \"expected\": {\n      \"score\": 3.5\n    },\n    \"inputs\": {\n      \"a\": 4.0,\n      \"b\": 2.0,\n      \"c\": 3.5\n    },\n    \"predicted\": {\n      \"a\": 4.0,\n      \"b\": 2.0,\n      \"c\": 3.5,\n      \"score\": 2.0\n    },\n    \"row_max_abs_error\": 1.5\n  },\n  {\n    \"abs_error\": {\n      \"score\": 1.0\n    },\n    \"expected\": {\n      \"score\": 0.0\n    },\n    \"inputs\": {\n      \"a\": -1.0,\n      \"b\": 3.0,\n      \"c\": 0.0\n    },\n    \"predicted\": {\n      \"a\": -1.0,\n      \"b\": 3.0,\n      \"c\": 0.0,\n      \"score\": -1.0\n    },\n    \"row_max_abs_error\": 1.0\n  },\n  {\n    \"abs_error\": {\n      \"score\": 0.5\n    },\n    \"expected\": {\n      \"score\": 1.0\n    },\n    \"inputs\": {\n      \"a\": 1.0,\n      \"b\": 2.0,\n      \"c\": 0.5\n    },\n    \"predicted\": {\n      \"a\": 1.0,\n      \"b\": 2.0,\n      \"c\": 0.5,\n      \"score\": 0.5\n    },\n    \"row_max_abs_error\": 0.5\n  },\n  {\n    \"abs_error\": {\n      \"score\": 0.19999999701976778\n    },\n    \"expected\": {\n      \"score\": 0.4\n    },\n    \"inputs\": {\n      \"a\": 0.2,\n      \"b\": 0.3,\n      \"c\": 0.4\n    },\n    \"predicted\": {\n      \"a\": 0.20000000298023224,\n      \"b\": 0.30000001192092896,\n      \"c\": 0.4000000059604645,\n      \"score\": 0.20000000298023224\n    },\n    \"row_max_abs_error\": 0.19999999701976778\n  }\n]\n```\n\n\n## Symbolic mapping hint\nThis task is defined by explicit input/output examples with numeric targets. Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n\n### Exact symbolic repair cues\nThe program compiles but mismatches examples — fix semantics, not syntax only:\n\n- Preserve interaction terms exactly (e.g. `a * b` when the goal requires a product of inputs).\n- Preserve additive bias terms exactly (intercepts, constant offsets).\n- Do not replace interaction terms with scaled unary terms.\n- Check row errors for: missing interaction term (`a * b`), distorted coefficient on a variable, or missing/altered additive bias.\n\n- Error varies strongly with `b` (corr~0.93); a coefficient on that variable is likely distorted. Preserve variable coefficients exactly; do not replace interaction terms with scaled unary terms.\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+      "semantic_trace_summary": null,
+      "row_comparisons": [
+        {
+          "inputs": {
+            "a": 5.0,
+            "b": 6.0,
+            "c": 1.0
+          },
+          "predicted": {
+            "a": 5.0,
+            "b": 6.0,
+            "c": 1.0,
+            "score": 1.0
+          },
+          "expected": {
+            "score": 5.0
+          },
+          "abs_error": {
+            "score": 4.0
+          },
+          "row_max_abs_error": 4.0
+        },
+        {
+          "inputs": {
+            "a": 4.0,
+            "b": 2.0,
+            "c": 3.5
+          },
+          "predicted": {
+            "a": 4.0,
+            "b": 2.0,
+            "c": 3.5,
+            "score": 2.0
+          },
+          "expected": {
+            "score": 3.5
+          },
+          "abs_error": {
+            "score": 1.5
+          },
+          "row_max_abs_error": 1.5
+        },
+        {
+          "inputs": {
+            "a": -1.0,
+            "b": 3.0,
+            "c": 0.0
+          },
+          "predicted": {
+            "a": -1.0,
+            "b": 3.0,
+            "c": 0.0,
+            "score": -1.0
+          },
+          "expected": {
+            "score": 0.0
+          },
+          "abs_error": {
+            "score": 1.0
+          },
+          "row_max_abs_error": 1.0
+        },
+        {
+          "inputs": {
+            "a": 1.0,
+            "b": 2.0,
+            "c": 0.5
+          },
+          "predicted": {
+            "a": 1.0,
+            "b": 2.0,
+            "c": 0.5,
+            "score": 0.5
+          },
+          "expected": {
+            "score": 1.0
+          },
+          "abs_error": {
+            "score": 0.5
+          },
+          "row_max_abs_error": 0.5
+        },
+        {
+          "inputs": {
+            "a": 0.2,
+            "b": 0.3,
+            "c": 0.4
+          },
+          "predicted": {
+            "a": 0.20000000298023224,
+            "b": 0.30000001192092896,
+            "c": 0.4000000059604645,
+            "score": 0.20000000298023224
+          },
+          "expected": {
+            "score": 0.4
+          },
+          "abs_error": {
+            "score": 0.19999999701976778
+          },
+          "row_max_abs_error": 0.19999999701976778
+        }
+      ],
+      "ranking_penalty": 0.0,
+      "adjusted_sort_score": -3.9079999997615813
+    },
+    {
+      "index": 1,
+      "candidate_source": "score = max(max(a, b)); if (score < c) { score = c; }",
+      "success": false,
+      "compile_stage_reached": "ir",
+      "metrics": {},
+      "program_metrics": [],
+      "failure_summaries": [
+        {
+          "stage": "ir",
+          "kind": "ir",
+          "message": "max() expects exactly 2 arguments",
+          "detail": "ValueError"
+        }
+      ],
+      "warnings": [],
+      "producing_expert": {
+        "expert_call": "repair",
+        "backend_name": "onyx_qwen",
+        "metadata": {
+          "model": "onyx-qwen-production-v1",
+          "raw_chars": 65,
+          "extraction_mode": "fenced_ax",
+          "code_line_count": 1
+        },
+        "explanation": null
+      },
+      "producing_payload": {
+        "type": "repair",
+        "goal": "Write a valid Axiom .ax program in this repo's DSL that computes score = max(min(a, b), c);",
+        "current_program": "if (a < b) {\n    if ((a < c)) {\n        score = a;\n    } \n    else {\n        score= c;\n    }\n} \nelse {\n    if((b<c)){\n        score=b;\n    }\n    else{\n        score=c;\n    }\n}",
+        "error_report": "## Goal\nWrite a valid Axiom .ax program in this repo's DSL that computes score = max(min(a, b), c);\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nif (a < b) {\n    if ((a < c)) {\n        score = a;\n    } \n    else {\n        score= c;\n    }\n} \nelse {\n    if((b<c)){\n        score=b;\n    }\n    else{\n        score=c;\n    }\n}\n```\n\n## Metric report (program runs but may be suboptimal)\n\n```json\n{\n  \"metrics\": {\n    \"neg_mse\": -3.9079999997615813\n  },\n  \"program_metrics\": [\n    {\n      \"name\": \"neg_mse\",\n      \"value\": -3.9079999997615813\n    }\n  ]\n}\n```\n\n\n## Row-wise mismatches\n\nOrdered **worst-first** (by `row_max_abs_error`). Use these concrete input/output deltas to fix coefficients or structure.\n\n```json\n[\n  {\n    \"abs_error\": {\n      \"score\": 4.0\n    },\n    \"expected\": {\n      \"score\": 5.0\n    },\n    \"inputs\": {\n      \"a\": 5.0,\n      \"b\": 6.0,\n      \"c\": 1.0\n    },\n    \"predicted\": {\n      \"a\": 5.0,\n      \"b\": 6.0,\n      \"c\": 1.0,\n      \"score\": 1.0\n    },\n    \"row_max_abs_error\": 4.0\n  },\n  {\n    \"abs_error\": {\n      \"score\": 1.5\n    },\n    \"expected\": {\n      \"score\": 3.5\n    },\n    \"inputs\": {\n      \"a\": 4.0,\n      \"b\": 2.0,\n      \"c\": 3.5\n    },\n    \"predicted\": {\n      \"a\": 4.0,\n      \"b\": 2.0,\n      \"c\": 3.5,\n      \"score\": 2.0\n    },\n    \"row_max_abs_error\": 1.5\n  },\n  {\n    \"abs_error\": {\n      \"score\": 1.0\n    },\n    \"expected\": {\n      \"score\": 0.0\n    },\n    \"inputs\": {\n      \"a\": -1.0,\n      \"b\": 3.0,\n      \"c\": 0.0\n    },\n    \"predicted\": {\n      \"a\": -1.0,\n      \"b\": 3.0,\n      \"c\": 0.0,\n      \"score\": -1.0\n    },\n    \"row_max_abs_error\": 1.0\n  },\n  {\n    \"abs_error\": {\n      \"score\": 0.5\n    },\n    \"expected\": {\n      \"score\": 1.0\n    },\n    \"inputs\": {\n      \"a\": 1.0,\n      \"b\": 2.0,\n      \"c\": 0.5\n    },\n    \"predicted\": {\n      \"a\": 1.0,\n      \"b\": 2.0,\n      \"c\": 0.5,\n      \"score\": 0.5\n    },\n    \"row_max_abs_error\": 0.5\n  },\n  {\n    \"abs_error\": {\n      \"score\": 0.19999999701976778\n    },\n    \"expected\": {\n      \"score\": 0.4\n    },\n    \"inputs\": {\n      \"a\": 0.2,\n      \"b\": 0.3,\n      \"c\": 0.4\n    },\n    \"predicted\": {\n      \"a\": 0.20000000298023224,\n      \"b\": 0.30000001192092896,\n      \"c\": 0.4000000059604645,\n      \"score\": 0.20000000298023224\n    },\n    \"row_max_abs_error\": 0.19999999701976778\n  }\n]\n```\n\n\n## Symbolic mapping hint\nThis task is defined by explicit input/output examples with numeric targets. Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n\n### Exact symbolic repair cues\nThe program compiles but mismatches examples — fix semantics, not syntax only:\n\n- Preserve interaction terms exactly (e.g. `a * b` when the goal requires a product of inputs).\n- Preserve additive bias terms exactly (intercepts, constant offsets).\n- Do not replace interaction terms with scaled unary terms.\n- Check row errors for: missing interaction term (`a * b`), distorted coefficient on a variable, or missing/altered additive bias.\n\n- Error varies strongly with `b` (corr~0.93); a coefficient on that variable is likely distorted. Preserve variable coefficients exactly; do not replace interaction terms with scaled unary terms.\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+        "context": {
+          "example_input_rows": [
+            {
+              "a": 1.0,
+              "b": 2.0,
+              "c": 0.5
+            },
+            {
+              "a": -1.0,
+              "b": 3.0,
+              "c": 0.0
+            },
+            {
+              "a": 4.0,
+              "b": 2.0,
+              "c": 3.5
+            },
+            {
+              "a": 0.2,
+              "b": 0.3,
+              "c": 0.4
+            },
+            {
+              "a": 5.0,
+              "b": 6.0,
+              "c": 1.0
+            }
+          ],
+          "expected_outputs": [
+            {
+              "score": 1.0
+            },
+            {
+              "score": 0.0
+            },
+            {
+              "score": 3.5
+            },
+            {
+              "score": 0.4
+            },
+            {
+              "score": 5.0
+            }
+          ],
+          "evaluation_mode": "predict_rows",
+          "exact_symbolic_examples_task": true
+        }
+      },
+      "outgoing_repair_error_report": "## Goal\nWrite a valid Axiom .ax program in this repo's DSL that computes score = max(min(a, b), c);\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nscore = max(max(a, b)); if (score < c) { score = c; }\n```\n\n## Structured compile / evaluation failures\n\n1. stage='ir' kind='ir' detail='ValueError'\n   message: max() expects exactly 2 arguments\n\n## Symbolic mapping hint\nThis task is defined by explicit input/output examples with numeric targets. Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+      "semantic_trace_summary": null,
+      "ranking_penalty": 0.0
+    },
+    {
+      "index": 2,
+      "candidate_source": "score = max(x, y); \nif (score < z) { score };",
+      "success": false,
+      "compile_stage_reached": "parse",
+      "metrics": {},
+      "program_metrics": [],
+      "failure_summaries": [
+        {
+          "stage": "parse",
+          "kind": "syntax",
+          "message": "Unexpected token Token('RBRACE', '}') at line 2, column 24.\nExpected one of: \n\t* LT\n\t* LSQB\n\t* ADD\n\t* NE\n\t* GT\n\t* EQ\n\t* SUB\n\t* SEMICOLON\n\t* DIV\n\t* LPAR\n\t* MUL\n\t* EQUAL\nPrevious tokens: [Token('NAME', 'score')]\n",
+          "detail": "UnexpectedToken"
+        }
+      ],
+      "warnings": [],
+      "producing_expert": {
+        "expert_call": "repair",
+        "backend_name": "onyx_qwen",
+        "metadata": {
+          "model": "onyx-qwen-production-v1",
+          "raw_chars": 58,
+          "extraction_mode": "fenced_ax",
+          "code_line_count": 2
+        },
+        "explanation": null
+      },
+      "producing_payload": {
+        "type": "repair",
+        "goal": "Write a valid Axiom .ax program in this repo's DSL that computes score = max(min(a, b), c);",
+        "current_program": "score = max(max(a, b)); if (score < c) { score = c; }",
+        "error_report": "## Goal\nWrite a valid Axiom .ax program in this repo's DSL that computes score = max(min(a, b), c);\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nscore = max(max(a, b)); if (score < c) { score = c; }\n```\n\n## Structured compile / evaluation failures\n\n1. stage='ir' kind='ir' detail='ValueError'\n   message: max() expects exactly 2 arguments\n\n## Symbolic mapping hint\nThis task is defined by explicit input/output examples with numeric targets. Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+        "context": {
+          "example_input_rows": [
+            {
+              "a": 1.0,
+              "b": 2.0,
+              "c": 0.5
+            },
+            {
+              "a": -1.0,
+              "b": 3.0,
+              "c": 0.0
+            },
+            {
+              "a": 4.0,
+              "b": 2.0,
+              "c": 3.5
+            },
+            {
+              "a": 0.2,
+              "b": 0.3,
+              "c": 0.4
+            },
+            {
+              "a": 5.0,
+              "b": 6.0,
+              "c": 1.0
+            }
+          ],
+          "expected_outputs": [
+            {
+              "score": 1.0
+            },
+            {
+              "score": 0.0
+            },
+            {
+              "score": 3.5
+            },
+            {
+              "score": 0.4
+            },
+            {
+              "score": 5.0
+            }
+          ],
+          "evaluation_mode": "predict_rows",
+          "exact_symbolic_examples_task": true
+        }
+      },
+      "outgoing_repair_error_report": "## Goal\nWrite a valid Axiom .ax program in this repo's DSL that computes score = max(min(a, b), c);\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nscore = max(x, y); \nif (score < z) { score };\n```\n\n## Structured compile / evaluation failures\n\n1. stage='parse' kind='syntax' detail='UnexpectedToken'\n   message: Unexpected token Token('RBRACE', '}') at line 2, column 24.\nExpected one of: \n\t* LT\n\t* LSQB\n\t* ADD\n\t* NE\n\t* GT\n\t* EQ\n\t* SUB\n\t* SEMICOLON\n\t* DIV\n\t* LPAR\n\t* MUL\n\t* EQUAL\nPrevious tokens: [Token('NAME', 'score')]\n\n## Symbolic mapping hint\nThis task is defined by explicit input/output examples with numeric targets. Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+      "semantic_trace_summary": null,
+      "ranking_penalty": 0.0
+    },
+    {
+      "index": 3,
+      "candidate_source": "score = max(max(a, b)); \nif (max(a, b) < c) { score };",
+      "success": false,
+      "compile_stage_reached": "parse",
+      "metrics": {},
+      "program_metrics": [],
+      "failure_summaries": [
+        {
+          "stage": "parse",
+          "kind": "syntax",
+          "message": "Unexpected token Token('RBRACE', '}') at line 2, column 28.\nExpected one of: \n\t* LT\n\t* LSQB\n\t* ADD\n\t* NE\n\t* GT\n\t* EQ\n\t* SUB\n\t* SEMICOLON\n\t* DIV\n\t* LPAR\n\t* MUL\n\t* EQUAL\nPrevious tokens: [Token('NAME', 'score')]\n",
+          "detail": "UnexpectedToken"
+        }
+      ],
+      "warnings": [],
+      "producing_expert": {
+        "expert_call": "repair",
+        "backend_name": "onyx_qwen",
+        "metadata": {
+          "model": "onyx-qwen-production-v1",
+          "raw_chars": 66,
+          "extraction_mode": "fenced_ax",
+          "code_line_count": 2
+        },
+        "explanation": null
+      },
+      "producing_payload": {
+        "type": "repair",
+        "goal": "Write a valid Axiom .ax program in this repo's DSL that computes score = max(min(a, b), c);",
+        "current_program": "score = max(x, y); \nif (score < z) { score };",
+        "error_report": "## Goal\nWrite a valid Axiom .ax program in this repo's DSL that computes score = max(min(a, b), c);\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nscore = max(x, y); \nif (score < z) { score };\n```\n\n## Structured compile / evaluation failures\n\n1. stage='parse' kind='syntax' detail='UnexpectedToken'\n   message: Unexpected token Token('RBRACE', '}') at line 2, column 24.\nExpected one of: \n\t* LT\n\t* LSQB\n\t* ADD\n\t* NE\n\t* GT\n\t* EQ\n\t* SUB\n\t* SEMICOLON\n\t* DIV\n\t* LPAR\n\t* MUL\n\t* EQUAL\nPrevious tokens: [Token('NAME', 'score')]\n\n## Symbolic mapping hint\nThis task is defined by explicit input/output examples with numeric targets. Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+        "context": {
+          "example_input_rows": [
+            {
+              "a": 1.0,
+              "b": 2.0,
+              "c": 0.5
+            },
+            {
+              "a": -1.0,
+              "b": 3.0,
+              "c": 0.0
+            },
+            {
+              "a": 4.0,
+              "b": 2.0,
+              "c": 3.5
+            },
+            {
+              "a": 0.2,
+              "b": 0.3,
+              "c": 0.4
+            },
+            {
+              "a": 5.0,
+              "b": 6.0,
+              "c": 1.0
+            }
+          ],
+          "expected_outputs": [
+            {
+              "score": 1.0
+            },
+            {
+              "score": 0.0
+            },
+            {
+              "score": 3.5
+            },
+            {
+              "score": 0.4
+            },
+            {
+              "score": 5.0
+            }
+          ],
+          "evaluation_mode": "predict_rows",
+          "exact_symbolic_examples_task": true
+        }
+      },
+      "outgoing_repair_error_report": "## Goal\nWrite a valid Axiom .ax program in this repo's DSL that computes score = max(min(a, b), c);\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nscore = max(max(a, b)); \nif (max(a, b) < c) { score };\n```\n\n## Structured compile / evaluation failures\n\n1. stage='parse' kind='syntax' detail='UnexpectedToken'\n   message: Unexpected token Token('RBRACE', '}') at line 2, column 28.\nExpected one of: \n\t* LT\n\t* LSQB\n\t* ADD\n\t* NE\n\t* GT\n\t* EQ\n\t* SUB\n\t* SEMICOLON\n\t* DIV\n\t* LPAR\n\t* MUL\n\t* EQUAL\nPrevious tokens: [Token('NAME', 'score')]\n\n## Symbolic mapping hint\nThis task is defined by explicit input/output examples with numeric targets. Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+      "semantic_trace_summary": null,
+      "ranking_penalty": 0.0
+    },
+    {
+      "index": 4,
+      "candidate_source": "score = max(x, y);\nif (x != y) {\n    if ((x < y) || (x > y)) {\n        score = min(x, y); \n    }\n}\nif (score < c) {\n    score = c;\n}",
+      "success": false,
+      "compile_stage_reached": "parse",
+      "metrics": {},
+      "program_metrics": [],
+      "failure_summaries": [
+        {
+          "stage": "parse",
+          "kind": "syntax",
+          "message": "No terminal matches '|' in the current parser context, at line 3 col 17\n\n    if ((x < y) || (x > y)) {\n                ^\nExpected one of: \n\t* LT\n\t* NE\n\t* RSQB\n\t* SEMICOLON\n\t* RPAR\n\t* COMMA\n\t* LSQB\n\t* ADD\n\t* GT\n\t* EQ\n\t* SUB\n\t* DIV\n\t* LPAR\n\t* MUL\n\nPrevious tokens: Token('RPAR', ')')\n",
+          "detail": "UnexpectedCharacters"
+        }
+      ],
+      "warnings": [],
+      "producing_expert": {
+        "expert_call": "repair",
+        "backend_name": "onyx_qwen",
+        "metadata": {
+          "model": "onyx-qwen-production-v1",
+          "raw_chars": 144,
+          "extraction_mode": "fenced_ax",
+          "code_line_count": 9
+        },
+        "explanation": null
+      },
+      "producing_payload": {
+        "type": "repair",
+        "goal": "Write a valid Axiom .ax program in this repo's DSL that computes score = max(min(a, b), c);",
+        "current_program": "score = max(max(a, b)); \nif (max(a, b) < c) { score };",
+        "error_report": "## Goal\nWrite a valid Axiom .ax program in this repo's DSL that computes score = max(min(a, b), c);\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nscore = max(max(a, b)); \nif (max(a, b) < c) { score };\n```\n\n## Structured compile / evaluation failures\n\n1. stage='parse' kind='syntax' detail='UnexpectedToken'\n   message: Unexpected token Token('RBRACE', '}') at line 2, column 28.\nExpected one of: \n\t* LT\n\t* LSQB\n\t* ADD\n\t* NE\n\t* GT\n\t* EQ\n\t* SUB\n\t* SEMICOLON\n\t* DIV\n\t* LPAR\n\t* MUL\n\t* EQUAL\nPrevious tokens: [Token('NAME', 'score')]\n\n## Symbolic mapping hint\nThis task is defined by explicit input/output examples with numeric targets. Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+        "context": {
+          "example_input_rows": [
+            {
+              "a": 1.0,
+              "b": 2.0,
+              "c": 0.5
+            },
+            {
+              "a": -1.0,
+              "b": 3.0,
+              "c": 0.0
+            },
+            {
+              "a": 4.0,
+              "b": 2.0,
+              "c": 3.5
+            },
+            {
+              "a": 0.2,
+              "b": 0.3,
+              "c": 0.4
+            },
+            {
+              "a": 5.0,
+              "b": 6.0,
+              "c": 1.0
+            }
+          ],
+          "expected_outputs": [
+            {
+              "score": 1.0
+            },
+            {
+              "score": 0.0
+            },
+            {
+              "score": 3.5
+            },
+            {
+              "score": 0.4
+            },
+            {
+              "score": 5.0
+            }
+          ],
+          "evaluation_mode": "predict_rows",
+          "exact_symbolic_examples_task": true
+        }
+      },
+      "outgoing_repair_error_report": "## Goal\nWrite a valid Axiom .ax program in this repo's DSL that computes score = max(min(a, b), c);\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nscore = max(x, y);\nif (x != y) {\n    if ((x < y) || (x > y)) {\n        score = min(x, y); \n    }\n}\nif (score < c) {\n    score = c;\n}\n```\n\n## Structured compile / evaluation failures\n\n1. stage='parse' kind='syntax' detail='UnexpectedCharacters'\n   message: No terminal matches '|' in the current parser context, at line 3 col 17\n\n    if ((x < y) || (x > y)) {\n                ^\nExpected one of: \n\t* LT\n\t* NE\n\t* RSQB\n\t* SEMICOLON\n\t* RPAR\n\t* COMMA\n\t* LSQB\n\t* ADD\n\t* GT\n\t* EQ\n\t* SUB\n\t* DIV\n\t* LPAR\n\t* MUL\n\nPrevious tokens: Token('RPAR', ')')\n\n## Symbolic mapping hint\nThis task is defined by explicit input/output examples with numeric targets. Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+      "semantic_trace_summary": null,
+      "ranking_penalty": 0.0
+    },
+    {
+      "index": 5,
+      "candidate_source": "score = max(c, min(a, b));",
+      "success": true,
+      "compile_stage_reached": "predict",
+      "metrics": {
+        "neg_mse": -7.105427304661443e-18
+      },
+      "program_metrics": [
+        {
+          "name": "neg_mse",
+          "value": -7.105427304661443e-18
+        }
+      ],
+      "failure_summaries": [],
+      "warnings": [],
+      "producing_expert": {
+        "expert_call": "repair",
+        "backend_name": "onyx_qwen",
+        "metadata": {
+          "model": "onyx-qwen-production-v1",
+          "raw_chars": 38,
+          "extraction_mode": "fenced_ax",
+          "code_line_count": 1
+        },
+        "explanation": null
+      },
+      "producing_payload": {
+        "type": "repair",
+        "goal": "Write a valid Axiom .ax program in this repo's DSL that computes score = max(min(a, b), c);",
+        "current_program": "score = max(x, y);\nif (x != y) {\n    if ((x < y) || (x > y)) {\n        score = min(x, y); \n    }\n}\nif (score < c) {\n    score = c;\n}",
+        "error_report": "## Goal\nWrite a valid Axiom .ax program in this repo's DSL that computes score = max(min(a, b), c);\n\n## Domain context\n(none)\n\n## Current .ax program\n```ax\nscore = max(x, y);\nif (x != y) {\n    if ((x < y) || (x > y)) {\n        score = min(x, y); \n    }\n}\nif (score < c) {\n    score = c;\n}\n```\n\n## Structured compile / evaluation failures\n\n1. stage='parse' kind='syntax' detail='UnexpectedCharacters'\n   message: No terminal matches '|' in the current parser context, at line 3 col 17\n\n    if ((x < y) || (x > y)) {\n                ^\nExpected one of: \n\t* LT\n\t* NE\n\t* RSQB\n\t* SEMICOLON\n\t* RPAR\n\t* COMMA\n\t* LSQB\n\t* ADD\n\t* GT\n\t* EQ\n\t* SUB\n\t* DIV\n\t* LPAR\n\t* MUL\n\nPrevious tokens: Token('RPAR', ')')\n\n## Symbolic mapping hint\nThis task is defined by explicit input/output examples with numeric targets. Prefer **direct symbolic arithmetic** in `.ax` over `neural(...)` when the mapping can be written exactly. **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically. For affine or clamp-style tasks, use `+`, `-`, `*`, `min`, `max` explicitly.\n\n\n## Instructions\nReturn a **corrected full** Axiom (.ax) program as plain source only (no markdown fences unless the program itself needs them). Preserve the user goal and I/O intent.",
+        "context": {
+          "example_input_rows": [
+            {
+              "a": 1.0,
+              "b": 2.0,
+              "c": 0.5
+            },
+            {
+              "a": -1.0,
+              "b": 3.0,
+              "c": 0.0
+            },
+            {
+              "a": 4.0,
+              "b": 2.0,
+              "c": 3.5
+            },
+            {
+              "a": 0.2,
+              "b": 0.3,
+              "c": 0.4
+            },
+            {
+              "a": 5.0,
+              "b": 6.0,
+              "c": 1.0
+            }
+          ],
+          "expected_outputs": [
+            {
+              "score": 1.0
+            },
+            {
+              "score": 0.0
+            },
+            {
+              "score": 3.5
+            },
+            {
+              "score": 0.4
+            },
+            {
+              "score": 5.0
+            }
+          ],
+          "evaluation_mode": "predict_rows",
+          "exact_symbolic_examples_task": true
+        }
+      },
+      "outgoing_repair_error_report": null,
+      "semantic_trace_summary": null,
+      "row_comparisons": [
+        {
+          "inputs": {
+            "a": 0.2,
+            "b": 0.3,
+            "c": 0.4
+          },
+          "predicted": {
+            "score": 0.4000000059604645,
+            "c": 0.4000000059604645,
+            "a": 0.20000000298023224,
+            "b": 0.30000001192092896
+          },
+          "expected": {
+            "score": 0.4
+          },
+          "abs_error": {
+            "score": 5.960464455334602e-09
+          },
+          "row_max_abs_error": 5.960464455334602e-09
+        },
+        {
+          "inputs": {
+            "a": 1.0,
+            "b": 2.0,
+            "c": 0.5
+          },
+          "predicted": {
+            "score": 1.0,
+            "c": 0.5,
+            "a": 1.0,
+            "b": 2.0
+          },
+          "expected": {
+            "score": 1.0
+          },
+          "abs_error": {
+            "score": 0.0
+          },
+          "row_max_abs_error": 0.0
+        },
+        {
+          "inputs": {
+            "a": -1.0,
+            "b": 3.0,
+            "c": 0.0
+          },
+          "predicted": {
+            "score": 0.0,
+            "c": 0.0,
+            "a": -1.0,
+            "b": 3.0
+          },
+          "expected": {
+            "score": 0.0
+          },
+          "abs_error": {
+            "score": 0.0
+          },
+          "row_max_abs_error": 0.0
+        },
+        {
+          "inputs": {
+            "a": 4.0,
+            "b": 2.0,
+            "c": 3.5
+          },
+          "predicted": {
+            "score": 3.5,
+            "c": 3.5,
+            "a": 4.0,
+            "b": 2.0
+          },
+          "expected": {
+            "score": 3.5
+          },
+          "abs_error": {
+            "score": 0.0
+          },
+          "row_max_abs_error": 0.0
+        },
+        {
+          "inputs": {
+            "a": 5.0,
+            "b": 6.0,
+            "c": 1.0
+          },
+          "predicted": {
+            "score": 5.0,
+            "c": 1.0,
+            "a": 5.0,
+            "b": 6.0
+          },
+          "expected": {
+            "score": 5.0
+          },
+          "abs_error": {
+            "score": 0.0
+          },
+          "row_max_abs_error": 0.0
+        }
+      ],
+      "ranking_penalty": 0.0,
+      "adjusted_sort_score": -7.105427304661443e-18
+    }
+  ]
+}
