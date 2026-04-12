@@ -59,6 +59,17 @@ function _Text {
     return [string]$Value
 }
 
+function _Snippet {
+    param(
+        $Value,
+        [int]$MaxLength = 160
+    )
+    if ([string]::IsNullOrWhiteSpace([string]$Value)) { return "n/a" }
+    $text = [regex]::Replace([string]$Value, "\s+", " ").Trim()
+    if ($text.Length -le $MaxLength) { return $text }
+    return $text.Substring(0, $MaxLength) + "..."
+}
+
 function _Task-Summary {
     param($Task)
     if ($null -eq $Task) { return $null }
@@ -66,14 +77,28 @@ function _Task-Summary {
     if ($null -eq $draft) { return $null }
     $eval = _Get-PropValue -Object $draft -Name "evaluation"
     $metrics = _Get-PropValue -Object $eval -Name "metrics"
+    $failureSummaries = _Get-PropValue -Object $eval -Name "failure_summaries"
+    $firstFailure = $null
+    if ($null -ne $failureSummaries) {
+        $items = @($failureSummaries)
+        if ($items.Count -gt 0) { $firstFailure = $items[0] }
+    }
+    $firstFailureDetail = _Get-PropValue -Object $firstFailure -Name "detail"
+    if ([string]::IsNullOrWhiteSpace([string]$firstFailureDetail)) {
+        $firstFailureDetail = _Get-PropValue -Object $firstFailure -Name "message"
+    }
     return [pscustomobject]@{
-        TaskId      = _Text (_Get-PropValue -Object $Task -Name "task_id")
-        Title       = _Text (_Get-PropValue -Object $Task -Name "title")
-        CompileOk   = _Get-PropValue -Object $draft -Name "compile_ok"
-        MetricOk    = _Get-PropValue -Object $draft -Name "metric_ok"
-        BackendKind = _Text (_Get-PropValue -Object $draft -Name "backend_kind")
-        BackendName = _Text (_Get-PropValue -Object $draft -Name "producing_backend_name")
-        NegMse      = _Get-NegMse -Metrics $metrics
+        TaskId               = _Text (_Get-PropValue -Object $Task -Name "task_id")
+        Title                = _Text (_Get-PropValue -Object $Task -Name "title")
+        CompileOk            = _Get-PropValue -Object $draft -Name "compile_ok"
+        MetricOk             = _Get-PropValue -Object $draft -Name "metric_ok"
+        BackendKind          = _Text (_Get-PropValue -Object $draft -Name "backend_kind")
+        BackendName          = _Text (_Get-PropValue -Object $draft -Name "producing_backend_name")
+        NegMse               = _Get-NegMse -Metrics $metrics
+        CompileStageReached  = _Text (_Get-PropValue -Object $eval -Name "compile_stage_reached")
+        FirstFailureKind     = _Text (_Get-PropValue -Object $firstFailure -Name "kind")
+        FirstFailureDetail   = _Snippet $firstFailureDetail
+        DraftSourcePreview   = _Snippet (_Get-PropValue -Object $draft -Name "source")
     }
 }
 
@@ -168,6 +193,15 @@ foreach ($task in @($tasks)) {
         $negMseText,
         $change
     )
+    if ((-not [bool]$summary.CompileOk) -or (-not [bool]$summary.MetricOk)) {
+        Write-Host (
+            "  failure_diag: compile_stage_reached={0} first_failure_kind={1} first_failure_detail={2} draft_source_preview={3}" -f `
+            (_Text $summary.CompileStageReached),
+            (_Text $summary.FirstFailureKind),
+            $summary.FirstFailureDetail,
+            $summary.DraftSourcePreview
+        )
+    }
 }
 
 $draftSummary = _Get-PropValue -Object $doc -Name "draft_summary"

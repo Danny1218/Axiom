@@ -2,6 +2,8 @@
 
 ## Current phase
 
+**Phase 86x** — **Draft smoke failure diagnostics** — **`src/axiom/copilot/benchmarks.py`** now includes per-record **`evaluation.failure_summaries`** in **`benchmark_suite_to_dict`**, and **`scripts/smoke_copilot_draft.ps1`** now prints failing-task diagnostics with **`compile_stage_reached`**, **`first_failure_kind`**, **`first_failure_detail`**, and **`draft_source_preview`** while keeping the existing **`compile_ok`** / **`metric_ok`** / **`backend_kind`** / **`backend`** / **`neg_mse`** per-task line. Tests updated in **`tests/test_copilot_benchmarks.py`**.
+
 **Phase 86w** — **Benchmark temperature override wired through CLI/harness** — **`axiom copilot-benchmark`** now accepts completion overrides like **`--temperature`** and threads them through both benchmark draft-only and search arms via the existing completion-override context path. This unblocks **`scripts/smoke_copilot_draft.ps1`** passing **`--temperature 0`** for deterministic draft sweeps. Tests updated in **`tests/test_cli_copilot_benchmarks.py`** and **`tests/test_copilot_benchmarks.py`**.
 
 **Phase 86v** — **Deterministic draft smoke temperature override** — **`scripts/smoke_copilot_draft.ps1`** now adds a **`Temperature`** parameter defaulting to **`0`** and always passes **`--temperature 0`** through to **`axiom copilot-benchmark --draft-only`** unless explicitly overridden, making prompt-regression draft sweeps easier to compare under greedy decoding. **`tests/test_copilot_benchmarks.py`** now asserts the script keeps that temperature parameter and forwards **`--temperature`**.

@@ -252,6 +252,13 @@ def summarize_rates(records: Sequence[BenchmarkRunRecord]) -> BenchmarkSummary:
     return BenchmarkSummary(n, cc / n, mc / n, cc, mc)
 
 
+def _failure_summaries(ev: ProgramEvaluationReport) -> List[Dict[str, Any]]:
+    return [
+        {"stage": f.stage, "kind": f.kind, "message": f.message, "detail": f.detail}
+        for f in ev.failures
+    ]
+
+
 def run_benchmark_suite(
     expert: SemanticExpert,
     *,
@@ -307,6 +314,7 @@ def _record_to_dict(rec: BenchmarkRunRecord) -> Dict[str, Any]:
             "compile_stage_reached": ev.compile_stage_reached,
             "mode": ev.mode,
             "metrics": dict(ev.metrics),
+            "failure_summaries": _failure_summaries(ev),
         },
     }
 

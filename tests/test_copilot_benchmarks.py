@@ -159,6 +159,7 @@ def test_run_benchmark_suite_dict_roundtrip():
     first = d["tasks"][0]
     assert first["draft_only"]["producing_backend_name"]
     assert first["draft_only"]["backend_kind"] in {"fast_path", "expert_backend"}
+    assert first["draft_only"]["evaluation"]["failure_summaries"] == []
     assert first["draft_only"]["winner_origin"] in {
         "deterministic_inference",
         "model_draft",
@@ -214,6 +215,10 @@ def test_search_beats_draft_when_first_draft_broken():
     assert cmp.draft_only.compile_ok is False
     assert cmp.search.compile_ok is True
     assert cmp.search.iterations_run >= 2
+    d = benchmark_suite_to_dict(suite)
+    failures = d["tasks"][0]["draft_only"]["evaluation"]["failure_summaries"]
+    assert failures
+    assert failures[0]["kind"]
 
 
 def test_benchmark_tasks_from_json_dict_and_bundled_path():
@@ -340,4 +345,8 @@ def test_smoke_copilot_draft_script_uses_benchmark_suite_and_reports_fields():
     assert "compile_ok=" in script
     assert "metric_ok=" in script
     assert "backend_kind=" in script
+    assert "compile_stage_reached=" in script
+    assert "first_failure_kind=" in script
+    assert "first_failure_detail=" in script
+    assert "draft_source_preview=" in script
     assert "COMPARE SUMMARY" in script
