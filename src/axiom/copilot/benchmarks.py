@@ -16,6 +16,7 @@ from axiom.copilot.models import EvaluationMode, ProgramCandidate, ProgramEvalua
 from axiom.copilot.search import (
     CopilotSearchConfig,
     build_draft_context,
+    merge_completion_overrides_into_context,
     run_copilot_search,
 )
 from axiom.experts.base import (
@@ -154,7 +155,12 @@ class BenchmarkSuiteResult:
     run_search: bool = True
 
 
-def run_benchmark_draft_only(expert: SemanticExpert, task: BenchmarkTask) -> BenchmarkRunRecord:
+def run_benchmark_draft_only(
+    expert: SemanticExpert,
+    task: BenchmarkTask,
+    *,
+    completion_overrides: Optional[Dict[str, Any]] = None,
+) -> BenchmarkRunRecord:
     """Single ``draft_program`` + in-memory evaluation (no repair)."""
     ctx = build_draft_context(
         domain_context=task.domain_context or None,
@@ -162,6 +168,7 @@ def run_benchmark_draft_only(expert: SemanticExpert, task: BenchmarkTask) -> Ben
         expected_rows=task.expected_rows,
     )
     ctx = {**ctx, **_bench_extras(task)}
+    ctx = merge_completion_overrides_into_context(ctx, completion_overrides)
     resp = expert.draft_program(ExpertDraftRequest(goal=task.goal, context=ctx))
     rep = _evaluate_for_task(task, resp.ax_source)
     co, mo = compile_success(rep), metric_success(task, rep)
@@ -185,6 +192,7 @@ def run_benchmark_search(
     task: BenchmarkTask,
     *,
     max_iterations: int = 4,
+    completion_overrides: Optional[Dict[str, Any]] = None,
 ) -> BenchmarkRunRecord:
     """Full copilot search (draft → eval → repair loop)."""
     score_fn = default_neg_mse_score_fn() if task.evaluation_mode == "predict_rows" else None
@@ -203,6 +211,7 @@ def run_benchmark_search(
         include_trace_snippet=False,
         draft_context_extras=_bench_extras(task),
         repair_context_extras=_bench_extras(task),
+        completion_overrides=completion_overrides,
     )
     out = run_copilot_search(cfg)
     rep = out.best_evaluation
@@ -250,6 +259,7 @@ def run_benchmark_suite(
     max_iterations: int = 4,
     run_draft: bool = True,
     run_search: bool = True,
+    completion_overrides: Optional[Dict[str, Any]] = None,
 ) -> BenchmarkSuiteResult:
     """Run tasks under draft-only and/or full search; compare aggregate success rates when both arms run."""
     if not run_draft and not run_search:
@@ -259,8 +269,12 @@ def run_benchmark_suite(
     draft_recs: List[BenchmarkRunRecord] = []
     search_recs: List[BenchmarkRunRecord] = []
     for t in seq:
-        dr = run_benchmark_draft_only(expert, t) if run_draft else None
-        sr = run_benchmark_search(expert, t, max_iterations=max_iterations) if run_search else None
+        dr = run_benchmark_draft_only(expert, t, completion_overrides=completion_overrides) if run_draft else None
+        sr = (
+            run_benchmark_search(expert, t, max_iterations=max_iterations, completion_overrides=completion_overrides)
+            if run_search
+            else None
+        )
         if dr is not None:
             draft_recs.append(dr)
         if sr is not None:

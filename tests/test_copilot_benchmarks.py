@@ -329,9 +329,11 @@ def test_smoke_copilot_draft_script_uses_benchmark_suite_and_reports_fields():
     assert '[string]$ExpertUrl = "http://127.0.0.1:8000"' in script
     assert '[string]$ExpertModel = "onyx-qwen-production-v1"' in script
     assert '[string]$ExpertApiKey = "sk-morph-b2b-test"' in script
+    assert "[double]$Temperature = 0" in script
     assert '[string]$TaskJson = "benchmarks/copilot_symbolic_and_generalization_tasks.json"' in script
     assert '[string]$OutJson = "benchmark_symbolic_snapshot.json"' in script
     assert "copilot-benchmark" in script
+    assert "--temperature" in script
     assert "--draft-only" in script
     assert "benchmarks/copilot_symbolic_and_generalization_tasks.json" in script
     assert "benchmark_symbolic_snapshot.json" in script

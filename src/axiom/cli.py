@@ -976,6 +976,7 @@ def _cmd_copilot_benchmark(args: argparse.Namespace) -> None:
         max_iterations=max(1, int(args.max_iterations)),
         run_draft=run_draft,
         run_search=run_search,
+        completion_overrides=_completion_overrides_from_args(args),
     )
     doc = benchmark_suite_to_dict(suite)
     _print_copilot_benchmark_summary(doc)
@@ -1545,6 +1546,7 @@ def main(argv: list[str] | None = None) -> None:
         dest="search_only",
         help="Run only the search arm (skip draft-only baseline).",
     )
+    _add_copilot_completion_args(p_cb)
     p_cb.set_defaults(_handler=_cmd_copilot_benchmark)
 
     args = ap.parse_args(argv)

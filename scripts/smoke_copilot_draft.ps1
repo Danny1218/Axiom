@@ -3,6 +3,7 @@ param(
     [string]$ExpertUrl = "http://127.0.0.1:8000",
     [string]$ExpertModel = "onyx-qwen-production-v1",
     [string]$ExpertApiKey = "sk-morph-b2b-test",
+    [double]$Temperature = 0,
     [string]$TaskJson = "benchmarks/copilot_symbolic_and_generalization_tasks.json",
     [string]$OutJson = "benchmark_symbolic_snapshot.json",
     [string]$CompareJson = ""
@@ -116,6 +117,7 @@ $cmd = @(
     "--backend", $Backend,
     "--expert-url", $ExpertUrl,
     "--expert-model", $ExpertModel,
+    "--temperature", ("{0}" -f $Temperature),
     "--draft-only",
     "--task-json", $TaskJson,
     "--out", $OutJson

@@ -10,6 +10,8 @@ import axiom.cli as cli_mod
 from axiom.cli import main
 from axiom.compiler.parser import reset_parser
 from axiom.copilot.benchmarks import BenchmarkDispatchExpert
+from axiom.experts.base import ExpertDraftRequest, ExpertDraftResponse, ExpertRepairRequest, ExpertTraceSummaryRequest
+from axiom.experts.onyx_qwen import COMPLETION_OVERRIDES_CONTEXT_KEY
 
 
 @pytest.fixture(autouse=True)
@@ -85,6 +87,47 @@ def test_copilot_benchmark_draft_only_and_task_json(tmp_path: Path, capsys, monk
     assert data["run_options"] == {"draft": True, "search": False}
     assert data["search_summary"] is None
     assert len(data["tasks"]) >= 5
+
+
+def test_copilot_benchmark_accepts_temperature_and_passes_completion_override(tmp_path: Path, monkeypatch):
+    calls: list[ExpertDraftRequest] = []
+
+    class CaptureExpert:
+        def draft_program(self, request: ExpertDraftRequest) -> ExpertDraftResponse:
+            calls.append(request)
+            return ExpertDraftResponse(ax_source="y = x * 2.0;", backend_name="onyx_qwen")
+
+        def repair_program(self, request: ExpertRepairRequest) -> ExpertDraftResponse:
+            raise AssertionError("repair should not run in draft-only benchmark")
+
+        def summarize_trace(self, request: ExpertTraceSummaryRequest) -> str:
+            return ""
+
+    monkeypatch.setattr(cli_mod, "_make_copilot_expert", lambda _a: CaptureExpert())
+    from axiom.copilot.benchmarks import default_benchmark_tasks_json_path
+
+    out_json = tmp_path / "bench_temp.json"
+    main(
+        [
+            "copilot-benchmark",
+            "--backend",
+            "onyx-qwen",
+            "--expert-url",
+            "http://x/",
+            "--expert-model",
+            "m",
+            "--draft-only",
+            "--task-json",
+            str(default_benchmark_tasks_json_path()),
+            "--temperature",
+            "0",
+            "--out",
+            str(out_json),
+        ]
+    )
+    assert calls
+    overrides = calls[0].context.get(COMPLETION_OVERRIDES_CONTEXT_KEY)
+    assert overrides == {"temperature": 0.0}
 
 
 def test_copilot_benchmark_rejects_draft_and_search_together(monkeypatch):

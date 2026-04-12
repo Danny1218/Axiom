@@ -2,6 +2,10 @@
 
 ## Current phase
 
+**Phase 86w** — **Benchmark temperature override wired through CLI/harness** — **`axiom copilot-benchmark`** now accepts completion overrides like **`--temperature`** and threads them through both benchmark draft-only and search arms via the existing completion-override context path. This unblocks **`scripts/smoke_copilot_draft.ps1`** passing **`--temperature 0`** for deterministic draft sweeps. Tests updated in **`tests/test_cli_copilot_benchmarks.py`** and **`tests/test_copilot_benchmarks.py`**.
+
+**Phase 86v** — **Deterministic draft smoke temperature override** — **`scripts/smoke_copilot_draft.ps1`** now adds a **`Temperature`** parameter defaulting to **`0`** and always passes **`--temperature 0`** through to **`axiom copilot-benchmark --draft-only`** unless explicitly overridden, making prompt-regression draft sweeps easier to compare under greedy decoding. **`tests/test_copilot_benchmarks.py`** now asserts the script keeps that temperature parameter and forwards **`--temperature`**.
+
 **Phase 86u** — **Draft smoke PowerShell parser fix** — **`scripts/smoke_copilot_draft.ps1`** now places its typed defaults inside a real top-level **`param(...)`** block before any executable statements, fixing the PowerShell parser failure seen with **`powershell -ExecutionPolicy Bypass -File .\scripts\smoke_copilot_draft.ps1`**. **`tests/test_copilot_benchmarks.py`** now also asserts the script starts with **`param(`** and keeps the expected default parameters wired.
 
 **Phase 86t** — **Draft-quality regression smoke script** — Added **`scripts/smoke_copilot_draft.ps1`** to run **`axiom copilot-benchmark --draft-only`** against **`benchmarks/copilot_symbolic_and_generalization_tasks.json`**, write a stable snapshot JSON (default **`benchmark_symbolic_snapshot.json`**), print per-task **`compile_ok`**, **`metric_ok`**, **`backend_kind`**, **`backend`**, and **`neg_mse`**, and emit a compare summary against a prior snapshot path for before/after prompt tuning. Added a contract test in **`tests/test_copilot_benchmarks.py`** so the script stays wired to the benchmark suite and expected reporting fields.
