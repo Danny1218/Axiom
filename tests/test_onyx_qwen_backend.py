@@ -119,8 +119,17 @@ if (z > 0.5) { out = z; } else { out = 0.0; }
 
 def test_system_draft_rejects_macaulay2_and_cas():
     assert "Macaulay2" in SYSTEM_DRAFT
-    assert "theorem prover" in SYSTEM_DRAFT.lower() or "not a theorem" in SYSTEM_DRAFT.lower()
-    assert "not Axiom CAS" in SYSTEM_DRAFT or "computer algebra" in SYSTEM_DRAFT.lower()
+    assert "Axiom CAS" in SYSTEM_DRAFT or "computer algebra" in SYSTEM_DRAFT.lower()
+    assert "not generic pseudocode" in SYSTEM_DRAFT.lower()
+
+
+def test_system_draft_includes_small_always_on_syntax_core():
+    assert "Always-on syntax core" in SYSTEM_DRAFT
+    assert "y = x * 2.0;" in SYSTEM_DRAFT
+    assert "if (x > 0.0) { y = x; } else { y = 0.0; }" in SYSTEM_DRAFT
+    assert "if (x < 0.0) {" in SYSTEM_DRAFT
+    assert "score = max(0.0, min(a + b, 1.0));" in SYSTEM_DRAFT
+    assert "Return only `.ax` source, no prose." in SYSTEM_DRAFT
 
 
 def test_system_repair_requires_ax_only():

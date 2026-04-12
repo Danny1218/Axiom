@@ -88,6 +88,23 @@ if (a > b) {
 }
 ```"""
 
+DRAFT_ALWAYS_ON_SYNTAX_CORE = """Always-on syntax core (valid `.ax` examples - copy this style exactly):
+```ax
+y = x * 2.0;
+if (x > 0.0) { y = x; } else { y = 0.0; }
+if (x < 0.0) {
+    y = 0.0;
+} else {
+    if (x < 1.0) {
+        y = x;
+    } else {
+        y = 1.0;
+    }
+}
+score = max(0.0, min(a + b, 1.0));
+```
+Return only `.ax` source, no prose."""
+
 _CANONICAL_SYMBOLIC_FAMILY_IDS = frozenset(
     {
         "double_x",
@@ -116,27 +133,14 @@ _CANONICAL_SYMBOLIC_FAMILY_HINTS = (
 )
 
 SYSTEM_DRAFT = (
-    "You write programs in THIS repository's custom `.ax` DSL (Axiom engine). "
-    "It is NOT Macaulay2, NOT the Axiom computer algebra system, NOT a theorem prover, "
-    "and NOT generic Python or pseudocode. "
-    "Use JavaScript-like statements terminated with semicolons. "
-    "Use `=` for assignment (never `:=`). "
-    "Use `if (condition) { ... } else { ... }` and `while (condition) { ... }`. "
-    "Nested control-flow (draft + search): explicitly forbid `else if`, `&&`, `||`, "
-    "chained comparisons such as `a < b < c` or `0.9999<x<1`, `==` in assignment position, and missing semicolons. "
-    "Rewrite `else if` as `else { if (...) { ... } else { ... } }`; split chained bounds with nested `if`/`else`; "
-    "use `y = x;` for assignment, never `y == x`. "
-    "For nested piecewise tasks, copy the canonical nested `if` / `else` structure from the prompt exactly: "
-    "one comparison per `if`, nested under `else`, never `else if`, `&&`, `||`, or chained comparisons. "
-    "If a piecewise program is needed, always use nested `else { if (...) { ... } else { ... } }`. "
-    "Forbidden tokens: `:=`, `>=`, `<=`, `&&`, `||`, `then`, `else if`; float literals must be canonical (e.g. `2.0`, never bare `2.`). "
-    "Do not use dotted variable access like `input.a` or `obj.value`; use direct variables only (e.g. `a`, `b`, `c`, `x`, `y`, `score`). "
-    "Use only well-formed `if`/`else` branches with braces; do not invent invalid branch structure. "
-    "Do not emit malformed literals like `0.0 0` or `1.0 0`. "
-    "Comparisons allowed: `>`, `<`, `==`, `!=` only. "
-    "Do not use `print`. Do not emit prose, commentary, or explanations unless the user explicitly asks for them. "
-    "If the user prompt includes a canonical symbolic-family anchor, follow it exactly when relevant. "
-    "When you use a markdown fence, use the info string `ax` so the block is ```ax ... ```.\n"
+    "You write programs in THIS repository's `.ax` DSL, not Macaulay2, not Axiom CAS, and not generic pseudocode. "
+    "Use `=` assignments with semicolons, direct variable names, `if (...) { ... } else { ... }`, and `while (...) { ... }`. "
+    "Never use `:=`, `else if`, `&&`, `||`, `>=`, `<=`, chained comparisons, dotted access like `input.a`, malformed numerics like `0.0 0`, or prose. "
+    "Use only `>`, `<`, `==`, `!=` for comparisons. "
+    "Rewrite `else if` as nested `else { if (...) { ... } else { ... } }`. "
+    "If the user prompt includes a canonical symbolic-family anchor, follow it exactly when relevant.\n"
+    + DRAFT_ALWAYS_ON_SYNTAX_CORE
+    + "\n"
     + RETURN_VALID_AX_SEMICOLON_LINE
 )
 
