@@ -150,36 +150,39 @@ Row file format (JSON array): each element is `{"inputs": {...}, "expected": {..
   - one-input affine (**double_x family**): **`y = a * x + b`**
   - one-input piecewise threshold identity / zero-floor (**piecewise_threshold family**): **`if (x < 0.0) y = 0.0 else y = x`**
   - exact three-region nested piecewise identity/cap: **`if (x < 0.0) y = 0.0 else { if (x < 1.0) y = x else y = 1.0 }`**
+  - exact two-input max: **`score = max(a, b)`**
   - exact two-input min/max blend: **`out = max(0.0, min(a + b, 1.0));`**
   - clamped two-input affine (**risk_score family**): **`out = max(0.0, min(1.0, a * x1 + b * x2 + c));`**
   - exact two-input interaction: **`out = w_ab * a * b + w_a * a + w_b * b + c`**
   - exact three-input affine (**three_input_affine family**): **`out = sum(w_i * x_i) + b`**
   - exact three-way max/min: **`score = max(min(a, b), c)`**
 - **Fallback to Onyx expert backend:** if inference is ambiguous/underdetermined, rows are non-numeric, shape constraints do not match, or any row fails exact validation (including clamp edge rows), search proceeds with normal expert draft/repair.
-- **Concrete examples:** `double_x`, `piecewise_threshold`, `nested_piecewise`, `minmax_blend`, `risk_score`, `quadratic_with_cross_term`, `three_input_affine`, and `three_way_maxmin` are now covered by deterministic fast paths.
+- **Concrete examples:** `double_x`, `piecewise_threshold`, `nested_piecewise`, `max_of_two`, `minmax_blend`, `risk_score`, `quadratic_with_cross_term`, `three_input_affine`, and `three_way_maxmin` are now covered by deterministic fast paths.
 
 **What is now proven working:**
-- deterministic fast-path emission for exact affine, clamp, min/max, interaction, and nested piecewise families when rows define an exact fit
+- deterministic fast-path emission for these symbolic/copilot task families when rows define an exact fit: `double_x`, `piecewise_threshold`, `nested_piecewise`, `max_of_two`, `minmax_blend`, `risk_score`, `quadratic_with_cross_term`, `three_input_affine`, and `three_way_maxmin`
 - canonical `.ax` output for direct arithmetic and nested control-flow forms, including the required `else { if (...) { ... } else { ... } }` shape
 - exact row validation gate before accepting a fast path
 - full search benchmark quality on the current milestone: `10/10` compile and `10/10` metric
-- backend-only smoke is nearly clean; one flaky `nested_piecewise` search case remains
+- backend-only smoke: `12/12` quality checks passed
 - strict fallback to expert draft/repair when rows are ambiguous/noisy/out-of-shape
 
 **What is still model-dependent:**
 - draft-only quality on the current benchmark (`5/10` compile, `2/10` metric)
 - tasks outside current exact fast-path families
 - any noisy or underdetermined example set (intent cannot be proven exactly)
-- the remaining flaky backend-only `nested_piecewise` search case
 - generalization quality after fallback to LLM draft/repair
 - prompt-following quality under different expert backends/models
 
-**Current milestone snapshot:**
-- `pytest`: `690 passed`, `2 skipped`
-- benchmark: draft `5/10` compile, `2/10` metric; search `10/10` compile, `10/10` metric
-- backend-only smoke: nearly clean, with one remaining flaky `nested_piecewise` search case
+**Non-blocking follow-up:** remaining ONNX tracer warnings are follow-up cleanup work, not a blocker for the completed symbolic copilot milestone.
 
-**Recommended next milestone:** `draft quality and flaky search stabilization`
+**Current milestone snapshot:**
+- `pytest`: `695 passed`, `2 skipped`
+- benchmark: draft `5/10` compile, `2/10` metric; search `10/10` compile, `10/10` metric
+- backend-only smoke: `12/12` quality checks passed
+- ONNX tracer warnings: non-blocking follow-up work
+
+**Recommended next milestone:** `draft quality, UX polish, and ONNX warning cleanup`
 
 ```powershell
 # Local smoke bundles (Windows PowerShell)
