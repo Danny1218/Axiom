@@ -155,13 +155,21 @@ def test_prompt_contains_backend_only_fewshot_rewrites():
     )
 
 
-def test_system_and_draft_share_canonical_symbolic_family_anchor_block():
-    p = user_prompt_draft("goal", {})
+def test_system_draft_does_not_include_global_canonical_symbolic_family_anchor_block():
     anchor = (
         "If the goal matches one of these families, emit that canonical form directly and do not add "
         "validation/range-guard branches unless the goal explicitly asks for them."
     )
-    assert DRAFT_FEWSHOT in SYSTEM_DRAFT
+    assert DRAFT_FEWSHOT not in SYSTEM_DRAFT
+    assert anchor not in SYSTEM_DRAFT
+
+
+def test_user_prompt_draft_includes_canonical_symbolic_family_anchor_block_when_exact_symbolic():
+    p = user_prompt_draft("goal", {"exact_symbolic_examples_task": True})
+    anchor = (
+        "If the goal matches one of these families, emit that canonical form directly and do not add "
+        "validation/range-guard branches unless the goal explicitly asks for them."
+    )
     assert DRAFT_FEWSHOT in p
     assert anchor in DRAFT_FEWSHOT
     assert "y = x * 2.0;" in DRAFT_FEWSHOT
@@ -172,6 +180,25 @@ def test_system_and_draft_share_canonical_symbolic_family_anchor_block():
     assert "score = max(min(a, b), c);" in DRAFT_FEWSHOT
     assert "if (x < 0.0) {" in DRAFT_FEWSHOT
     assert "if (a > b) {" in DRAFT_FEWSHOT
+
+
+def test_user_prompt_draft_includes_canonical_symbolic_family_anchor_block_for_known_family_context():
+    p = user_prompt_draft("goal", {"benchmark_task_id": "minmax_blend"})
+    assert DRAFT_FEWSHOT in p
+    assert "score = max(0.0, min(a + b, 1.0));" in p
+
+
+def test_user_prompt_draft_includes_canonical_symbolic_family_anchor_block_for_known_family_goal():
+    p = user_prompt_draft("Write .ax so score = max(a, b).", {})
+    assert DRAFT_FEWSHOT in p
+    assert "if (a > b) {" in p
+
+
+def test_user_prompt_draft_omits_canonical_symbolic_family_anchor_block_for_unrelated_goal():
+    p = user_prompt_draft("Write a while loop counter that increments i until it reaches n.", {})
+    assert DRAFT_FEWSHOT not in p
+    assert "score = 0.5 * a + 0.3 * b + 0.2 * c;" not in p
+    assert "if (a > b) {" not in p
 
 
 def test_user_prompt_draft_is_deterministic():

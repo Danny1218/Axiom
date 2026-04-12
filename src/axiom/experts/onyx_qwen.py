@@ -88,6 +88,33 @@ if (a > b) {
 }
 ```"""
 
+_CANONICAL_SYMBOLIC_FAMILY_IDS = frozenset(
+    {
+        "double_x",
+        "risk_score",
+        "three_input_affine",
+        "minmax_blend",
+        "quadratic_with_cross_term",
+        "three_way_maxmin",
+        "nested_piecewise",
+        "max_of_two",
+    }
+)
+
+_CANONICAL_SYMBOLIC_FAMILY_HINTS = (
+    re.compile(r"\bdouble_x\b|\bdouble of x\b|\by\s*=\s*x\s*\*\s*2(?:\.0)?\b", re.I | re.S),
+    re.compile(r"\brisk_score\b|\b0\.7\s*\*\s*risk_a\b[\s\S]*\b0\.3\s*\*\s*risk_b\b", re.I | re.S),
+    re.compile(r"\bthree_input_affine\b|\b0\.5\s*\*\s*a\b[\s\S]*\b0\.3\s*\*\s*b\b[\s\S]*\b0\.2\s*\*\s*c\b", re.I | re.S),
+    re.compile(r"\bminmax_blend\b|max\s*\(\s*0(?:\.0)?\s*,\s*min\(\s*a\s*\+\s*b\s*,\s*1(?:\.0)?\s*\)\s*\)", re.I | re.S),
+    re.compile(r"\bquadratic_with_cross_term\b|\ba\s*\*\s*b\s*\+\s*a\s*\+\s*1(?:\.0)?\b", re.I | re.S),
+    re.compile(r"\bthree_way_maxmin\b|max\s*\(\s*min\(\s*a\s*,\s*b\s*\)\s*,\s*c\s*\)", re.I | re.S),
+    re.compile(
+        r"\bnested_piecewise\b|\bif\b[\s\S]*\bx\s*<\s*0(?:\.0)?\b[\s\S]*\belse\b[\s\S]*\bif\b[\s\S]*\bx\s*<\s*1(?:\.0)?\b[\s\S]*\by\s*=\s*x\b[\s\S]*\belse\b[\s\S]*\by\s*=\s*1(?:\.0)?\b",
+        re.I | re.S,
+    ),
+    re.compile(r"\bmax_of_two\b|\bscore\s*=\s*max\(\s*a\s*,\s*b\s*\)|\bmax\(\s*a\s*,\s*b\s*\)", re.I | re.S),
+)
+
 SYSTEM_DRAFT = (
     "You write programs in THIS repository's custom `.ax` DSL (Axiom engine). "
     "It is NOT Macaulay2, NOT the Axiom computer algebra system, NOT a theorem prover, "
@@ -108,9 +135,8 @@ SYSTEM_DRAFT = (
     "Do not emit malformed literals like `0.0 0` or `1.0 0`. "
     "Comparisons allowed: `>`, `<`, `==`, `!=` only. "
     "Do not use `print`. Do not emit prose, commentary, or explanations unless the user explicitly asks for them. "
+    "If the user prompt includes a canonical symbolic-family anchor, follow it exactly when relevant. "
     "When you use a markdown fence, use the info string `ax` so the block is ```ax ... ```.\n"
-    + _CANONICAL_SYMBOLIC_FAMILY_DRAFTS_BLOCK
-    + "\n"
     + RETURN_VALID_AX_SEMICOLON_LINE
 )
 
@@ -357,6 +383,34 @@ def _append_exact_symbolic_math_if_needed(parts: list[str], context: Mapping[str
     parts.append(EXACT_SYMBOLIC_MATH_BLOCK + "\n\n")
 
 
+def _goal_matches_known_canonical_symbolic_family(goal: str) -> bool:
+    g = (goal or "").strip()
+    if not g:
+        return False
+    return any(p.search(g) for p in _CANONICAL_SYMBOLIC_FAMILY_HINTS)
+
+
+def _context_hints_known_canonical_symbolic_family(context: Mapping[str, Any]) -> bool:
+    for key in ("benchmark_task_id", "task_id", "task_family", "family"):
+        value = context.get(key)
+        if isinstance(value, str) and value.strip().lower() in _CANONICAL_SYMBOLIC_FAMILY_IDS:
+            return True
+    return False
+
+
+def _append_canonical_symbolic_family_drafts_if_needed(
+    parts: list[str], goal: str, context: Mapping[str, Any]
+) -> None:
+    if context.get("exact_symbolic_examples_task"):
+        parts.append(DRAFT_FEWSHOT + "\n\n")
+        return
+    if _context_hints_known_canonical_symbolic_family(context):
+        parts.append(DRAFT_FEWSHOT + "\n\n")
+        return
+    if _goal_matches_known_canonical_symbolic_family(goal):
+        parts.append(DRAFT_FEWSHOT + "\n\n")
+
+
 def _context_has_examples_driven_semantics(context: Mapping[str, Any]) -> bool:
     eo = context.get("expected_outputs")
     ei = context.get("example_input_rows")
@@ -379,6 +433,7 @@ def user_prompt_draft(goal: str, context: Mapping[str, Any]) -> str:
     ]
     _append_examples_semantics_if_needed(parts, context)
     _append_exact_symbolic_math_if_needed(parts, context)
+    _append_canonical_symbolic_family_drafts_if_needed(parts, goal, context)
     parts.extend(
         [
             f"{SYNTAX_SUMMARY}\n\n",
@@ -386,7 +441,6 @@ def user_prompt_draft(goal: str, context: Mapping[str, Any]) -> str:
             f"{ALLOWED_SYNTAX_BLOCK}\n\n",
             f"{SYNTAX_BAD_GOOD_FEWSHOT}\n\n",
             f"{CONTROL_FLOW_FEWSHOT}\n\n",
-            f"{DRAFT_FEWSHOT}\n\n",
             "Respond with the complete `.ax` program only (fenced with `ax` if you use a fence).\n"
             + RETURN_VALID_AX_SEMICOLON_LINE,
         ]
