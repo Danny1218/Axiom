@@ -10,7 +10,7 @@ pytest.importorskip("fastapi")
 
 from axiom.copilot.artifacts import BEST_AX_NAME
 from axiom.copilot.api_models import SearchRequest
-from axiom.copilot.benchmarks import BenchmarkDispatchExpert
+from axiom.copilot.benchmarks import BenchmarkDispatchExpert, DEFAULT_BENCHMARK_TASKS
 from axiom.copilot.server import _search_config_from_request, create_app
 from axiom.experts.base import (
     ExpertDraftRequest,
@@ -397,10 +397,13 @@ def test_benchmarks_run_default(bench_client):
     body = r.json()
     assert "suite" in body
     s = body["suite"]
+    expected_count = len(DEFAULT_BENCHMARK_TASKS)
     assert s["kind"] == "axiom.copilot.benchmark_suite"
     assert s["run_options"] == {"draft": True, "search": True}
     assert s["draft_summary"] is not None and s["search_summary"] is not None
-    assert len(s["tasks"]) == 3
+    assert s["draft_summary"]["task_count"] == expected_count
+    assert s["search_summary"]["task_count"] == expected_count
+    assert len(s["tasks"]) == expected_count
 
 
 def test_benchmarks_run_draft_only(bench_client):

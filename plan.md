@@ -2,6 +2,8 @@
 
 ## Current phase
 
+**Phase 86h** — **Copilot benchmark HTTP default-suite count test fixed** — **`tests/test_copilot_server.py`** no longer hardcodes a stale benchmark count for **`POST /benchmarks/run`**. The assertion now derives the expected task count from **`DEFAULT_BENCHMARK_TASKS`** and also checks **`draft_summary.task_count`** / **`search_summary.task_count`**, matching the current Phase 65/70 benchmark suite behavior.
+
 **Phase 86g** — **Regression coverage for new exact-symbolic fast paths** — **`tests/test_copilot_search.py`** now asserts canonical emitted source for the two-input interaction fast path and the three-region nested piecewise identity/cap fast path, and explicitly guards against forbidden syntax in those outputs: **`&&`**, **`||`**, and **`else if`**. Coverage remains deterministic and small.
 
 **Phase 86f** — **Hard-task prompt cleanup pass** — **`src/axiom/experts/onyx_qwen.py`** adds two explicit cleanup rules without changing the API: for pure algebraic mappings, **never introduce `if` / `else` / `while`**; when a piecewise program is needed, **always use nested `else { if (...) { ... } else { ... } }`**. Existing forbidden-syntax rules remain intact. Tests updated in **`tests/test_onyx_qwen_backend.py`**.
