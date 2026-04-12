@@ -209,8 +209,16 @@ Good: `y = x * 2.0;`"""
 EXACT_SYMBOLIC_MATH_BLOCK = """Exact symbolic mapping (small example-driven math / affine / clamp tasks):
 - Prefer **direct symbolic arithmetic** using `+`, `-`, `*`, `/`, `min`, `max`, and numeric literals.
 - **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically from the examples.
+- If the goal/examples imply a **single closed-form arithmetic expression**, do **NOT** introduce `if` / `else` / `while`.
+- For a pure algebraic mapping, return **one direct assignment expression only** (for example, `y = ...;`).
+- Never introduce boolean guard logic for pure algebraic mappings.
+- Do not use `||` or `&&` under any circumstance.
 - For affine blends and clamp-to-[0,1] style behavior, write explicit `max`, `min`, and arithmetic — not a learned head.
-- Avoid malformed numerics: use `0.3` not `03` or ambiguous multi-dot literals."""
+- Avoid malformed numerics: use `0.3` not `03` or ambiguous multi-dot literals.
+
+Bad → good:
+Bad: `if (a < 0 || b < 0) { y = ... } else { y = a*b + a + 1.0; }`
+Good: `y = a * b + a + 1.0;`"""
 
 REPAIR_NEURAL_TO_SYMBOLIC_BLOCK = """Repair focus — replace `neural(...)` with symbolic arithmetic (examples suggest an exact formula):
 The current program uses `neural(...)`. When the goal and examples define a closed-form mapping (blend, clamp, affine), **replace** the `neural(...)` call with explicit `max` / `min` / arithmetic on the input variables.
