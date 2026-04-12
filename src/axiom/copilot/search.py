@@ -117,7 +117,7 @@ def _nested_piecewise_identity_cap_source(in_key: str, out_key: str, low_value: 
 
 
 def _try_nested_piecewise_identity_cap_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
-    """Exact one-input/one-output clamp-style identity/cap: low constant, middle identity, high constant."""
+    """Exact one-input/one-output three-region clamp: ``0.0`` below, identity in the middle, ``1.0`` above."""
     if not is_exact_symbolic_examples_task(config):
         return None
     if config.mode != "predict_rows":
@@ -179,11 +179,13 @@ def _try_nested_piecewise_identity_cap_fast_path(config: CopilotSearchConfig) ->
     for _, y in high_rows[1:]:
         if not math.isclose(y, high_value, rel_tol=1e-12, abs_tol=1e-9):
             return None
-    if not low_value < high_value:
+    if not math.isclose(low_value, 0.0, rel_tol=0.0, abs_tol=1e-9):
+        return None
+    if not math.isclose(high_value, 1.0, rel_tol=0.0, abs_tol=1e-9):
         return None
 
     for x, y in rows:
-        pred = low_value if x < low_value else (x if x < high_value else high_value)
+        pred = 0.0 if x < 0.0 else (x if x < 1.0 else 1.0)
         if not math.isclose(pred, y, rel_tol=1e-12, abs_tol=1e-9):
             return None
 

@@ -769,6 +769,20 @@ def test_nested_piecewise_identity_cap_fast_path_falls_back_noisy():
     assert len(ex.draft_calls) == 1
 
 
+def test_nested_piecewise_identity_cap_fast_path_returns_none_when_caps_not_zero_one():
+    cfg = CopilotSearchConfig(
+        expert=ScriptedExpert(GOOD_DOUBLE_AX, []),
+        goal="compute nested piecewise clamp from x",
+        max_iterations=1,
+        mode="predict_rows",
+        example_input_rows=[{"x": -2.0}, {"x": -0.1}, {"x": 0.4}, {"x": 1.0}, {"x": 1.5}],
+        expected_rows=[{"y": 2.0}, {"y": 2.0}, {"y": 0.4}, {"y": 1.0}, {"y": 1.0}],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+    )
+    assert _try_nested_piecewise_identity_cap_fast_path(cfg) is None
+
+
 def test_linear_xy_fast_path_affine_with_intercept():
     ex = ScriptedExpert("noop", [])
     cfg = CopilotSearchConfig(
