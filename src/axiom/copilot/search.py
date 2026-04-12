@@ -383,6 +383,81 @@ def _minmax_blend_source(k1: str, k2: str, out_var: str) -> str:
     return f"{out_var} = max(0.0, min({k1} + {k2}, 1.0));\n"
 
 
+def _three_way_maxmin_source(k1: str, k2: str, k3: str, out_var: str) -> str:
+    return f"{out_var} = max(min({k1}, {k2}), {k3});\n"
+
+
+def _try_three_way_maxmin_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
+    """Exact three-input symbolic min/max family: ``out = max(min(a, b), c)``."""
+    if not is_exact_symbolic_examples_task(config):
+        return None
+    if config.mode != "predict_rows":
+        return None
+    inp = config.example_input_rows
+    exp = config.expected_rows
+    if not inp or not exp or len(inp) != len(exp):
+        return None
+    if len(inp) < 3:
+        return None
+
+    in_keys: Optional[tuple[str, str, str]] = None
+    out_key: Optional[str] = None
+    rows: List[tuple[float, float, float, float]] = []
+
+    for row_in, row_ex in zip(inp, exp):
+        if not isinstance(row_in, Mapping) or not isinstance(row_ex, Mapping):
+            return None
+        if len(row_in) != 3 or len(row_ex) != 1:
+            return None
+        keys = tuple(sorted(str(k) for k in row_in.keys()))
+        if in_keys is None:
+            in_keys = keys
+        elif keys != in_keys:
+            return None
+        ok = str(next(iter(row_ex.keys())))
+        if out_key is None:
+            out_key = ok
+        elif ok != out_key:
+            return None
+        try:
+            a = float(row_in[in_keys[0]])
+            b = float(row_in[in_keys[1]])
+            c = float(row_in[in_keys[2]])
+            y = float(row_ex[out_key])
+        except (TypeError, ValueError, KeyError):
+            return None
+        if not math.isfinite(a) or not math.isfinite(b) or not math.isfinite(c) or not math.isfinite(y):
+            return None
+        rows.append((a, b, c, y))
+
+    assert in_keys is not None and out_key is not None
+    candidates = ((0, 1, 2), (0, 2, 1), (1, 2, 0))
+    matches: List[tuple[int, int, int]] = []
+    for i, j, k in candidates:
+        exact = True
+        for a, b, c, y in rows:
+            vals = (a, b, c)
+            pred = max(min(vals[i], vals[j]), vals[k])
+            if not math.isclose(pred, y, rel_tol=1e-12, abs_tol=1e-9):
+                exact = False
+                break
+        if exact:
+            matches.append((i, j, k))
+    if len(matches) != 1:
+        return None
+
+    i, j, k = matches[0]
+    return ExpertDraftResponse(
+        ax_source=_three_way_maxmin_source(in_keys[i], in_keys[j], in_keys[k], out_key),
+        backend_name="three_way_maxmin_fast_path",
+        metadata={
+            "fast_path": "three_way_maxmin",
+            "in_keys": [in_keys[i], in_keys[j], in_keys[k]],
+            "out_key": out_key,
+        },
+    )
+
+
 def _try_minmax_blend_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
     """Exact two-input clamp blend: ``out = max(0.0, min(x1 + x2, 1.0))``."""
     if not is_exact_symbolic_examples_task(config):
@@ -1451,6 +1526,8 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
         fast = _try_piecewise_threshold_identity_fast_path(config)
     if fast is None:
         fast = _try_linear_xy_fast_path(config)
+    if fast is None:
+        fast = _try_three_way_maxmin_fast_path(config)
     if fast is None:
         fast = _try_minmax_blend_fast_path(config)
     if fast is None:
