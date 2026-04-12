@@ -284,6 +284,13 @@ def test_split_ax_normalizes_colon_eq_and_trailing_dot_float():
     assert "assign_colon_eq" in (r.extraction.get("forbidden_tokens_detected") or [])
 
 
+def test_split_ax_normalizes_statement_eq_eq_assignment_only_for_statement_lines():
+    r = split_ax_and_prose("```ax\nif (x == 0) {\n    y == x + 2.;\n}\n```")
+    assert r.ax_source == "if (x == 0) {\n    y = x + 2.0;\n}"
+    assert r.extraction.get("normalized_statement_eq_eq_assignment") is True
+    assert r.extraction.get("normalized_trailing_dot_float") is True
+
+
 def test_split_ax_normalization_does_not_introduce_dotted_access():
     r = split_ax_and_prose("```ax\nscore := max(min(a, b), c);\n```")
     assert r.ax_source == "score = max(min(a, b), c);"
@@ -299,6 +306,16 @@ def test_draft_metadata_includes_normalization_flags():
     assert out.ax_source == "z = 2.0;"
     assert out.metadata.get("normalized_colon_eq") is True
     assert out.metadata.get("normalized_trailing_dot_float") is True
+
+
+def test_draft_metadata_includes_statement_eq_eq_assignment_normalization_flag():
+    def fake_post(url, json=None, headers=None, timeout=None):
+        return _ok_response("```ax\ny == x;\nif (x == 0) { y = 0.0; }\n```")
+
+    b = OnyxQwenBackend("http://h", "m", _post=fake_post)
+    out = b.draft_program(ExpertDraftRequest("normalize"))
+    assert out.ax_source == "y = x;\nif (x == 0) { y = 0.0; }"
+    assert out.metadata.get("normalized_statement_eq_eq_assignment") is True
 
 
 def test_successful_draft():

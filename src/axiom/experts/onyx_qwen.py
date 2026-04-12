@@ -468,6 +468,7 @@ def _finalize_extracted_source(ax: str, extraction: dict[str, Any]) -> str:
 
 # Lone `2.` → `2.0` without touching `2.0`, `3.14`, or the fractional part after `.` in `2.0.`
 _TRAILING_DOT_FLOAT = re.compile(r"(?<!\.\d)(\d+)\.(?![0-9.])")
+_STATEMENT_EQ_EQ_ASSIGN = re.compile(r"^(\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*)==(\s*)(.+;)\s*$")
 
 
 def _normalize_ax_source_conservative(ax: str) -> tuple[str, dict[str, bool]]:
@@ -477,6 +478,20 @@ def _normalize_ax_source_conservative(ax: str) -> tuple[str, dict[str, bool]]:
     if ":=" in out:
         out = out.replace(":=", "=")
         meta["normalized_colon_eq"] = True
+    lines = out.splitlines(keepends=True)
+    rewritten_lines: list[str] = []
+    changed_eqeq_assign = False
+    for line in lines:
+        line_body = line.rstrip("\r\n")
+        newline = line[len(line_body) :]
+        m = _STATEMENT_EQ_EQ_ASSIGN.match(line_body)
+        if m:
+            line = f"{m.group(1)}{m.group(2)}{m.group(3)}={m.group(4)}{m.group(5)}{newline}"
+            changed_eqeq_assign = True
+        rewritten_lines.append(line)
+    if changed_eqeq_assign:
+        out = "".join(rewritten_lines)
+        meta["normalized_statement_eq_eq_assignment"] = True
     out2, n = _TRAILING_DOT_FLOAT.subn(r"\1.0", out)
     if n:
         out = out2
