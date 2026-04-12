@@ -130,6 +130,76 @@ def _piecewise_threshold_identity_source(in_key: str, out_key: str) -> str:
     )
 
 
+def _max_of_two_source(k1: str, k2: str, out_var: str) -> str:
+    return (
+        f"if ({k1} > {k2}) {{\n"
+        f"    {out_var} = {k1};\n"
+        "} else {\n"
+        f"    {out_var} = {k2};\n"
+        "}\n"
+    )
+
+
+def _try_max_of_two_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
+    """Exact two-input max family: ``out = max(a, b)`` with evidence for both strict branches."""
+    if not is_exact_symbolic_examples_task(config):
+        return None
+    if config.mode != "predict_rows":
+        return None
+    inp = config.example_input_rows
+    exp = config.expected_rows
+    if not inp or not exp or len(inp) != len(exp):
+        return None
+    if len(inp) < 2:
+        return None
+
+    in_keys: Optional[tuple[str, str]] = None
+    out_key: Optional[str] = None
+    saw_left = False
+    saw_right = False
+
+    for row_in, row_ex in zip(inp, exp):
+        if not isinstance(row_in, Mapping) or not isinstance(row_ex, Mapping):
+            return None
+        if len(row_in) != 2 or len(row_ex) != 1:
+            return None
+        keys = tuple(sorted(str(k) for k in row_in.keys()))
+        if in_keys is None:
+            in_keys = keys
+        elif keys != in_keys:
+            return None
+        ok = str(next(iter(row_ex.keys())))
+        if out_key is None:
+            out_key = ok
+        elif ok != out_key:
+            return None
+        try:
+            a = float(row_in[in_keys[0]])
+            b = float(row_in[in_keys[1]])
+            y = float(row_ex[out_key])
+        except (TypeError, ValueError, KeyError):
+            return None
+        if not math.isfinite(a) or not math.isfinite(b) or not math.isfinite(y):
+            return None
+        pred = max(a, b)
+        if not math.isclose(pred, y, rel_tol=1e-12, abs_tol=1e-9):
+            return None
+        if a > b and math.isclose(y, a, rel_tol=1e-12, abs_tol=1e-9):
+            saw_left = True
+        elif b > a and math.isclose(y, b, rel_tol=1e-12, abs_tol=1e-9):
+            saw_right = True
+
+    if not saw_left or not saw_right:
+        return None
+
+    assert in_keys is not None and out_key is not None
+    return ExpertDraftResponse(
+        ax_source=_max_of_two_source(in_keys[0], in_keys[1], out_key),
+        backend_name="max_of_two_fast_path",
+        metadata={"fast_path": "max_of_two", "in_keys": [in_keys[0], in_keys[1]], "out_key": out_key},
+    )
+
+
 def _nested_piecewise_identity_cap_source(in_key: str, out_key: str, low_value: float, high_value: float) -> str:
     low_s = _linear_xy_coeff_str(low_value)
     high_s = _linear_xy_coeff_str(high_value)
@@ -1558,6 +1628,8 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
         fast = _try_piecewise_threshold_identity_fast_path(config)
     if fast is None:
         fast = _try_linear_xy_fast_path(config)
+    if fast is None:
+        fast = _try_max_of_two_fast_path(config)
     if fast is None:
         fast = _try_three_way_maxmin_fast_path(config)
     if fast is None:
