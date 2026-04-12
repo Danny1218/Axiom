@@ -139,10 +139,18 @@ def test_prompt_contains_backend_only_fewshot_rewrites():
     p = user_prompt_draft("g", {"example_input_rows": [{"a": 1.0}], "expected_outputs": [{"score": 1.0}]})
     assert "score = max(min(input.a, input.b), input.c);" in p
     assert "score = max(min(a, b), c);" in p
+    assert "copy this structure exactly" in p
     assert "else if (x < 1.0)" in p
     assert "else { if (x < 1.0)" in p
+    assert "0.9999<x<1" in p
+    assert "y == x;" in p
+    assert "y = x;" in p
+    assert "if (x != 0.0 && x < 2.0)" in p
     assert "if (x <= 0) { y = 0.0; }" in p
     assert "if (x < 0.0) { y = 0.0; } else { y = x; }" in p
+    assert p.rstrip().endswith(
+        "Return only valid .ax source. Every assignment statement must end with a semicolon."
+    )
 
 
 def test_user_prompt_draft_is_deterministic():

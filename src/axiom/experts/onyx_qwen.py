@@ -44,6 +44,8 @@ SYSTEM_DRAFT = (
     "chained comparisons such as `a < b < c` or `0.9999<x<1`, `==` in assignment position, and missing semicolons. "
     "Rewrite `else if` as `else { if (...) { ... } else { ... } }`; split chained bounds with nested `if`/`else`; "
     "use `y = x;` for assignment, never `y == x`. "
+    "For nested piecewise tasks, copy the canonical nested `if` / `else` structure from the prompt exactly: "
+    "one comparison per `if`, nested under `else`, never `else if`, `&&`, `||`, or chained comparisons. "
     "Forbidden tokens: `:=`, `>=`, `<=`, `&&`, `||`, `then`, `else if`; float literals must be canonical (e.g. `2.0`, never bare `2.`). "
     "Do not use dotted variable access like `input.a` or `obj.value`; use direct variables only (e.g. `a`, `b`, `c`, `x`, `y`, `score`). "
     "Use only well-formed `if`/`else` branches with braces; do not invent invalid branch structure. "
@@ -67,6 +69,8 @@ SYSTEM_REPAIR = (
     "chained comparisons such as `a < b < c` or `0.9999<x<1`, `==` in assignment position, and missing semicolons. "
     "Rewrite `else if` as `else { if (...) { ... } else { ... } }`; split chained bounds with nested `if`/`else`; "
     "use `y = x;` for assignment, never `y == x`. "
+    "For nested piecewise tasks, copy the canonical nested `if` / `else` structure from the prompt exactly: "
+    "one comparison per `if`, nested under `else`, never `else if`, `&&`, `||`, or chained comparisons. "
     "Forbidden: `:=`, `>=`, `<=`, `&&`, `||`, `then`, `else if`; no bare float `2.` — use `2.0`. "
     "Do not use dotted variable access like `input.a` or `obj.value`; use direct variables only (e.g. `a`, `b`, `c`, `x`, `y`, `score`). "
     "Use only well-formed `if`/`else` branches with braces; do not invent invalid branch structure. "
@@ -117,7 +121,7 @@ SYNTAX_BAD_GOOD_FEWSHOT = """Few-shot bad → good rewrites:
 
 CONTROL_FLOW_FEWSHOT = """Control-flow few-shot rewrites (grammar-supported only):
 
-Canonical good example (nested piecewise — copy this structure; one condition per `if`, no chaining):
+Canonical nested piecewise example — copy this structure exactly for nested piecewise tasks; only change variable names, constants, and assigned expressions:
 ```ax
 if (x < 0.0) {
     y = 0.0;
@@ -132,24 +136,26 @@ if (x < 0.0) {
 
 Bad → good (nested piecewise — apply these first):
 1. bad: `else if (x < 1.0) { ... }` — good: `else { if (x < 1.0) { ... } else { ... } }` (never `else if`)
-2. bad: `0.9999<x<1` or any `a < b < c` — good: never chain comparisons; use nested `if`/`else` like the canonical example above
-3. bad: `y == x` (assignment intent) — good: `y = x;`
+2. bad: `0.9999<x<1` — good: never use chained comparisons; copy the canonical nested piecewise structure above with one comparison per `if`
+3. bad: `y == x;` — good: `y = x;`
+4. bad: `if (x != 0.0 && x < 2.0) { ... }`
+   good: `if (x != 0.0) { if (x < 2.0) { ... } else { ... } } else { ... }` (use nested `if`s, never `&&`)
 
 More bad → good:
-4. bad: `if (0.0<x<1.0) { y = x; }` or `if (0.0 < x < 1.0) { ... }`
+5. bad: `if (0.0<x<1.0) { y = x; }` or `if (0.0 < x < 1.0) { ... }`
    good: nested `if`/`else` as in the canonical example — never chained comparisons
-5. `if (x == 0) then y = 0.0 else y = x;` →
+6. `if (x == 0) then y = 0.0 else y = x;` →
 ```ax
 if (x == 0) { y = 0.0; } else { y = x; }
 ```
-6. `if (x < 0) then (y = 0.0) else (y = x)` →
+7. `if (x < 0) then (y = 0.0) else (y = x)` →
 ```ax
 if (x < 0) { y = 0.0; } else { y = x; }
 ```
-7. bad: `if (x <= 0) { ... }`
+8. bad: `if (x <= 0) { ... }`
    good: use only `<`, `>`, `==`, `!=` (no `<=`), with strict comparisons and nested `if`/`else` as needed.
-8. Simple two-branch `if` (valid when you do not need a third region): `if (x < 0.0) { y = 0.0; } else { y = x; }`
-9. bad: `if (x <= 0) { y = 0.0; } else { y = x; }` when you need an extra boundary
+9. Simple two-branch `if` (valid when you do not need a third region): `if (x < 0.0) { y = 0.0; } else { y = x; }`
+10. bad: `if (x <= 0) { y = 0.0; } else { y = x; }` when you need an extra boundary
    good:
 ```ax
 if (x < 0.0) {
