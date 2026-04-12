@@ -134,6 +134,7 @@ $steps = @(
         Type = "search"
         ReportPath = "debug_backend_only_nested_piecewise/search_report_cli.json"
         IterationsPath = "debug_backend_only_nested_piecewise/iterations.json"
+        ExpectedBackendKind = "deterministic_fast_path"
         NegMseMin = $NegMseMinDefault
         Command = @(
             "axiom", "copilot-search",
@@ -154,6 +155,7 @@ $steps = @(
         Type = "run"
         ReportPath = "showcase_backend_only_nested_piecewise/pipeline_summary.json"
         IterationsPath = "showcase_backend_only_nested_piecewise/iterations.json"
+        ExpectedBackendKind = "deterministic_fast_path"
         NegMseMin = $NegMseMinDefault
         Command = @(
             "axiom", "copilot-run",
@@ -260,9 +262,10 @@ foreach ($step in $steps) {
         }
     }
     $backendKind = _BackendKind -BackendName $backendName
-    if ($backendKind -ne "expert_backend") {
+    $expectedBackendKind = if ($step.ContainsKey("ExpectedBackendKind")) { [string]$step.ExpectedBackendKind } else { "expert_backend" }
+    if ($backendKind -ne $expectedBackendKind) {
         $qualityOk = $false
-        $why += "non_expert_backend_used"
+        $why += ("backend_kind!={0}" -f $expectedBackendKind)
     }
 
     if ($qualityOk) { $qualityPassCount++ }

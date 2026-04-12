@@ -189,9 +189,9 @@
     },
     {
       "id": "nested_piecewise",
-      "title": "nested_piecewise (expert backend)",
+      "title": "nested_piecewise (deterministic fast-path)",
       "goal": "Write .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.",
-      "domain_context": "Nested control-flow threshold map proven through backend-only expert synthesis.",
+      "domain_context": "Nested control-flow threshold map with exact symbolic rows and deterministic fast-path coverage.",
       "evaluation_mode": "predict_rows",
       "max_unroll": 8,
       "example_input_rows": [
@@ -212,8 +212,8 @@
       ],
       "score_sort_key": "neg_mse",
       "metric_pass_min": ["neg_mse", -0.000000000001],
-      "fast_path_expected": false,
-      "backend_expected": "expert_backend",
+      "fast_path_expected": true,
+      "backend_expected": "fast_path",
       "category": "control_flow"
     },
     {

@@ -503,6 +503,25 @@ def test_is_exact_symbolic_examples_task_detects_clamp_goal():
     assert is_exact_symbolic_examples_task(cfg) is True
 
 
+@pytest.mark.parametrize(
+    "goal",
+    [
+        "Write .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.",
+        "Write a valid Axiom .ax program in this repo's DSL so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.",
+    ],
+)
+def test_is_exact_symbolic_examples_task_detects_nested_piecewise_goals(goal: str):
+    cfg = CopilotSearchConfig(
+        expert=ScriptedExpert(GOOD_AX, []),
+        goal=goal,
+        max_iterations=1,
+        mode="predict_rows",
+        example_input_rows=[{"x": -2.0}, {"x": 0.4}, {"x": 1.8}],
+        expected_rows=[{"y": 0.0}, {"y": 0.4}, {"y": 1.0}],
+    )
+    assert is_exact_symbolic_examples_task(cfg) is True
+
+
 def test_merge_completion_overrides_into_context():
     from axiom.experts.onyx_qwen import COMPLETION_OVERRIDES_CONTEXT_KEY
 
@@ -736,6 +755,35 @@ def test_nested_piecewise_identity_cap_fast_path_success():
     )
     _assert_no_forbidden_fast_path_syntax(source)
     assert out.converged and out.best_evaluation.success
+
+
+def test_nested_piecewise_identity_cap_fast_path_smoke_fixture_skips_expert():
+    ex = ScriptedExpert("SHOULD_NOT_DRAFT", [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="Write .ax so if x < 0 then y = 0.0 else if x < 1 then y = x else y = 1.0.",
+        max_iterations=2,
+        mode="predict_rows",
+        example_input_rows=[{"x": -2.0}, {"x": 0.4}, {"x": 1.8}],
+        expected_rows=[{"y": 0.0}, {"y": 0.4}, {"y": 1.0}],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+        repair_valid_with_metrics=False,
+    )
+    out = run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 0
+    assert out.iterations[0].producing_expert["backend_name"] == "nested_piecewise_identity_cap_fast_path"
+    assert out.best_source.strip() == (
+        "if (x < 0.0) {\n"
+        "    y = 0.0;\n"
+        "} else {\n"
+        "    if (x < 1.0) {\n"
+        "        y = x;\n"
+        "    } else {\n"
+        "        y = 1.0;\n"
+        "    }\n"
+        "}"
+    )
 
 
 def test_nested_piecewise_identity_cap_fast_path_ambiguous_returns_none():

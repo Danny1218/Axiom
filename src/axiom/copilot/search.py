@@ -37,6 +37,7 @@ _GOAL_EXACT_SYMBOLIC_EXTRA = re.compile(
     r"(max\s*\(|min\s*\(|clamp|affine|weighted\s+(sum|blend)|risk_score)",
     re.I,
 )
+_GOAL_EXACT_PIECEWISE_CONTROL = re.compile(r"\bif\b.+(?:<|>).+\bthen\b.+\belse\b", re.I)
 
 # Penalties subtracted from raw sort metric (higher-is-better, e.g. ``neg_mse``).
 _PENALTY_NEURAL_EXACT = 2.0
@@ -57,12 +58,41 @@ def _goal_suggests_symbolic_math(goal: str) -> bool:
     return False
 
 
+def _goal_suggests_piecewise_control(goal: str) -> bool:
+    g = (goal or "").strip()
+    if not g or len(g) > 500:
+        return False
+    return bool(_GOAL_EXACT_PIECEWISE_CONTROL.search(g))
+
+
+def _has_single_numeric_input_output_rows(config: CopilotSearchConfig) -> bool:
+    inp = config.example_input_rows
+    exp = config.expected_rows
+    if not inp or not exp or len(inp) != len(exp):
+        return False
+    for row_in, row_ex in zip(inp, exp):
+        if not isinstance(row_in, Mapping) or not isinstance(row_ex, Mapping):
+            return False
+        if len(row_in) != 1 or len(row_ex) != 1:
+            return False
+        try:
+            x = float(next(iter(row_in.values())))
+            y = float(next(iter(row_ex.values())))
+        except (TypeError, ValueError, StopIteration):
+            return False
+        if not math.isfinite(x) or not math.isfinite(y):
+            return False
+    return True
+
+
 def is_exact_symbolic_examples_task(config: CopilotSearchConfig) -> bool:
-    """predict_rows + expected rows + goal looks like affine/clamp/small math (not a policy)."""
+    """predict_rows + expected rows + goal looks like exact symbolic arithmetic or piecewise control."""
     if config.mode != "predict_rows" or not config.expected_rows:
         return False
     g = config.goal or ""
     if _goal_suggests_symbolic_math(g):
+        return True
+    if _goal_suggests_piecewise_control(g) and _has_single_numeric_input_output_rows(config):
         return True
     if len(g) <= 500 and _GOAL_EXACT_SYMBOLIC_EXTRA.search(g):
         return True
