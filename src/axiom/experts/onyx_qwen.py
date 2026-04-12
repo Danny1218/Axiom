@@ -33,6 +33,61 @@ RETURN_VALID_AX_SEMICOLON_LINE = (
     "Return only valid .ax source. Every assignment statement must end with a semicolon."
 )
 
+_CANONICAL_SYMBOLIC_FAMILY_DRAFTS_BLOCK = """Positive anchors - canonical symbolic family drafts:
+If the goal matches one of these families, emit that canonical form directly and do not add validation/range-guard branches unless the goal explicitly asks for them.
+
+- `double_x`
+```ax
+y = x * 2.0;
+```
+
+- `risk_score` clamped blend
+```ax
+risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));
+```
+
+- `three_input_affine`
+```ax
+score = 0.5 * a + 0.3 * b + 0.2 * c;
+```
+
+- `minmax_blend`
+```ax
+score = max(0.0, min(a + b, 1.0));
+```
+
+- `quadratic_with_cross_term`
+```ax
+y = a * b + a + 1.0;
+```
+
+- `three_way_maxmin`
+```ax
+score = max(min(a, b), c);
+```
+
+- `nested_piecewise`
+```ax
+if (x < 0.0) {
+    y = 0.0;
+} else {
+    if (x < 1.0) {
+        y = x;
+    } else {
+        y = 1.0;
+    }
+}
+```
+
+- `max_of_two`
+```ax
+if (a > b) {
+    score = a;
+} else {
+    score = b;
+}
+```"""
+
 SYSTEM_DRAFT = (
     "You write programs in THIS repository's custom `.ax` DSL (Axiom engine). "
     "It is NOT Macaulay2, NOT the Axiom computer algebra system, NOT a theorem prover, "
@@ -54,9 +109,8 @@ SYSTEM_DRAFT = (
     "Comparisons allowed: `>`, `<`, `==`, `!=` only. "
     "Do not use `print`. Do not emit prose, commentary, or explanations unless the user explicitly asks for them. "
     "When you use a markdown fence, use the info string `ax` so the block is ```ax ... ```.\n"
-    "Canonical valid examples:\n"
-    "  y = x * 2.0;\n"
-    "  risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));\n"
+    + _CANONICAL_SYMBOLIC_FAMILY_DRAFTS_BLOCK
+    + "\n"
     + RETURN_VALID_AX_SEMICOLON_LINE
 )
 
@@ -173,11 +227,7 @@ if (x < 0.0) {
 }
 ```"""
 
-DRAFT_FEWSHOT = """Tiny example (valid `.ax`):
-```ax
-y = x * 2.0;
-risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));
-```"""
+DRAFT_FEWSHOT = _CANONICAL_SYMBOLIC_FAMILY_DRAFTS_BLOCK
 
 REPAIR_FEWSHOT = """Few-shot repair:
 Bad: `score := max(a, b); print(score);`

@@ -12,6 +12,7 @@ import requests
 from axiom.experts.base import ExpertDraftRequest, ExpertRepairRequest, ExpertTraceSummaryRequest, SemanticExpert
 from axiom.experts.onyx_qwen import (
     COMPLETION_OVERRIDES_CONTEXT_KEY,
+    DRAFT_FEWSHOT,
     EXAMPLES_SEMANTICS_BLOCK,
     EXACT_SYMBOLIC_MATH_BLOCK,
     REPAIR_NEURAL_TO_SYMBOLIC_BLOCK,
@@ -152,6 +153,25 @@ def test_prompt_contains_backend_only_fewshot_rewrites():
     assert p.rstrip().endswith(
         "Return only valid .ax source. Every assignment statement must end with a semicolon."
     )
+
+
+def test_system_and_draft_share_canonical_symbolic_family_anchor_block():
+    p = user_prompt_draft("goal", {})
+    anchor = (
+        "If the goal matches one of these families, emit that canonical form directly and do not add "
+        "validation/range-guard branches unless the goal explicitly asks for them."
+    )
+    assert DRAFT_FEWSHOT in SYSTEM_DRAFT
+    assert DRAFT_FEWSHOT in p
+    assert anchor in DRAFT_FEWSHOT
+    assert "y = x * 2.0;" in DRAFT_FEWSHOT
+    assert "risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));" in DRAFT_FEWSHOT
+    assert "score = 0.5 * a + 0.3 * b + 0.2 * c;" in DRAFT_FEWSHOT
+    assert "score = max(0.0, min(a + b, 1.0));" in DRAFT_FEWSHOT
+    assert "y = a * b + a + 1.0;" in DRAFT_FEWSHOT
+    assert "score = max(min(a, b), c);" in DRAFT_FEWSHOT
+    assert "if (x < 0.0) {" in DRAFT_FEWSHOT
+    assert "if (a > b) {" in DRAFT_FEWSHOT
 
 
 def test_user_prompt_draft_is_deterministic():
