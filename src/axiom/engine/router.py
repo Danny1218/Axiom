@@ -46,13 +46,17 @@ class SinkhornRouter(nn.Module):
         self.epsilon = epsilon
         self.mutation_entropy_norm_threshold = mutation_entropy_norm_threshold
         self.proj = nn.Linear(dim, num_experts, bias=True)
+        self.register_buffer(
+            "_entropy_denominators",
+            torch.tensor([math.log(max(a, 2)) for a in range(num_experts + 1)], dtype=torch.float64),
+            persistent=False,
+        )
 
     def _normalized_entropy_tensor(self, p_a: torch.Tensor) -> torch.Tensor:
-        """Batch-mean routing entropy / log(max(A,2)), clamped to [0, 1]; no Python branch on A (compile-safe)."""
+        """Batch-mean routing entropy / log(max(A,2)), clamped to [0, 1]."""
         p = p_a.clamp_min(1e-12)
         ent = -(p * p.log()).sum(dim=-1).mean()
-        a = int(p_a.shape[-1])
-        den = math.log(max(a, 2))
+        den = self._entropy_denominators[p_a.shape[-1]].to(device=p_a.device, dtype=p_a.dtype)
         return (ent / den).clamp(0.0, 1.0)
 
     def forward(

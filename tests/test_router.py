@@ -67,3 +67,18 @@ def test_router_uniform_routing_high_normalized_entropy_tensor():
     assert w.shape == (10, 2)
     assert ent.shape == ()
     assert float(ent.item()) >= 0.5
+
+
+def test_sinkhorn_router_masked_compile_aot_eager_fullgraph_matches_eager():
+    import torch._dynamo.config as dynamo_config
+
+    dynamo_config.capture_dynamic_output_shape_ops = True
+    torch.manual_seed(4)
+    r = SinkhornRouter(4, 4, num_iters=16, epsilon=0.4)
+    x = torch.randn(6, 4)
+    mask = torch.tensor([1, 0, 1, 1], dtype=torch.bool)
+    w_e, ent_e = r(x, mask)
+    compiled = torch.compile(r, backend="aot_eager", fullgraph=True)
+    w_j, ent_j = compiled(x, mask)
+    assert torch.allclose(w_e, w_j, atol=1e-5, rtol=1e-5)
+    assert torch.allclose(ent_e, ent_j, atol=1e-5, rtol=1e-5)
