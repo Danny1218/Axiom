@@ -100,6 +100,107 @@ def _piecewise_threshold_identity_source(in_key: str, out_key: str) -> str:
     )
 
 
+def _nested_piecewise_identity_cap_source(in_key: str, out_key: str, low_value: float, high_value: float) -> str:
+    low_s = _linear_xy_coeff_str(low_value)
+    high_s = _linear_xy_coeff_str(high_value)
+    return (
+        f"if ({in_key} < {low_s}) {{\n"
+        f"    {out_key} = {low_s};\n"
+        "} else {\n"
+        f"    if ({in_key} < {high_s}) {{\n"
+        f"        {out_key} = {in_key};\n"
+        "    } else {\n"
+        f"        {out_key} = {high_s};\n"
+        "    }\n"
+        "}\n"
+    )
+
+
+def _try_nested_piecewise_identity_cap_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
+    """Exact one-input/one-output clamp-style identity/cap: low constant, middle identity, high constant."""
+    if not is_exact_symbolic_examples_task(config):
+        return None
+    if config.mode != "predict_rows":
+        return None
+    inp = config.example_input_rows
+    exp = config.expected_rows
+    if not inp or not exp or len(inp) != len(exp):
+        return None
+    if len(inp) < 3:
+        return None
+
+    in_key: Optional[str] = None
+    out_key: Optional[str] = None
+    rows: List[tuple[float, float]] = []
+    low_rows: List[tuple[float, float]] = []
+    mid_rows: List[tuple[float, float]] = []
+    high_rows: List[tuple[float, float]] = []
+
+    for row_in, row_ex in zip(inp, exp):
+        if not isinstance(row_in, Mapping) or not isinstance(row_ex, Mapping):
+            return None
+        if len(row_in) != 1 or len(row_ex) != 1:
+            return None
+
+        ik = str(next(iter(row_in.keys())))
+        ok = str(next(iter(row_ex.keys())))
+        if in_key is None:
+            in_key = ik
+        elif ik != in_key:
+            return None
+        if out_key is None:
+            out_key = ok
+        elif ok != out_key:
+            return None
+
+        try:
+            x = float(row_in[in_key])
+            y = float(row_ex[out_key])
+        except (TypeError, ValueError, KeyError):
+            return None
+        if not math.isfinite(x) or not math.isfinite(y):
+            return None
+        rows.append((x, y))
+        if math.isclose(y, x, rel_tol=1e-12, abs_tol=1e-9):
+            mid_rows.append((x, y))
+        elif y > x:
+            low_rows.append((x, y))
+        else:
+            high_rows.append((x, y))
+
+    if not low_rows or not mid_rows or not high_rows:
+        return None
+
+    low_value = low_rows[0][1]
+    high_value = high_rows[0][1]
+    for _, y in low_rows[1:]:
+        if not math.isclose(y, low_value, rel_tol=1e-12, abs_tol=1e-9):
+            return None
+    for _, y in high_rows[1:]:
+        if not math.isclose(y, high_value, rel_tol=1e-12, abs_tol=1e-9):
+            return None
+    if not low_value < high_value:
+        return None
+
+    for x, y in rows:
+        pred = low_value if x < low_value else (x if x < high_value else high_value)
+        if not math.isclose(pred, y, rel_tol=1e-12, abs_tol=1e-9):
+            return None
+
+    assert in_key is not None and out_key is not None
+    return ExpertDraftResponse(
+        ax_source=_nested_piecewise_identity_cap_source(in_key, out_key, low_value, high_value),
+        backend_name="nested_piecewise_identity_cap_fast_path",
+        metadata={
+            "fast_path": "nested_piecewise_identity_cap",
+            "in_key": in_key,
+            "out_key": out_key,
+            "low_value": low_value,
+            "high_value": high_value,
+        },
+    )
+
+
 def _try_piecewise_threshold_identity_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
     """Exact one-input/one-output zero-floor identity: ``y = x`` for non-negative ``x``, else ``0.0``."""
     if not is_exact_symbolic_examples_task(config):
@@ -1276,7 +1377,9 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
         ctx["exact_symbolic_examples_task"] = True
     ctx = merge_completion_overrides_into_context(ctx, config.completion_overrides)
     draft_req = ExpertDraftRequest(goal=config.goal, context=ctx)
-    fast = _try_piecewise_threshold_identity_fast_path(config)
+    fast = _try_nested_piecewise_identity_cap_fast_path(config)
+    if fast is None:
+        fast = _try_piecewise_threshold_identity_fast_path(config)
     if fast is None:
         fast = _try_linear_xy_fast_path(config)
     if fast is None:

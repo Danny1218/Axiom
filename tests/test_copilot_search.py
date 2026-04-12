@@ -28,6 +28,7 @@ from axiom.copilot.search import (
     _try_affine_multi_input_fast_path,
     _try_bounded_affine2_fast_path,
     _try_linear_xy_fast_path,
+    _try_nested_piecewise_identity_cap_fast_path,
     _try_piecewise_threshold_identity_fast_path,
     _try_two_input_interaction_fast_path,
     is_exact_symbolic_examples_task,
@@ -693,6 +694,68 @@ def test_piecewise_threshold_identity_fast_path_falls_back_noisy():
         score_sort_key="neg_mse",
     )
     assert _try_piecewise_threshold_identity_fast_path(cfg) is None
+    run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 1
+
+
+def test_nested_piecewise_identity_cap_fast_path_success():
+    ex = ScriptedExpert("SHOULD_NOT_DRAFT", [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="compute nested piecewise clamp so y is capped between 0.0 and 1.0",
+        max_iterations=2,
+        mode="predict_rows",
+        example_input_rows=[{"x": -2.0}, {"x": -0.1}, {"x": 0.0}, {"x": 0.4}, {"x": 1.0}, {"x": 1.5}],
+        expected_rows=[{"y": 0.0}, {"y": 0.0}, {"y": 0.0}, {"y": 0.4}, {"y": 1.0}, {"y": 1.0}],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+        repair_valid_with_metrics=False,
+    )
+    out = run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 0
+    assert out.iterations[0].producing_expert["backend_name"] == "nested_piecewise_identity_cap_fast_path"
+    assert out.iterations[0].producing_expert["metadata"].get("fast_path") == "nested_piecewise_identity_cap"
+    assert out.best_source.strip() == (
+        "if (x < 0.0) {\n"
+        "    y = 0.0;\n"
+        "} else {\n"
+        "    if (x < 1.0) {\n"
+        "        y = x;\n"
+        "    } else {\n"
+        "        y = 1.0;\n"
+        "    }\n"
+        "}"
+    )
+    assert out.converged and out.best_evaluation.success
+
+
+def test_nested_piecewise_identity_cap_fast_path_ambiguous_returns_none():
+    cfg = CopilotSearchConfig(
+        expert=ScriptedExpert(GOOD_DOUBLE_AX, []),
+        goal="compute nested piecewise clamp from x",
+        max_iterations=1,
+        mode="predict_rows",
+        example_input_rows=[{"x": 0.0}, {"x": 0.4}, {"x": 1.0}],
+        expected_rows=[{"y": 0.0}, {"y": 0.4}, {"y": 1.0}],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+    )
+    assert _try_nested_piecewise_identity_cap_fast_path(cfg) is None
+
+
+def test_nested_piecewise_identity_cap_fast_path_falls_back_noisy():
+    ex = ScriptedExpert(GOOD_DOUBLE_AX, [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="compute nested piecewise clamp so y is capped between 0.0 and 1.0",
+        max_iterations=1,
+        mode="predict_rows",
+        example_input_rows=[{"x": -1.0}, {"x": 0.0}, {"x": 0.4}, {"x": 1.0}, {"x": 1.5}],
+        expected_rows=[{"y": 0.0}, {"y": 0.0}, {"y": 0.41}, {"y": 1.0}, {"y": 1.0}],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+    )
+    assert _try_nested_piecewise_identity_cap_fast_path(cfg) is None
     run_copilot_search(cfg)
     assert len(ex.draft_calls) == 1
 
