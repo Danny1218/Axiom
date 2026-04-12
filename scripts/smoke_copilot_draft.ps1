@@ -1,6 +1,3 @@
-$ErrorActionPreference = "Stop"
-Set-StrictMode -Version Latest
-
 param(
     [string]$Backend = "onyx-qwen",
     [string]$ExpertUrl = "http://127.0.0.1:8000",
@@ -10,6 +7,9 @@ param(
     [string]$OutJson = "benchmark_symbolic_snapshot.json",
     [string]$CompareJson = ""
 )
+
+$ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
 
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root

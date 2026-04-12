@@ -324,6 +324,13 @@ def test_smoke_backend_only_script_references_harder_task_examples():
 def test_smoke_copilot_draft_script_uses_benchmark_suite_and_reports_fields():
     root = Path(__file__).resolve().parents[1]
     script = (root / "scripts" / "smoke_copilot_draft.ps1").read_text(encoding="utf-8")
+    assert script.lstrip().startswith("param(")
+    assert '[string]$Backend = "onyx-qwen"' in script
+    assert '[string]$ExpertUrl = "http://127.0.0.1:8000"' in script
+    assert '[string]$ExpertModel = "onyx-qwen-production-v1"' in script
+    assert '[string]$ExpertApiKey = "sk-morph-b2b-test"' in script
+    assert '[string]$TaskJson = "benchmarks/copilot_symbolic_and_generalization_tasks.json"' in script
+    assert '[string]$OutJson = "benchmark_symbolic_snapshot.json"' in script
     assert "copilot-benchmark" in script
     assert "--draft-only" in script
     assert "benchmarks/copilot_symbolic_and_generalization_tasks.json" in script
