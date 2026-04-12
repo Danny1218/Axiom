@@ -66,6 +66,8 @@ def is_exact_symbolic_examples_task(config: CopilotSearchConfig) -> bool:
         return True
     if len(g) <= 500 and _GOAL_EXACT_SYMBOLIC_EXTRA.search(g):
         return True
+    if len(g) <= 500 and _goal_suggests_cross_term_with_additive(g):
+        return True
     return False
 
 
@@ -512,6 +514,141 @@ def _try_bounded_affine2_fast_path(config: CopilotSearchConfig) -> Optional[Expe
             "c": cc,
             "in_keys": [k1, k2],
             "out_key": out_key,
+        },
+    )
+
+
+def _two_input_interaction_source(
+    out_key: str,
+    k1: str,
+    k2: str,
+    w_ab: float,
+    w_a: float,
+    w_b: float,
+    bias: float,
+) -> str:
+    parts: List[str] = []
+
+    def _append_term(coeff: float, expr: str) -> None:
+        if math.isclose(coeff, 0.0, abs_tol=1e-12, rel_tol=1e-12):
+            return
+        ac = abs(coeff)
+        if math.isclose(ac, 1.0, abs_tol=1e-12, rel_tol=1e-12):
+            rendered = expr
+        else:
+            rendered = f"{_linear_xy_coeff_str(ac)} * {expr}"
+        if not parts:
+            parts.append(f"-{rendered}" if coeff < 0 else rendered)
+        else:
+            parts.append(f"- {rendered}" if coeff < 0 else f"+ {rendered}")
+
+    def _append_bias(coeff: float) -> None:
+        if math.isclose(coeff, 0.0, abs_tol=1e-12, rel_tol=1e-12):
+            return
+        rendered = _linear_xy_coeff_str(abs(coeff))
+        if not parts:
+            parts.append(f"-{rendered}" if coeff < 0 else rendered)
+        else:
+            parts.append(f"- {rendered}" if coeff < 0 else f"+ {rendered}")
+
+    _append_term(w_ab, f"{k1} * {k2}")
+    _append_term(w_a, k1)
+    _append_term(w_b, k2)
+    _append_bias(bias)
+    expr = " ".join(parts) if parts else "0.0"
+    return f"{out_key} = {expr};\n"
+
+
+def _try_two_input_interaction_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
+    """Exact two-input interaction fit: ``out = w_ab*a*b + w_a*a + w_b*b + c``."""
+    if not is_exact_symbolic_examples_task(config):
+        return None
+    if config.mode != "predict_rows":
+        return None
+    inp = config.example_input_rows
+    exp = config.expected_rows
+    if not inp or not exp or len(inp) != len(exp):
+        return None
+    if len(inp) < 4:
+        return None
+
+    in_keys: Optional[tuple[str, str]] = None
+    out_key: Optional[str] = None
+    basis_rows: List[List[float]] = []
+    ys: List[float] = []
+
+    for row_in, row_ex in zip(inp, exp):
+        if not isinstance(row_in, Mapping) or not isinstance(row_ex, Mapping):
+            return None
+        if len(row_in) != 2 or len(row_ex) != 1:
+            return None
+        keys = tuple(sorted(str(k) for k in row_in.keys()))
+        if in_keys is None:
+            in_keys = keys
+        elif keys != in_keys:
+            return None
+        ok = str(next(iter(row_ex.keys())))
+        if out_key is None:
+            out_key = ok
+        elif ok != out_key:
+            return None
+        try:
+            a = float(row_in[in_keys[0]])
+            b = float(row_in[in_keys[1]])
+            y = float(row_ex[out_key])
+        except (TypeError, ValueError, KeyError):
+            return None
+        if not math.isfinite(a) or not math.isfinite(b) or not math.isfinite(y):
+            return None
+        basis_rows.append([a * b, a, b, 1.0])
+        ys.append(y)
+
+    assert in_keys is not None and out_key is not None
+    valid_solution: Optional[List[float]] = None
+    for combo in itertools.combinations(range(len(basis_rows)), 4):
+        mat = [basis_rows[idx] for idx in combo]
+        rhs = [ys[idx] for idx in combo]
+        sol = _solve_linear_system(mat, rhs)
+        if sol is None:
+            continue
+        ok = True
+        for row, y in zip(basis_rows, ys):
+            pred = sum(sol[i] * row[i] for i in range(4))
+            if not math.isclose(pred, y, rel_tol=1e-12, abs_tol=1e-9):
+                ok = False
+                break
+        if not ok:
+            continue
+        if valid_solution is None:
+            valid_solution = sol
+        elif any(
+            not math.isclose(valid_solution[i], sol[i], rel_tol=1e-10, abs_tol=1e-8) for i in range(4)
+        ):
+            return None
+
+    if valid_solution is None:
+        return None
+
+    src = _two_input_interaction_source(
+        out_key,
+        in_keys[0],
+        in_keys[1],
+        valid_solution[0],
+        valid_solution[1],
+        valid_solution[2],
+        valid_solution[3],
+    )
+    return ExpertDraftResponse(
+        ax_source=src,
+        backend_name="two_input_interaction_fast_path",
+        metadata={
+            "fast_path": "two_input_interaction",
+            "in_keys": [in_keys[0], in_keys[1]],
+            "out_key": out_key,
+            "w_ab": valid_solution[0],
+            "w_a": valid_solution[1],
+            "w_b": valid_solution[2],
+            "bias": valid_solution[3],
         },
     )
 
@@ -1144,6 +1281,8 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
         fast = _try_linear_xy_fast_path(config)
     if fast is None:
         fast = _try_bounded_affine2_fast_path(config)
+    if fast is None:
+        fast = _try_two_input_interaction_fast_path(config)
     if fast is None:
         fast = _try_affine_multi_input_fast_path(config)
     if fast is not None:

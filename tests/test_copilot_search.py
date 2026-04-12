@@ -29,6 +29,7 @@ from axiom.copilot.search import (
     _try_bounded_affine2_fast_path,
     _try_linear_xy_fast_path,
     _try_piecewise_threshold_identity_fast_path,
+    _try_two_input_interaction_fast_path,
     is_exact_symbolic_examples_task,
     merge_completion_overrides_into_context,
 )
@@ -825,6 +826,126 @@ def test_bounded_affine2_clamp_edges_validated_on_v3_subset():
     assert "max(0.0, min(1.0" in r.ax_source
     md = r.metadata
     assert md.get("a") == pytest.approx(0.7) and md.get("b") == pytest.approx(0.3)
+
+
+def test_two_input_interaction_fast_path_exact_cross_term_success():
+    ex = ScriptedExpert("SHOULD_NOT_DRAFT", [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="Write .ax so y = a * b + a.",
+        max_iterations=2,
+        mode="predict_rows",
+        example_input_rows=[
+            {"a": 0.0, "b": 0.0},
+            {"a": 1.0, "b": 0.0},
+            {"a": 0.0, "b": 1.0},
+            {"a": 1.0, "b": 1.0},
+            {"a": 2.0, "b": 3.0},
+        ],
+        expected_rows=[
+            {"y": 0.0},
+            {"y": 1.0},
+            {"y": 0.0},
+            {"y": 2.0},
+            {"y": 8.0},
+        ],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+        repair_valid_with_metrics=False,
+    )
+    out = run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 0
+    assert out.iterations[0].producing_expert["backend_name"] == "two_input_interaction_fast_path"
+    assert out.iterations[0].producing_expert["metadata"].get("fast_path") == "two_input_interaction"
+    assert out.best_source.strip() == "y = a * b + a;"
+    assert out.converged and out.best_evaluation.success
+
+
+def test_two_input_interaction_fast_path_exact_cross_term_with_bias_success():
+    r = _try_two_input_interaction_fast_path(
+        CopilotSearchConfig(
+            expert=ScriptedExpert(GOOD_AX, []),
+            goal="Write .ax so y = a * b + a + 1.0.",
+            max_iterations=1,
+            mode="predict_rows",
+            example_input_rows=[
+                {"a": 0.0, "b": 0.0},
+                {"a": 1.0, "b": 0.0},
+                {"a": 0.0, "b": 1.0},
+                {"a": 1.0, "b": 1.0},
+                {"a": 2.0, "b": 2.0},
+            ],
+            expected_rows=[
+                {"y": 1.0},
+                {"y": 2.0},
+                {"y": 1.0},
+                {"y": 3.0},
+                {"y": 7.0},
+            ],
+            score_fn=default_neg_mse_score_fn(),
+            score_sort_key="neg_mse",
+        )
+    )
+    assert r is not None
+    assert r.ax_source.strip() == "y = a * b + a + 1.0;"
+    assert r.metadata["w_ab"] == pytest.approx(1.0)
+    assert r.metadata["w_a"] == pytest.approx(1.0)
+    assert r.metadata["w_b"] == pytest.approx(0.0)
+    assert r.metadata["bias"] == pytest.approx(1.0)
+
+
+def test_two_input_interaction_fast_path_falls_back_when_noisy():
+    ex = ScriptedExpert("y = 0.0;\n", [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="Write .ax so y = a * b + a + 1.0.",
+        max_iterations=2,
+        mode="predict_rows",
+        example_input_rows=[
+            {"a": 0.0, "b": 0.0},
+            {"a": 1.0, "b": 0.0},
+            {"a": 0.0, "b": 1.0},
+            {"a": 1.0, "b": 1.0},
+            {"a": 2.0, "b": 2.0},
+        ],
+        expected_rows=[
+            {"y": 1.0},
+            {"y": 2.0},
+            {"y": 1.0},
+            {"y": 3.0},
+            {"y": 7.001},
+        ],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+        repair_valid_with_metrics=False,
+    )
+    assert _try_two_input_interaction_fast_path(cfg) is None
+    run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 1
+
+
+def test_two_input_interaction_fast_path_returns_none_when_ambiguous():
+    cfg = CopilotSearchConfig(
+        expert=ScriptedExpert(GOOD_AX, []),
+        goal="Write .ax so y = a * b + a + 1.0.",
+        max_iterations=1,
+        mode="predict_rows",
+        example_input_rows=[
+            {"a": 0.0, "b": 0.0},
+            {"a": 1.0, "b": 0.0},
+            {"a": 2.0, "b": 0.0},
+            {"a": 3.0, "b": 0.0},
+        ],
+        expected_rows=[
+            {"y": 1.0},
+            {"y": 2.0},
+            {"y": 3.0},
+            {"y": 4.0},
+        ],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+    )
+    assert _try_two_input_interaction_fast_path(cfg) is None
 
 
 def test_affine_multi_input_fast_path_exact_three_input_success():
