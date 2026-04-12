@@ -95,6 +95,11 @@ class ScriptedExpert:
         return "ok"
 
 
+def _assert_no_forbidden_fast_path_syntax(ax_source: str) -> None:
+    for token in ("&&", "||", "else if"):
+        assert token not in ax_source
+
+
 def test_scripted_expert_is_semantic_expert():
     e: SemanticExpert = ScriptedExpert(GOOD_AX, [])
     assert isinstance(e, SemanticExpert)
@@ -715,7 +720,8 @@ def test_nested_piecewise_identity_cap_fast_path_success():
     assert len(ex.draft_calls) == 0
     assert out.iterations[0].producing_expert["backend_name"] == "nested_piecewise_identity_cap_fast_path"
     assert out.iterations[0].producing_expert["metadata"].get("fast_path") == "nested_piecewise_identity_cap"
-    assert out.best_source.strip() == (
+    source = out.best_source.strip()
+    assert source == (
         "if (x < 0.0) {\n"
         "    y = 0.0;\n"
         "} else {\n"
@@ -726,6 +732,7 @@ def test_nested_piecewise_identity_cap_fast_path_success():
         "    }\n"
         "}"
     )
+    _assert_no_forbidden_fast_path_syntax(source)
     assert out.converged and out.best_evaluation.success
 
 
@@ -920,7 +927,9 @@ def test_two_input_interaction_fast_path_exact_cross_term_success():
     assert len(ex.draft_calls) == 0
     assert out.iterations[0].producing_expert["backend_name"] == "two_input_interaction_fast_path"
     assert out.iterations[0].producing_expert["metadata"].get("fast_path") == "two_input_interaction"
-    assert out.best_source.strip() == "y = a * b + a;"
+    source = out.best_source.strip()
+    assert source == "y = a * b + a;"
+    _assert_no_forbidden_fast_path_syntax(source)
     assert out.converged and out.best_evaluation.success
 
 
@@ -950,7 +959,9 @@ def test_two_input_interaction_fast_path_exact_cross_term_with_bias_success():
         )
     )
     assert r is not None
-    assert r.ax_source.strip() == "y = a * b + a + 1.0;"
+    source = r.ax_source.strip()
+    assert source == "y = a * b + a + 1.0;"
+    _assert_no_forbidden_fast_path_syntax(source)
     assert r.metadata["w_ab"] == pytest.approx(1.0)
     assert r.metadata["w_a"] == pytest.approx(1.0)
     assert r.metadata["w_b"] == pytest.approx(0.0)
