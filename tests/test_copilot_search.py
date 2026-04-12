@@ -250,8 +250,8 @@ def test_repair_prompt_adds_missing_bias_hint_for_constant_offset_rows():
         symbolic_exact_hint=True,
     )
     assert "near-constant offset" in txt
-    assert "missing or altered additive bias" in txt
-    assert "**preserve additive bias terms exactly**" in txt.lower()
+    assert "missing constant/bias" in txt
+    assert "**preserve additive bias exactly**" in txt.lower()
 
 
 def test_repair_prompt_adds_cross_term_preservation_hint():
@@ -276,6 +276,8 @@ def test_repair_prompt_adds_cross_term_preservation_hint():
         symbolic_exact_hint=True,
     )
     assert "**Preserve interaction terms exactly**" in txt
+    assert "**Preserve additive bias exactly**" in txt
+    assert "**Do not replace interaction terms with boolean guards or branch logic**" in txt
     assert "**Do not replace interaction terms with scaled unary terms**" in txt
     assert "**Missing or wrong interaction term**" in txt
     assert "`a * b`" in txt
@@ -303,7 +305,8 @@ def test_repair_prompt_adds_distorted_unary_coefficient_hint():
         evaluation=rep,
         symbolic_exact_hint=True,
     )
-    assert "a coefficient on that variable is likely distorted" in txt
+    assert "distorted unary coefficient" in txt.lower()
+    assert "missing constant/bias" in txt
     assert "do not replace interaction terms with scaled unary terms" in txt.lower()
 
 
