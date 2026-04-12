@@ -47,9 +47,32 @@ function _Get-PropValue {
         [Parameter(Mandatory = $true)][string]$Name
     )
     if ($null -eq $Object) { return $null }
+    if ($Object -is [System.Collections.IDictionary]) {
+        if ($Object.Contains($Name)) { return $Object[$Name] }
+        return $null
+    }
     $p = $Object.PSObject.Properties[$Name]
     if ($null -eq $p) { return $null }
     return $p.Value
+}
+
+function _Get-RunReportFields {
+    param([Parameter(Mandatory = $true)]$Doc)
+    $fields = @{
+        Converged = _Get-PropValue -Object $Doc -Name "converged"
+        ConvergenceReason = _Get-PropValue -Object $Doc -Name "convergence_reason"
+        BestEvaluation = _Get-PropValue -Object $Doc -Name "best_evaluation"
+        FinalEvaluation = _Get-PropValue -Object $Doc -Name "final_evaluation"
+        FinalValidation = _Get-PropValue -Object $Doc -Name "final_validation"
+    }
+    $fields["Readable"] = (
+        ($null -ne $fields["Converged"]) -or
+        ($null -ne $fields["ConvergenceReason"]) -or
+        ($null -ne $fields["BestEvaluation"]) -or
+        ($null -ne $fields["FinalEvaluation"]) -or
+        ($null -ne $fields["FinalValidation"])
+    )
+    return $fields
 }
 
 function _Read-JsonDoc {
@@ -160,15 +183,22 @@ foreach ($step in $steps) {
 
     $qualityOk = $true
     $converged = $null
+    $convergenceReason = $null
     $negMse = $null
     $backendName = "unknown"
     $why = @()
     if ($exitCode -ne 0) { $why += ("process_exit={0}" -f $exitCode) }
 
+    $reportExists = Test-Path -LiteralPath $step.ReportPath
     $doc = _Read-JsonDoc -Path $step.ReportPath
     if ($null -eq $doc) {
         $qualityOk = $false
-        $why += "missing_or_invalid_report"
+        if ($reportExists) {
+            $why += "invalid_report_json"
+        }
+        else {
+            $why += "missing_or_invalid_report"
+        }
     }
     else {
         if ($step.Type -eq "search") {
@@ -179,19 +209,26 @@ foreach ($step in $steps) {
                 $why += "final_report.success=false"
             }
             $converged = _Get-PropValue -Object $doc -Name "converged"
+            $convergenceReason = _Get-PropValue -Object $doc -Name "convergence_reason"
             $finalMetrics = _Get-PropValue -Object $finalReport -Name "metrics"
             $negMse = _Get-NegMse -Metrics $finalMetrics
         }
         elseif ($step.Type -eq "run") {
-            $converged = _Get-PropValue -Object $doc -Name "converged"
-            $finalValidation = _Get-PropValue -Object $doc -Name "final_validation"
+            $runReport = _Get-RunReportFields -Doc $doc
+            if (-not [bool]$runReport["Readable"]) {
+                $qualityOk = $false
+                $why += "invalid_pipeline_summary_shape"
+            }
+            $converged = $runReport["Converged"]
+            $convergenceReason = $runReport["ConvergenceReason"]
+            $finalValidation = $runReport["FinalValidation"]
+            $bestEvaluation = $runReport["BestEvaluation"]
+            $finalEvaluation = $runReport["FinalEvaluation"]
             $finalValidationOk = _Get-PropValue -Object $finalValidation -Name "success"
             if (($null -ne $finalValidationOk) -and (-not [bool]$finalValidationOk)) {
                 $qualityOk = $false
                 $why += "final_validation.success=false"
             }
-            $finalEvaluation = _Get-PropValue -Object $doc -Name "final_evaluation"
-            $bestEvaluation = _Get-PropValue -Object $doc -Name "best_evaluation"
             $finalEvalMetrics = _Get-PropValue -Object $finalEvaluation -Name "metrics"
             $bestEvalMetrics = _Get-PropValue -Object $bestEvaluation -Name "metrics"
             $negMse = _Get-NegMse -Metrics $finalEvalMetrics
@@ -232,9 +269,10 @@ foreach ($step in $steps) {
 
     $status = if ($qualityOk) { "PASS" } else { "FAIL" }
     $convText = if ($null -eq $converged) { "n/a" } else { "$converged" }
+    $convReasonText = if ([string]::IsNullOrWhiteSpace([string]$convergenceReason)) { "n/a" } else { [string]$convergenceReason }
     $metricText = if ($null -eq $negMse) { "n/a" } else { "{0}" -f $negMse }
     $extra = if ($why.Count -gt 0) { " reason=" + ($why -join ",") } else { "" }
-    Write-Host ("STEP {0}: {1} converged={2} neg_mse={3} backend_kind={4}{5}" -f $step.Name, $status, $convText, $metricText, $backendKind, $extra)
+    Write-Host ("STEP {0}: {1} converged={2} convergence_reason={3} neg_mse={4} backend_kind={5}{6}" -f $step.Name, $status, $convText, $convReasonText, $metricText, $backendKind, $extra)
 }
 
 Write-Host ""

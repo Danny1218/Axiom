@@ -2,6 +2,8 @@
 
 ## Current phase
 
+**Phase 86i** — **Remaining backend-only smoke parser hardened** — **`scripts/smoke_copilot_backend_only_remaining.ps1`** now parses **`copilot-run`** `pipeline_summary.json` defensively from top-level fields (**`converged`**, **`convergence_reason`**, **`best_evaluation`**, **`final_evaluation`**, **`final_validation`**). Existing quality thresholds remain unchanged, but the script now distinguishes **missing report**, **invalid JSON**, and **invalid pipeline summary shape** so readable pipeline summaries no longer get mislabeled as **`missing_or_invalid_report`**.
+
 **Phase 86h** — **Copilot benchmark HTTP default-suite count test fixed** — **`tests/test_copilot_server.py`** no longer hardcodes a stale benchmark count for **`POST /benchmarks/run`**. The assertion now derives the expected task count from **`DEFAULT_BENCHMARK_TASKS`** and also checks **`draft_summary.task_count`** / **`search_summary.task_count`**, matching the current Phase 65/70 benchmark suite behavior.
 
 **Phase 86g** — **Regression coverage for new exact-symbolic fast paths** — **`tests/test_copilot_search.py`** now asserts canonical emitted source for the two-input interaction fast path and the three-region nested piecewise identity/cap fast path, and explicitly guards against forbidden syntax in those outputs: **`&&`**, **`||`**, and **`else if`**. Coverage remains deterministic and small.
