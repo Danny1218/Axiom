@@ -319,3 +319,16 @@ def test_smoke_backend_only_script_references_harder_task_examples():
     assert "examples/quadratic_with_cross_term.json" in script
     assert "examples/nested_piecewise.json" in script
     assert "examples/three_way_maxmin.json" in script
+
+
+def test_smoke_copilot_draft_script_uses_benchmark_suite_and_reports_fields():
+    root = Path(__file__).resolve().parents[1]
+    script = (root / "scripts" / "smoke_copilot_draft.ps1").read_text(encoding="utf-8")
+    assert "copilot-benchmark" in script
+    assert "--draft-only" in script
+    assert "benchmarks/copilot_symbolic_and_generalization_tasks.json" in script
+    assert "benchmark_symbolic_snapshot.json" in script
+    assert "compile_ok=" in script
+    assert "metric_ok=" in script
+    assert "backend_kind=" in script
+    assert "COMPARE SUMMARY" in script
