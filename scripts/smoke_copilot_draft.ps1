@@ -28,6 +28,7 @@ function _Read-JsonDoc {
 
 function _Get-PropValue {
     param(
+        [AllowNull()]
         [Parameter(Mandatory = $true)]
         $Object,
         [Parameter(Mandatory = $true)]

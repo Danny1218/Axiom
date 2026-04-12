@@ -330,6 +330,7 @@ def test_smoke_copilot_draft_script_uses_benchmark_suite_and_reports_fields():
     root = Path(__file__).resolve().parents[1]
     script = (root / "scripts" / "smoke_copilot_draft.ps1").read_text(encoding="utf-8")
     assert script.lstrip().startswith("param(")
+    assert "[AllowNull()]" in script
     assert '[string]$Backend = "onyx-qwen"' in script
     assert '[string]$ExpertUrl = "http://127.0.0.1:8000"' in script
     assert '[string]$ExpertModel = "onyx-qwen-production-v1"' in script
