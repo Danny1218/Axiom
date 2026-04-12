@@ -379,6 +379,75 @@ def _bounded_affine2_inner_source(k1: str, k2: str, out_var: str, a: float, b: f
     return f"{out_var} = max(0.0, min(1.0, {inner}));\n"
 
 
+def _minmax_blend_source(k1: str, k2: str, out_var: str) -> str:
+    return f"{out_var} = max(0.0, min({k1} + {k2}, 1.0));\n"
+
+
+def _try_minmax_blend_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
+    """Exact two-input clamp blend: ``out = max(0.0, min(x1 + x2, 1.0))``."""
+    if not is_exact_symbolic_examples_task(config):
+        return None
+    if config.mode != "predict_rows":
+        return None
+    inp = config.example_input_rows
+    exp = config.expected_rows
+    if not inp or not exp or len(inp) != len(exp):
+        return None
+    if len(inp) < 3:
+        return None
+
+    in_keys: Optional[tuple[str, str]] = None
+    out_key: Optional[str] = None
+    saw_low = False
+    saw_mid = False
+    saw_high = False
+
+    for row_in, row_ex in zip(inp, exp):
+        if not isinstance(row_in, Mapping) or not isinstance(row_ex, Mapping):
+            return None
+        if len(row_in) != 2 or len(row_ex) != 1:
+            return None
+        keys = tuple(sorted(str(k) for k in row_in.keys()))
+        if in_keys is None:
+            in_keys = keys
+        elif keys != in_keys:
+            return None
+        ok = str(next(iter(row_ex.keys())))
+        if out_key is None:
+            out_key = ok
+        elif ok != out_key:
+            return None
+        try:
+            x1 = float(row_in[in_keys[0]])
+            x2 = float(row_in[in_keys[1]])
+            y = float(row_ex[out_key])
+        except (TypeError, ValueError, KeyError):
+            return None
+        if not math.isfinite(x1) or not math.isfinite(x2) or not math.isfinite(y):
+            return None
+
+        raw = x1 + x2
+        pred = _clamp01(raw)
+        if not math.isclose(pred, y, rel_tol=1e-12, abs_tol=1e-9):
+            return None
+        if raw < 0.0 and math.isclose(y, 0.0, rel_tol=0.0, abs_tol=1e-9):
+            saw_low = True
+        elif 0.0 < raw < 1.0 and math.isclose(y, raw, rel_tol=1e-12, abs_tol=1e-9):
+            saw_mid = True
+        elif raw > 1.0 and math.isclose(y, 1.0, rel_tol=0.0, abs_tol=1e-9):
+            saw_high = True
+
+    if not saw_low or not saw_mid or not saw_high:
+        return None
+
+    assert in_keys is not None and out_key is not None
+    return ExpertDraftResponse(
+        ax_source=_minmax_blend_source(in_keys[0], in_keys[1], out_key),
+        backend_name="minmax_blend_fast_path",
+        metadata={"fast_path": "minmax_blend", "in_keys": [in_keys[0], in_keys[1]], "out_key": out_key},
+    )
+
+
 def _solve_linear_system(matrix: Sequence[Sequence[float]], rhs: Sequence[float]) -> Optional[List[float]]:
     """Solve square system by Gaussian elimination with partial pivoting; None when singular."""
     n = len(matrix)
@@ -1382,6 +1451,8 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
         fast = _try_piecewise_threshold_identity_fast_path(config)
     if fast is None:
         fast = _try_linear_xy_fast_path(config)
+    if fast is None:
+        fast = _try_minmax_blend_fast_path(config)
     if fast is None:
         fast = _try_bounded_affine2_fast_path(config)
     if fast is None:

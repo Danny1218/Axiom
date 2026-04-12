@@ -2,6 +2,8 @@
 
 ## Current phase
 
+**Phase 86j** — **Exact-symbolic min/max clamp-blend fast path** — **`src/axiom/copilot/search.py`** adds a deterministic fast path for the exact two-input family **`out = max(0.0, min(x1 + x2, 1.0))`** when **`exact_symbolic_examples_task`** is true. It activates only for exact numeric two-input / one-output example sets, requires all three clamp regions to be evidenced (low, interior, high) to avoid ambiguity, emits canonical source like **`score = max(0.0, min(a + b, 1.0));`**, and is registered before the generic bounded-affine clamp path. Tests added in **`tests/test_copilot_search.py`** for exact success and noisy-row fallback.
+
 **Phase 86i** — **Remaining backend-only smoke parser hardened** — **`scripts/smoke_copilot_backend_only_remaining.ps1`** now parses **`copilot-run`** `pipeline_summary.json` defensively from top-level fields (**`converged`**, **`convergence_reason`**, **`best_evaluation`**, **`final_evaluation`**, **`final_validation`**). Existing quality thresholds remain unchanged, but the script now distinguishes **missing report**, **invalid JSON**, and **invalid pipeline summary shape** so readable pipeline summaries no longer get mislabeled as **`missing_or_invalid_report`**.
 
 **Phase 86h** — **Copilot benchmark HTTP default-suite count test fixed** — **`tests/test_copilot_server.py`** no longer hardcodes a stale benchmark count for **`POST /benchmarks/run`**. The assertion now derives the expected task count from **`DEFAULT_BENCHMARK_TASKS`** and also checks **`draft_summary.task_count`** / **`search_summary.task_count`**, matching the current Phase 65/70 benchmark suite behavior.
