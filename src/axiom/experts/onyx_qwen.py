@@ -46,6 +46,7 @@ SYSTEM_DRAFT = (
     "use `y = x;` for assignment, never `y == x`. "
     "For nested piecewise tasks, copy the canonical nested `if` / `else` structure from the prompt exactly: "
     "one comparison per `if`, nested under `else`, never `else if`, `&&`, `||`, or chained comparisons. "
+    "If a piecewise program is needed, always use nested `else { if (...) { ... } else { ... } }`. "
     "Forbidden tokens: `:=`, `>=`, `<=`, `&&`, `||`, `then`, `else if`; float literals must be canonical (e.g. `2.0`, never bare `2.`). "
     "Do not use dotted variable access like `input.a` or `obj.value`; use direct variables only (e.g. `a`, `b`, `c`, `x`, `y`, `score`). "
     "Use only well-formed `if`/`else` branches with braces; do not invent invalid branch structure. "
@@ -71,6 +72,7 @@ SYSTEM_REPAIR = (
     "use `y = x;` for assignment, never `y == x`. "
     "For nested piecewise tasks, copy the canonical nested `if` / `else` structure from the prompt exactly: "
     "one comparison per `if`, nested under `else`, never `else if`, `&&`, `||`, or chained comparisons. "
+    "If a piecewise program is needed, always use nested `else { if (...) { ... } else { ... } }`. "
     "Forbidden: `:=`, `>=`, `<=`, `&&`, `||`, `then`, `else if`; no bare float `2.` — use `2.0`. "
     "Do not use dotted variable access like `input.a` or `obj.value`; use direct variables only (e.g. `a`, `b`, `c`, `x`, `y`, `score`). "
     "Use only well-formed `if`/`else` branches with braces; do not invent invalid branch structure. "
@@ -133,6 +135,8 @@ if (x < 0.0) {
     }
 }
 ```
+
+If a piecewise program is needed, always use nested `else { if (...) { ... } else { ... } }`.
 
 Bad → good (nested piecewise — apply these first):
 1. bad: `else if (x < 1.0) { ... }` — good: `else { if (x < 1.0) { ... } else { ... } }` (never `else if`)
@@ -216,6 +220,7 @@ EXACT_SYMBOLIC_MATH_BLOCK = """Exact symbolic mapping (small example-driven math
 - Prefer **direct symbolic arithmetic** using `+`, `-`, `*`, `/`, `min`, `max`, and numeric literals.
 - **Do NOT** use `neural(...)` unless the mapping truly cannot be expressed symbolically from the examples.
 - If the goal/examples imply a **single closed-form arithmetic expression**, do **NOT** introduce `if` / `else` / `while`.
+- For pure algebraic mappings, never introduce `if` / `else` / `while`.
 - For a pure algebraic mapping, return **one direct assignment expression only** (for example, `y = ...;`).
 - Never introduce boolean guard logic for pure algebraic mappings.
 - Do not use `||` or `&&` under any circumstance.

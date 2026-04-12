@@ -140,6 +140,7 @@ def test_prompt_contains_backend_only_fewshot_rewrites():
     assert "score = max(min(input.a, input.b), input.c);" in p
     assert "score = max(min(a, b), c);" in p
     assert "copy this structure exactly" in p
+    assert "If a piecewise program is needed, always use nested `else { if (...) { ... } else { ... } }`." in p
     assert "else if (x < 1.0)" in p
     assert "else { if (x < 1.0)" in p
     assert "0.9999<x<1" in p
@@ -195,6 +196,7 @@ def test_user_prompt_draft_includes_exact_symbolic_block_when_flag_and_examples(
     p = user_prompt_draft("risk_score = max(0, min(1, x));", ctx)
     assert EXACT_SYMBOLIC_MATH_BLOCK.splitlines()[0] in p
     assert "Do NOT" in p and "neural" in p.lower()
+    assert "For pure algebraic mappings, never introduce `if` / `else` / `while`." in p
 
 
 def test_user_prompt_repair_includes_neural_to_symbolic_when_neural_and_examples():
