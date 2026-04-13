@@ -30,7 +30,9 @@ from axiom.copilot.search import (
     _try_bounded_affine2_fast_path,
     _try_bounded_affine_multi_input_fast_path,
     _try_linear_xy_fast_path,
+    _try_max_of_three_nested_fast_path,
     _try_max_of_two_fast_path,
+    _try_min_of_max_pair_fast_path,
     _try_minmax_blend_fast_path,
     _try_nested_piecewise_identity_cap_fast_path,
     _try_piecewise_threshold_identity_fast_path,
@@ -1086,6 +1088,15 @@ def _load_three_way_maxmin_rows():
     return ex_in, ex_out
 
 
+def _load_next_milestone_task_rows(task_id: str):
+    p = Path(__file__).resolve().parent.parent / "benchmarks" / "copilot_symbolic_next_milestone_tasks.json"
+    data = json.loads(p.read_text(encoding="utf-8"))
+    task = next(t for t in data["tasks"] if t["id"] == task_id)
+    ex_in = [dict(row) for row in task["example_input_rows"]]
+    ex_out = [dict(row) for row in task["expected_rows"]]
+    return ex_in, ex_out
+
+
 def test_three_way_maxmin_fast_path_exact_success():
     ex_in, ex_out = _load_three_way_maxmin_rows()
     ex = ScriptedExpert("SHOULD_NOT_DRAFT", [])
@@ -1126,6 +1137,94 @@ def test_three_way_maxmin_fast_path_falls_back_when_row_noisy():
         score_sort_key="neg_mse",
     )
     assert _try_three_way_maxmin_fast_path(cfg) is None
+    run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 1
+
+
+def test_min_of_max_pair_fast_path_exact_success():
+    ex_in, ex_out = _load_next_milestone_task_rows("min_of_max_pair")
+    ex = ScriptedExpert("SHOULD_NOT_DRAFT", [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="Write .ax so score = min(max(a, b), c).",
+        max_iterations=2,
+        mode="predict_rows",
+        example_input_rows=ex_in,
+        expected_rows=ex_out,
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+        repair_valid_with_metrics=False,
+    )
+    out = run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 0
+    assert out.iterations[0].producing_expert["backend_name"] == "min_of_max_pair_fast_path"
+    assert out.iterations[0].producing_expert["metadata"].get("fast_path") == "min_of_max_pair"
+    source = out.best_source.strip()
+    assert source == "score = min(max(a, b), c);"
+    _assert_no_forbidden_fast_path_syntax(source)
+    assert out.converged and out.best_evaluation.success
+
+
+def test_min_of_max_pair_fast_path_falls_back_when_row_noisy():
+    ex_in, ex_out = _load_next_milestone_task_rows("min_of_max_pair")
+    ex_out = [dict(r) for r in ex_out]
+    ex_out[-1] = {"score": 1.001}
+    ex = ScriptedExpert("score = 0.0;\n", [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="Write .ax so score = min(max(a, b), c).",
+        max_iterations=1,
+        mode="predict_rows",
+        example_input_rows=ex_in,
+        expected_rows=ex_out,
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+    )
+    assert _try_min_of_max_pair_fast_path(cfg) is None
+    run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 1
+
+
+def test_max_of_three_nested_fast_path_exact_success():
+    ex_in, ex_out = _load_next_milestone_task_rows("max_of_three_nested")
+    ex = ScriptedExpert("SHOULD_NOT_DRAFT", [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="Write .ax so score = max(max(a, b), c).",
+        max_iterations=2,
+        mode="predict_rows",
+        example_input_rows=ex_in,
+        expected_rows=ex_out,
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+        repair_valid_with_metrics=False,
+    )
+    out = run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 0
+    assert out.iterations[0].producing_expert["backend_name"] == "max_of_three_nested_fast_path"
+    assert out.iterations[0].producing_expert["metadata"].get("fast_path") == "max_of_three_nested"
+    source = out.best_source.strip()
+    assert source == "score = max(max(a, b), c);"
+    _assert_no_forbidden_fast_path_syntax(source)
+    assert out.converged and out.best_evaluation.success
+
+
+def test_max_of_three_nested_fast_path_falls_back_when_row_noisy():
+    ex_in, ex_out = _load_next_milestone_task_rows("max_of_three_nested")
+    ex_out = [dict(r) for r in ex_out]
+    ex_out[-1] = {"score": 6.001}
+    ex = ScriptedExpert("score = 0.0;\n", [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="Write .ax so score = max(max(a, b), c).",
+        max_iterations=1,
+        mode="predict_rows",
+        example_input_rows=ex_in,
+        expected_rows=ex_out,
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+    )
+    assert _try_max_of_three_nested_fast_path(cfg) is None
     run_copilot_search(cfg)
     assert len(ex.draft_calls) == 1
 

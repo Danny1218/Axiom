@@ -718,8 +718,17 @@ def _three_way_maxmin_source(k1: str, k2: str, k3: str, out_var: str) -> str:
     return f"{out_var} = max(min({k1}, {k2}), {k3});\n"
 
 
-def _try_three_way_maxmin_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
-    """Exact three-input symbolic min/max family: ``out = max(min(a, b), c)``."""
+def _min_of_max_pair_source(k1: str, k2: str, k3: str, out_var: str) -> str:
+    return f"{out_var} = min(max({k1}, {k2}), {k3});\n"
+
+
+def _max_of_three_nested_source(k1: str, k2: str, k3: str, out_var: str) -> str:
+    return f"{out_var} = max(max({k1}, {k2}), {k3});\n"
+
+
+def _load_exact_three_input_symbolic_rows(
+    config: CopilotSearchConfig,
+) -> Optional[tuple[tuple[str, str, str], str, List[tuple[float, float, float, float]]]]:
     if not is_exact_symbolic_examples_task(config):
         return None
     if config.mode != "predict_rows":
@@ -734,7 +743,6 @@ def _try_three_way_maxmin_fast_path(config: CopilotSearchConfig) -> Optional[Exp
     in_keys: Optional[tuple[str, str, str]] = None
     out_key: Optional[str] = None
     rows: List[tuple[float, float, float, float]] = []
-
     for row_in, row_ex in zip(inp, exp):
         if not isinstance(row_in, Mapping) or not isinstance(row_ex, Mapping):
             return None
@@ -762,6 +770,15 @@ def _try_three_way_maxmin_fast_path(config: CopilotSearchConfig) -> Optional[Exp
         rows.append((a, b, c, y))
 
     assert in_keys is not None and out_key is not None
+    return in_keys, out_key, rows
+
+
+def _try_three_way_maxmin_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
+    """Exact three-input symbolic min/max family: ``out = max(min(a, b), c)``."""
+    loaded = _load_exact_three_input_symbolic_rows(config)
+    if loaded is None:
+        return None
+    in_keys, out_key, rows = loaded
     candidates = ((0, 1, 2), (0, 2, 1), (1, 2, 0))
     matches: List[tuple[int, int, int]] = []
     for i, j, k in candidates:
@@ -784,6 +801,70 @@ def _try_three_way_maxmin_fast_path(config: CopilotSearchConfig) -> Optional[Exp
         metadata={
             "fast_path": "three_way_maxmin",
             "in_keys": [in_keys[i], in_keys[j], in_keys[k]],
+            "out_key": out_key,
+        },
+    )
+
+
+def _try_min_of_max_pair_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
+    """Exact three-input symbolic min/max family: ``out = min(max(a, b), c)``."""
+    loaded = _load_exact_three_input_symbolic_rows(config)
+    if loaded is None:
+        return None
+    in_keys, out_key, rows = loaded
+    candidates = ((0, 1, 2), (0, 2, 1), (1, 2, 0))
+    matches: List[tuple[int, int, int]] = []
+    for i, j, k in candidates:
+        exact = True
+        for a, b, c, y in rows:
+            vals = (a, b, c)
+            pred = min(max(vals[i], vals[j]), vals[k])
+            if not math.isclose(pred, y, rel_tol=1e-12, abs_tol=1e-9):
+                exact = False
+                break
+        if exact:
+            matches.append((i, j, k))
+    if len(matches) != 1:
+        return None
+
+    i, j, k = matches[0]
+    return ExpertDraftResponse(
+        ax_source=_min_of_max_pair_source(in_keys[i], in_keys[j], in_keys[k], out_key),
+        backend_name="min_of_max_pair_fast_path",
+        metadata={
+            "fast_path": "min_of_max_pair",
+            "in_keys": [in_keys[i], in_keys[j], in_keys[k]],
+            "out_key": out_key,
+        },
+    )
+
+
+def _try_max_of_three_nested_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
+    """Exact three-input nested-max family: ``out = max(max(a, b), c)``."""
+    loaded = _load_exact_three_input_symbolic_rows(config)
+    if loaded is None:
+        return None
+    in_keys, out_key, rows = loaded
+
+    saw_wins = [False, False, False]
+    for a, b, c, y in rows:
+        vals = (a, b, c)
+        pred = max(max(vals[0], vals[1]), vals[2])
+        if not math.isclose(pred, y, rel_tol=1e-12, abs_tol=1e-9):
+            return None
+        for idx, val in enumerate(vals):
+            if val > vals[(idx + 1) % 3] and val > vals[(idx + 2) % 3] and math.isclose(y, val, rel_tol=1e-12, abs_tol=1e-9):
+                saw_wins[idx] = True
+
+    if not all(saw_wins):
+        return None
+
+    return ExpertDraftResponse(
+        ax_source=_max_of_three_nested_source(in_keys[0], in_keys[1], in_keys[2], out_key),
+        backend_name="max_of_three_nested_fast_path",
+        metadata={
+            "fast_path": "max_of_three_nested",
+            "in_keys": [in_keys[0], in_keys[1], in_keys[2]],
             "out_key": out_key,
         },
     )
@@ -1934,6 +2015,10 @@ def _try_exact_symbolic_fast_path(config: CopilotSearchConfig) -> Optional[Exper
         fast = _try_max_of_two_fast_path(config)
     if fast is None:
         fast = _try_three_way_maxmin_fast_path(config)
+    if fast is None:
+        fast = _try_min_of_max_pair_fast_path(config)
+    if fast is None:
+        fast = _try_max_of_three_nested_fast_path(config)
     if fast is None:
         fast = _try_minmax_blend_fast_path(config)
     if fast is None:

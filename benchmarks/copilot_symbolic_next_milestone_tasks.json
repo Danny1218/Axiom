@@ -83,8 +83,8 @@
       ],
       "score_sort_key": "neg_mse",
       "metric_pass_min": ["neg_mse", -0.000000000001],
-      "fast_path_expected": false,
-      "backend_expected": "expert_backend",
+      "fast_path_expected": true,
+      "backend_expected": "min_of_max_pair_fast_path",
       "category": "symbolic_minmax_harder"
     },
     {
@@ -183,8 +183,8 @@
       ],
       "score_sort_key": "neg_mse",
       "metric_pass_min": ["neg_mse", -0.000000000001],
-      "fast_path_expected": false,
-      "backend_expected": "expert_backend",
+      "fast_path_expected": true,
+      "backend_expected": "max_of_three_nested_fast_path",
       "category": "symbolic_minmax_harder"
     }
   ]
