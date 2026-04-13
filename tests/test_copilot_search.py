@@ -27,6 +27,7 @@ from axiom.copilot.search import (
     _is_better,
     _try_affine_multi_input_fast_path,
     _try_bounded_affine2_fast_path,
+    _try_bounded_affine_multi_input_fast_path,
     _try_linear_xy_fast_path,
     _try_max_of_two_fast_path,
     _try_minmax_blend_fast_path,
@@ -1186,6 +1187,75 @@ def test_bounded_affine2_clamp_edges_validated_on_v3_subset():
     assert md.get("a") == pytest.approx(0.7) and md.get("b") == pytest.approx(0.3)
 
 
+def test_bounded_affine_multi_input_fast_path_three_input_shifted_success():
+    ex = ScriptedExpert("SHOULD_NOT_DRAFT", [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="Write .ax so score = max(0.0, min(1.0, 0.5 * a + 0.3 * b - 0.2 * c + 0.1)).",
+        domain_context="Three-input clamped affine blend with a negative coefficient and additive bias.",
+        max_iterations=2,
+        mode="predict_rows",
+        example_input_rows=[
+            {"a": 0.0, "b": 0.0, "c": 0.0},
+            {"a": 1.0, "b": 0.0, "c": 0.0},
+            {"a": 0.0, "b": 1.0, "c": 0.0},
+            {"a": 0.0, "b": 0.0, "c": 1.0},
+            {"a": 1.0, "b": 1.0, "c": 1.0},
+            {"a": 2.0, "b": 2.0, "c": -1.0},
+        ],
+        expected_rows=[
+            {"score": 0.1},
+            {"score": 0.6},
+            {"score": 0.4},
+            {"score": 0.0},
+            {"score": 0.7},
+            {"score": 1.0},
+        ],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+    )
+    out = run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 0
+    assert out.iterations[0].producing_expert["backend_name"] == "bounded_affine_multi_input_fast_path"
+    assert out.iterations[0].producing_expert["metadata"].get("fast_path") == "bounded_affine_multi_input"
+    source = out.best_source.strip()
+    assert source == "score = max(0.0, min(1.0, 0.5 * a + 0.3 * b - 0.2 * c + 0.1));"
+    _assert_no_forbidden_fast_path_syntax(source)
+    assert out.converged and out.best_evaluation.success
+
+
+def test_bounded_affine_multi_input_fast_path_falls_back_when_row_noisy():
+    ex = ScriptedExpert("score = 0.0;\n", [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="Write .ax so score = max(0.0, min(1.0, 0.5 * a + 0.3 * b - 0.2 * c + 0.1)).",
+        domain_context="Three-input clamped affine blend with a negative coefficient and additive bias.",
+        max_iterations=1,
+        mode="predict_rows",
+        example_input_rows=[
+            {"a": 0.0, "b": 0.0, "c": 0.0},
+            {"a": 1.0, "b": 0.0, "c": 0.0},
+            {"a": 0.0, "b": 1.0, "c": 0.0},
+            {"a": 0.0, "b": 0.0, "c": 1.0},
+            {"a": 1.0, "b": 1.0, "c": 1.0},
+            {"a": 2.0, "b": 2.0, "c": -1.0},
+        ],
+        expected_rows=[
+            {"score": 0.1},
+            {"score": 0.6},
+            {"score": 0.4},
+            {"score": 0.001},
+            {"score": 0.7},
+            {"score": 1.0},
+        ],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+    )
+    assert _try_bounded_affine_multi_input_fast_path(cfg) is None
+    run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 1
+
+
 def test_two_input_interaction_fast_path_exact_cross_term_success():
     ex = ScriptedExpert("SHOULD_NOT_DRAFT", [])
     cfg = CopilotSearchConfig(
@@ -1415,3 +1485,72 @@ def test_affine_multi_input_fast_path_fixture_emits_canonical_without_indexed_ac
     src = out.best_source.strip()
     assert src == "score = 0.5 * a + 0.3 * b + 0.2 * c;"
     assert "[0]" not in src and "[1]" not in src and "[2]" not in src
+
+
+def test_affine_multi_input_fast_path_four_input_signed_bias_success():
+    ex = ScriptedExpert("SHOULD_NOT_DRAFT", [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="Write .ax so score = 0.4 * a + 0.3 * b - 0.1 * c + 0.2 * d + 0.05.",
+        domain_context="Higher-arity affine symbolic task to pressure exact coefficient retention.",
+        max_iterations=2,
+        mode="predict_rows",
+        example_input_rows=[
+            {"a": 1.0, "b": 0.0, "c": 0.0, "d": 0.0},
+            {"a": 0.0, "b": 1.0, "c": 0.0, "d": 0.0},
+            {"a": 0.0, "b": 0.0, "c": 1.0, "d": 0.0},
+            {"a": 0.0, "b": 0.0, "c": 0.0, "d": 1.0},
+            {"a": 1.0, "b": 1.0, "c": 1.0, "d": 1.0},
+            {"a": 2.0, "b": -1.0, "c": 0.5, "d": 3.0},
+        ],
+        expected_rows=[
+            {"score": 0.45},
+            {"score": 0.35},
+            {"score": -0.05},
+            {"score": 0.25},
+            {"score": 0.85},
+            {"score": 1.1},
+        ],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+    )
+    out = run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 0
+    assert out.iterations[0].producing_expert["backend_name"] == "affine_multi_input_fast_path"
+    assert out.iterations[0].producing_expert["metadata"].get("fast_path") == "affine_multi_input"
+    source = out.best_source.strip()
+    assert source == "score = 0.4 * a + 0.3 * b - 0.1 * c + 0.2 * d + 0.05;"
+    _assert_no_forbidden_fast_path_syntax(source)
+    assert out.converged and out.best_evaluation.success
+
+
+def test_affine_multi_input_fast_path_four_input_signed_bias_falls_back_when_noisy():
+    ex = ScriptedExpert("score = 0.0;\n", [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="Write .ax so score = 0.4 * a + 0.3 * b - 0.1 * c + 0.2 * d + 0.05.",
+        domain_context="Higher-arity affine symbolic task to pressure exact coefficient retention.",
+        max_iterations=1,
+        mode="predict_rows",
+        example_input_rows=[
+            {"a": 1.0, "b": 0.0, "c": 0.0, "d": 0.0},
+            {"a": 0.0, "b": 1.0, "c": 0.0, "d": 0.0},
+            {"a": 0.0, "b": 0.0, "c": 1.0, "d": 0.0},
+            {"a": 0.0, "b": 0.0, "c": 0.0, "d": 1.0},
+            {"a": 1.0, "b": 1.0, "c": 1.0, "d": 1.0},
+            {"a": 2.0, "b": -1.0, "c": 0.5, "d": 3.0},
+        ],
+        expected_rows=[
+            {"score": 0.45},
+            {"score": 0.35},
+            {"score": -0.05},
+            {"score": 0.25},
+            {"score": 0.851},
+            {"score": 1.1},
+        ],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+    )
+    assert _try_affine_multi_input_fast_path(cfg) is None
+    run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 1

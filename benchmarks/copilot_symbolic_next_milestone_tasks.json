@@ -56,8 +56,8 @@
       ],
       "score_sort_key": "neg_mse",
       "metric_pass_min": ["neg_mse", -0.000000000001],
-      "fast_path_expected": false,
-      "backend_expected": "expert_backend",
+      "fast_path_expected": true,
+      "backend_expected": "bounded_affine_multi_input_fast_path",
       "category": "symbolic_clamped_harder"
     },
     {
@@ -112,8 +112,8 @@
       ],
       "score_sort_key": "neg_mse",
       "metric_pass_min": ["neg_mse", -0.000000000001],
-      "fast_path_expected": false,
-      "backend_expected": "expert_backend",
+      "fast_path_expected": true,
+      "backend_expected": "affine_multi_input_fast_path",
       "category": "symbolic_affine_harder"
     },
     {

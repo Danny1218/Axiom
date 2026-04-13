@@ -178,6 +178,38 @@ def test_symbolic_benchmark_draft_only_uses_fast_path_for_expected_families(task
     assert rec.producing_backend_name == backend_name
 
 
+@pytest.mark.parametrize(
+    ("task_id", "backend_name"),
+    [
+        ("four_input_affine_bias", "affine_multi_input_fast_path"),
+        ("three_input_clamped_affine_shifted", "bounded_affine_multi_input_fast_path"),
+    ],
+)
+def test_next_milestone_benchmark_draft_only_uses_fast_path_for_new_affine_families(
+    task_id: str, backend_name: str
+):
+    class NoDraftExpert:
+        def draft_program(self, request: ExpertDraftRequest) -> ExpertDraftResponse:
+            raise AssertionError("draft expert should be skipped when fast path matches exactly")
+
+        def repair_program(self, request: ExpertRepairRequest) -> ExpertDraftResponse:
+            raise AssertionError("repair should not run in draft-only benchmark")
+
+        def summarize_trace(self, *args, **kwargs) -> str:
+            return ""
+
+    root = Path(__file__).resolve().parents[1]
+    tasks = {
+        t.id: t for t in load_benchmark_tasks_json_path(root / "benchmarks" / "copilot_symbolic_next_milestone_tasks.json")
+    }
+    rec = run_benchmark_draft_only(NoDraftExpert(), tasks[task_id])  # type: ignore[arg-type]
+    assert rec.compile_ok is True
+    assert rec.metric_ok is True
+    assert rec.backend_kind == "fast_path"
+    assert rec.winner_origin == "deterministic_inference"
+    assert rec.producing_backend_name == backend_name
+
+
 def test_run_benchmark_suite_dict_roundtrip():
     ex = BenchmarkDispatchExpert()
     suite = run_benchmark_suite(ex, tasks=DEFAULT_BENCHMARK_TASKS, max_iterations=2)
@@ -405,6 +437,14 @@ def test_next_milestone_benchmark_tasks_json_loads():
         "max_of_three_nested",
     }.issubset(ids)
     assert len(tasks) >= 8
+    by_id = {t["id"]: t for t in raw["tasks"]}
+    assert by_id["four_input_affine_bias"]["fast_path_expected"] is True
+    assert by_id["four_input_affine_bias"]["backend_expected"] == "affine_multi_input_fast_path"
+    assert by_id["three_input_clamped_affine_shifted"]["fast_path_expected"] is True
+    assert (
+        by_id["three_input_clamped_affine_shifted"]["backend_expected"]
+        == "bounded_affine_multi_input_fast_path"
+    )
 
 
 def test_copilot_milestone_workflow_runs_pytest_smoke_and_benchmark():

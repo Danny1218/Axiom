@@ -37,6 +37,7 @@ _GOAL_EXACT_SYMBOLIC_EXTRA = re.compile(
     r"(max\s*\(|min\s*\(|clamp|affine|weighted\s+(sum|blend)|risk_score)",
     re.I,
 )
+_GOAL_CLAMP_HINT = re.compile(r"(max\s*\(|min\s*\(|clamp|bounded|risk_score)", re.I)
 _GOAL_EXACT_PIECEWISE_CONTROL = re.compile(r"\bif\b.+(?:<|>).+\bthen\b.+\belse\b", re.I)
 
 # Penalties subtracted from raw sort metric (higher-is-better, e.g. ``neg_mse``).
@@ -65,6 +66,18 @@ def _goal_suggests_piecewise_control(goal: str) -> bool:
     return bool(_GOAL_EXACT_PIECEWISE_CONTROL.search(g))
 
 
+def _exact_symbolic_hint_text(config: CopilotSearchConfig) -> str:
+    parts = [(config.goal or "").strip()]
+    domain_context = (config.domain_context or "").strip()
+    if domain_context:
+        parts.append(domain_context)
+    return " ".join(p for p in parts if p)
+
+
+def _hint_suggests_clamp_family(config: CopilotSearchConfig) -> bool:
+    return bool(_GOAL_CLAMP_HINT.search(_exact_symbolic_hint_text(config)))
+
+
 def _has_single_numeric_input_output_rows(config: CopilotSearchConfig) -> bool:
     inp = config.example_input_rows
     exp = config.expected_rows
@@ -86,17 +99,17 @@ def _has_single_numeric_input_output_rows(config: CopilotSearchConfig) -> bool:
 
 
 def is_exact_symbolic_examples_task(config: CopilotSearchConfig) -> bool:
-    """predict_rows + expected rows + goal looks like exact symbolic arithmetic or piecewise control."""
+    """predict_rows + expected rows + goal/context look like an exact symbolic arithmetic or piecewise task."""
     if config.mode != "predict_rows" or not config.expected_rows:
         return False
-    g = config.goal or ""
-    if _goal_suggests_symbolic_math(g):
+    hint_text = _exact_symbolic_hint_text(config)
+    if _goal_suggests_symbolic_math(hint_text):
         return True
-    if _goal_suggests_piecewise_control(g) and _has_single_numeric_input_output_rows(config):
+    if _goal_suggests_piecewise_control(hint_text) and _has_single_numeric_input_output_rows(config):
         return True
-    if len(g) <= 500 and _GOAL_EXACT_SYMBOLIC_EXTRA.search(g):
+    if len(hint_text) <= 800 and _GOAL_EXACT_SYMBOLIC_EXTRA.search(hint_text):
         return True
-    if len(g) <= 500 and _goal_suggests_cross_term_with_additive(g):
+    if len(hint_text) <= 800 and _goal_suggests_cross_term_with_additive(hint_text):
         return True
     return False
 
@@ -509,57 +522,6 @@ def _is_strict01_interior(y: float) -> bool:
     return y > 0.0 and y < 1.0
 
 
-def _solve_3x3_affine(
-    x1a: float,
-    x2a: float,
-    ya: float,
-    x1b: float,
-    x2b: float,
-    yb: float,
-    x1c: float,
-    x2c: float,
-    yc: float,
-) -> Optional[tuple[float, float, float]]:
-    """Solve ``a*x1 + b*x2 + c = y`` for three rows; return ``(a, b, c)`` or None if singular."""
-    m = [
-        [x1a, x2a, 1.0, ya],
-        [x1b, x2b, 1.0, yb],
-        [x1c, x2c, 1.0, yc],
-    ]
-    for col in range(3):
-        pivot = col
-        best = abs(m[col][col])
-        for r in range(col + 1, 3):
-            if abs(m[r][col]) > best:
-                best = abs(m[r][col])
-                pivot = r
-        if best < 1e-15:
-            return None
-        if pivot != col:
-            m[col], m[pivot] = m[pivot], m[col]
-        pv = m[col][col]
-        for j in range(4):
-            m[col][j] /= pv
-        for r in range(3):
-            if r == col:
-                continue
-            f = m[r][col]
-            if abs(f) < 1e-18:
-                continue
-            for j in range(4):
-                m[r][j] -= f * m[col][j]
-    return (m[0][3], m[1][3], m[2][3])
-
-
-def _bounded_affine2_inner_source(k1: str, k2: str, out_var: str, a: float, b: float, c: float) -> str:
-    ca, cb = _linear_xy_coeff_str(a), _linear_xy_coeff_str(b)
-    inner = f"{ca} * {k1} + {cb} * {k2}"
-    if not math.isclose(c, 0.0, abs_tol=1e-12, rel_tol=1e-12):
-        cc = _linear_xy_coeff_str(abs(c))
-        inner = f"{inner} - {cc}" if c < 0 else f"{inner} + {_linear_xy_coeff_str(c)}"
-    return f"{out_var} = max(0.0, min(1.0, {inner}));\n"
-
-
 def _minmax_blend_source(k1: str, k2: str, out_var: str) -> str:
     return f"{out_var} = max(0.0, min({k1} + {k2}, 1.0));\n"
 
@@ -742,14 +704,43 @@ def _solve_linear_system(matrix: Sequence[Sequence[float]], rhs: Sequence[float]
     return [a[i][n] for i in range(n)]
 
 
-def _affine_multi_input_source(out_key: str, in_keys: Sequence[str], weights: Sequence[float], bias: float) -> str:
-    terms = [f"{_linear_xy_coeff_str(weights[i])} * {in_keys[i]}" for i in range(len(in_keys))]
-    expr = " + ".join(terms)
-    if not math.isclose(bias, 0.0, abs_tol=1e-12, rel_tol=1e-12):
-        if bias < 0:
-            expr = f"{expr} - {_linear_xy_coeff_str(abs(bias))}"
+def _signed_weighted_sum_source_expr(in_keys: Sequence[str], weights: Sequence[float], bias: float) -> str:
+    parts: List[str] = []
+    for key, weight in zip(in_keys, weights):
+        if math.isclose(weight, 0.0, abs_tol=1e-12, rel_tol=1e-12):
+            continue
+        term = f"{_linear_xy_coeff_str(abs(weight))} * {key}"
+        if not parts:
+            parts.append(f"-{term}" if weight < 0.0 else term)
         else:
-            expr = f"{expr} + {_linear_xy_coeff_str(bias)}"
+            parts.append(f"- {term}" if weight < 0.0 else f"+ {term}")
+    if not math.isclose(bias, 0.0, abs_tol=1e-12, rel_tol=1e-12):
+        term = _linear_xy_coeff_str(abs(bias))
+        if not parts:
+            parts.append(f"-{term}" if bias < 0.0 else term)
+        else:
+            parts.append(f"- {term}" if bias < 0.0 else f"+ {term}")
+    return " ".join(parts) if parts else "0.0"
+
+
+def _clamped_affine_multi_input_source(
+    out_key: str,
+    in_keys: Sequence[str],
+    weights: Sequence[float],
+    bias: float,
+    *,
+    low: float = 0.0,
+    high: float = 1.0,
+) -> str:
+    inner = _signed_weighted_sum_source_expr(in_keys, weights, bias)
+    return (
+        f"{out_key} = max({_linear_xy_coeff_str(low)}, "
+        f"min({_linear_xy_coeff_str(high)}, {inner}));\n"
+    )
+
+
+def _affine_multi_input_source(out_key: str, in_keys: Sequence[str], weights: Sequence[float], bias: float) -> str:
+    expr = _signed_weighted_sum_source_expr(in_keys, weights, bias)
     return f"{out_key} = {expr};\n"
 
 
@@ -845,9 +836,18 @@ def _try_affine_multi_input_fast_path(config: CopilotSearchConfig) -> Optional[E
     )
 
 
-def _try_bounded_affine2_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
-    """``out = max(0, min(1, a*x1 + b*x2 + c))`` with two numeric inputs and one output (exact fit only)."""
+def _try_clamped_affine_multi_input_fast_path(
+    config: CopilotSearchConfig,
+    *,
+    min_inputs: int,
+    max_inputs: Optional[int],
+    backend_name: str,
+    fast_path_name: str,
+) -> Optional[ExpertDraftResponse]:
+    """Exact ``[0.0, 1.0]`` clamped affine fit using interior rows to recover weights and bias."""
     if not is_exact_symbolic_examples_task(config):
+        return None
+    if not _hint_suggests_clamp_family(config):
         return None
     if config.mode != "predict_rows":
         return None
@@ -855,92 +855,122 @@ def _try_bounded_affine2_fast_path(config: CopilotSearchConfig) -> Optional[Expe
     exp = config.expected_rows
     if not inp or not exp or len(inp) != len(exp):
         return None
-    n = len(inp)
-    if n < 3:
-        return None
 
-    in_keys: Optional[tuple[str, str]] = None
+    in_keys: Optional[List[str]] = None
     out_key: Optional[str] = None
-    interior: List[tuple[float, float, float]] = []
-    all_rows: List[tuple[float, float, float]] = []
+    xs: List[List[float]] = []
+    ys: List[float] = []
+    interior_indices: List[int] = []
 
     for row_in, row_ex in zip(inp, exp):
         if not isinstance(row_in, Mapping) or not isinstance(row_ex, Mapping):
             return None
-        if len(row_in) != 2 or len(row_ex) != 1:
+        if len(row_ex) != 1:
             return None
-        ks = sorted(row_in.keys())
+        keys = sorted(str(k) for k in row_in.keys())
         if in_keys is None:
-            in_keys = (ks[0], ks[1])
-        elif tuple(ks) != (in_keys[0], in_keys[1]):
+            if len(keys) < min_inputs:
+                return None
+            if max_inputs is not None and len(keys) > max_inputs:
+                return None
+            in_keys = keys
+        elif keys != in_keys:
             return None
-        ok = next(iter(row_ex.keys()))
+        ok = str(next(iter(row_ex.keys())))
         if out_key is None:
             out_key = ok
         elif ok != out_key:
             return None
         try:
-            x1 = float(row_in[in_keys[0]])
-            x2 = float(row_in[in_keys[1]])
-            y = float(row_ex[out_key])
+            xrow = [float(row_in[k]) for k in in_keys]
+            yv = float(row_ex[out_key])
         except (TypeError, ValueError, KeyError):
             return None
-        all_rows.append((x1, x2, y))
-        if _is_strict01_interior(y):
-            interior.append((x1, x2, y))
+        if not all(math.isfinite(v) for v in xrow) or not math.isfinite(yv):
+            return None
+        xs.append(xrow)
+        ys.append(yv)
+        if _is_strict01_interior(yv):
+            interior_indices.append(len(xs) - 1)
 
     assert in_keys is not None and out_key is not None
-
-    if len(interior) < 3:
+    unknowns = len(in_keys) + 1
+    if len(interior_indices) < unknowns:
         return None
 
-    ni = len(interior)
-    sol: Optional[tuple[float, float, float]] = None
-    for i in range(ni):
-        for j in range(i + 1, ni):
-            for k in range(j + 1, ni):
-                x1a, x2a, ya = interior[i]
-                x1b, x2b, yb = interior[j]
-                x1c, x2c, yc = interior[k]
-                cand = _solve_3x3_affine(x1a, x2a, ya, x1b, x2b, yb, x1c, x2c, yc)
-                if cand is None:
-                    continue
-                aa, bb, cc = cand
-                ok = True
-                for x1, x2, y in interior:
-                    if not math.isclose(aa * x1 + bb * x2 + cc, y, rel_tol=1e-11, abs_tol=1e-8):
-                        ok = False
-                        break
-                if ok:
-                    sol = (aa, bb, cc)
-                    break
-            if sol is not None:
+    valid_solution: Optional[List[float]] = None
+    for combo in itertools.combinations(interior_indices, unknowns):
+        mat = [xs[idx] + [1.0] for idx in combo]
+        rhs = [ys[idx] for idx in combo]
+        sol = _solve_linear_system(mat, rhs)
+        if sol is None:
+            continue
+        ok = True
+        for idx in interior_indices:
+            pred = sum(sol[i] * xs[idx][i] for i in range(len(in_keys))) + sol[-1]
+            if not math.isclose(pred, ys[idx], rel_tol=1e-11, abs_tol=1e-8):
+                ok = False
                 break
-        if sol is not None:
-            break
-
-    if sol is None:
-        return None
-
-    aa, bb, cc = sol
-    for x1, x2, y in all_rows:
-        pred = _clamp01(aa * x1 + bb * x2 + cc)
-        if not math.isclose(pred, y, rel_tol=1e-11, abs_tol=1e-8):
+        if not ok:
+            continue
+        for xrow, yv in zip(xs, ys):
+            raw = sum(sol[i] * xrow[i] for i in range(len(in_keys))) + sol[-1]
+            pred = _clamp01(raw)
+            if not math.isclose(pred, yv, rel_tol=1e-11, abs_tol=1e-8):
+                ok = False
+                break
+        if not ok:
+            continue
+        if valid_solution is None:
+            valid_solution = sol
+        elif any(
+            not math.isclose(valid_solution[i], sol[i], rel_tol=1e-10, abs_tol=1e-8) for i in range(unknowns)
+        ):
             return None
 
-    k1, k2 = in_keys[0], in_keys[1]
-    src = _bounded_affine2_inner_source(k1, k2, out_key, aa, bb, cc)
+    if valid_solution is None:
+        return None
+
+    metadata: Dict[str, Any] = {
+        "fast_path": fast_path_name,
+        "in_keys": list(in_keys),
+        "out_key": out_key,
+        "weights": list(valid_solution[:-1]),
+        "bias": valid_solution[-1],
+        "low": 0.0,
+        "high": 1.0,
+    }
+    if len(in_keys) == 2:
+        metadata["a"] = valid_solution[0]
+        metadata["b"] = valid_solution[1]
+        metadata["c"] = valid_solution[2]
+
     return ExpertDraftResponse(
-        ax_source=src,
+        ax_source=_clamped_affine_multi_input_source(out_key, in_keys, valid_solution[:-1], valid_solution[-1]),
+        backend_name=backend_name,
+        metadata=metadata,
+    )
+
+
+def _try_bounded_affine_multi_input_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
+    """Exact multi-input clamp: ``out = max(0.0, min(1.0, sum(w_i * x_i) + c))`` for N>=3 inputs."""
+    return _try_clamped_affine_multi_input_fast_path(
+        config,
+        min_inputs=3,
+        max_inputs=None,
+        backend_name="bounded_affine_multi_input_fast_path",
+        fast_path_name="bounded_affine_multi_input",
+    )
+
+
+def _try_bounded_affine2_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
+    """``out = max(0, min(1, a*x1 + b*x2 + c))`` with two numeric inputs and one output (exact fit only)."""
+    return _try_clamped_affine_multi_input_fast_path(
+        config,
+        min_inputs=2,
+        max_inputs=2,
         backend_name="bounded_affine2_fast_path",
-        metadata={
-            "fast_path": "bounded_affine2",
-            "a": aa,
-            "b": bb,
-            "c": cc,
-            "in_keys": [k1, k2],
-            "out_key": out_key,
-        },
+        fast_path_name="bounded_affine2",
     )
 
 
@@ -1716,6 +1746,8 @@ def _try_exact_symbolic_fast_path(config: CopilotSearchConfig) -> Optional[Exper
         fast = _try_three_way_maxmin_fast_path(config)
     if fast is None:
         fast = _try_minmax_blend_fast_path(config)
+    if fast is None:
+        fast = _try_bounded_affine_multi_input_fast_path(config)
     if fast is None:
         fast = _try_bounded_affine2_fast_path(config)
     if fast is None:
