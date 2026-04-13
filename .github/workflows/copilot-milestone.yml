@@ -1,0 +1,40 @@
+name: Copilot Milestone
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  copilot-milestone:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,copilot,serve]"
+
+      - name: Run Pytest
+        run: pytest -q
+
+      - name: Run Draft Smoke
+        run: |
+          powershell -ExecutionPolicy Bypass -File .\scripts\smoke_copilot_draft.ps1 `
+            -Backend benchmark-dispatch `
+            -OutJson benchmark_symbolic_snapshot_ci.json
+
+      - name: Run Symbolic Benchmark
+        run: |
+          axiom copilot-benchmark `
+            --backend benchmark-dispatch `
+            --task-json benchmarks/copilot_symbolic_and_generalization_tasks.json `
+            --out benchmark_symbolic_suite_ci.json

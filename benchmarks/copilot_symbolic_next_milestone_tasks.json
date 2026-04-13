@@ -1,0 +1,191 @@
+{
+  "schema_version": 1,
+  "tasks": [
+    {
+      "id": "absolute_value_piecewise",
+      "title": "absolute_value_piecewise (next milestone)",
+      "goal": "Write .ax so y = abs(x) using if/else, without neural().",
+      "domain_context": "Single-input control-flow symbolic task for exact examples.",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [{ "x": -3.0 }, { "x": -1.5 }, { "x": 0.0 }, { "x": 2.0 }, { "x": 4.25 }],
+      "expected_rows": [{ "y": 3.0 }, { "y": 1.5 }, { "y": 0.0 }, { "y": 2.0 }, { "y": 4.25 }],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.000000000001],
+      "fast_path_expected": false,
+      "backend_expected": "expert_backend",
+      "category": "control_flow_harder"
+    },
+    {
+      "id": "quadratic_plus_linear",
+      "title": "quadratic_plus_linear (next milestone)",
+      "goal": "Write .ax so y = x * x + x + 1.0.",
+      "domain_context": "Single-input nonlinear symbolic task with both quadratic and linear terms.",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [{ "x": -2.0 }, { "x": -1.0 }, { "x": 0.0 }, { "x": 1.5 }, { "x": 3.0 }],
+      "expected_rows": [{ "y": 3.0 }, { "y": 1.0 }, { "y": 1.0 }, { "y": 4.75 }, { "y": 13.0 }],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.000000000001],
+      "fast_path_expected": false,
+      "backend_expected": "expert_backend",
+      "category": "symbolic_nonlinear_harder"
+    },
+    {
+      "id": "three_input_clamped_affine_shifted",
+      "title": "three_input_clamped_affine_shifted (next milestone)",
+      "goal": "Write .ax so score = max(0.0, min(1.0, 0.5 * a + 0.3 * b - 0.2 * c + 0.1)).",
+      "domain_context": "Three-input clamped affine blend with a negative coefficient and additive bias.",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [
+        { "a": 0.0, "b": 0.0, "c": 0.0 },
+        { "a": 1.0, "b": 0.0, "c": 0.0 },
+        { "a": 0.0, "b": 1.0, "c": 0.0 },
+        { "a": 0.0, "b": 0.0, "c": 1.0 },
+        { "a": 1.0, "b": 1.0, "c": 1.0 },
+        { "a": 2.0, "b": 2.0, "c": -1.0 }
+      ],
+      "expected_rows": [
+        { "score": 0.1 },
+        { "score": 0.6 },
+        { "score": 0.4 },
+        { "score": 0.0 },
+        { "score": 0.7 },
+        { "score": 1.0 }
+      ],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.000000000001],
+      "fast_path_expected": false,
+      "backend_expected": "expert_backend",
+      "category": "symbolic_clamped_harder"
+    },
+    {
+      "id": "min_of_max_pair",
+      "title": "min_of_max_pair (next milestone)",
+      "goal": "Write .ax so score = min(max(a, b), c).",
+      "domain_context": "Nested min/max family not covered by the current deterministic benchmark set.",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [
+        { "a": 1.0, "b": 2.0, "c": 3.0 },
+        { "a": -1.0, "b": 3.0, "c": 0.0 },
+        { "a": 4.0, "b": 2.0, "c": 3.5 },
+        { "a": 0.2, "b": 0.3, "c": 0.25 },
+        { "a": 5.0, "b": 6.0, "c": 1.0 }
+      ],
+      "expected_rows": [
+        { "score": 2.0 },
+        { "score": 0.0 },
+        { "score": 3.5 },
+        { "score": 0.25 },
+        { "score": 1.0 }
+      ],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.000000000001],
+      "fast_path_expected": false,
+      "backend_expected": "expert_backend",
+      "category": "symbolic_minmax_harder"
+    },
+    {
+      "id": "four_input_affine_bias",
+      "title": "four_input_affine_bias (next milestone)",
+      "goal": "Write .ax so score = 0.4 * a + 0.3 * b - 0.1 * c + 0.2 * d + 0.05.",
+      "domain_context": "Higher-arity affine symbolic task to pressure exact coefficient retention.",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [
+        { "a": 1.0, "b": 0.0, "c": 0.0, "d": 0.0 },
+        { "a": 0.0, "b": 1.0, "c": 0.0, "d": 0.0 },
+        { "a": 0.0, "b": 0.0, "c": 1.0, "d": 0.0 },
+        { "a": 0.0, "b": 0.0, "c": 0.0, "d": 1.0 },
+        { "a": 1.0, "b": 1.0, "c": 1.0, "d": 1.0 },
+        { "a": 2.0, "b": -1.0, "c": 0.5, "d": 3.0 }
+      ],
+      "expected_rows": [
+        { "score": 0.45 },
+        { "score": 0.35 },
+        { "score": -0.05 },
+        { "score": 0.25 },
+        { "score": 0.85 },
+        { "score": 1.1 }
+      ],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.000000000001],
+      "fast_path_expected": false,
+      "backend_expected": "expert_backend",
+      "category": "symbolic_affine_harder"
+    },
+    {
+      "id": "cross_term_signed_bias",
+      "title": "cross_term_signed_bias (next milestone)",
+      "goal": "Write .ax so y = a * b - b + 0.5.",
+      "domain_context": "Two-input interaction task with a negative unary term and positive bias.",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [
+        { "a": 0.0, "b": 0.0 },
+        { "a": 1.0, "b": 2.0 },
+        { "a": -1.0, "b": 3.0 },
+        { "a": 2.0, "b": -0.5 },
+        { "a": 0.5, "b": 0.5 },
+        { "a": 3.0, "b": 2.0 }
+      ],
+      "expected_rows": [
+        { "y": 0.5 },
+        { "y": 0.5 },
+        { "y": -5.5 },
+        { "y": 0.0 },
+        { "y": 0.25 },
+        { "y": 4.5 }
+      ],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.000000000001],
+      "fast_path_expected": false,
+      "backend_expected": "expert_backend",
+      "category": "symbolic_interaction_harder"
+    },
+    {
+      "id": "shifted_nested_piecewise",
+      "title": "shifted_nested_piecewise (next milestone)",
+      "goal": "Write .ax so if x < -1.0 then y = 0.0 else if x < 2.0 then y = x + 1.0 else y = 3.0.",
+      "domain_context": "Shifted three-region control-flow family with an affine middle branch.",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [{ "x": -2.0 }, { "x": -1.0 }, { "x": 0.0 }, { "x": 1.5 }, { "x": 2.0 }, { "x": 3.0 }],
+      "expected_rows": [{ "y": 0.0 }, { "y": 0.0 }, { "y": 1.0 }, { "y": 2.5 }, { "y": 3.0 }, { "y": 3.0 }],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.000000000001],
+      "fast_path_expected": false,
+      "backend_expected": "expert_backend",
+      "category": "control_flow_harder"
+    },
+    {
+      "id": "max_of_three_nested",
+      "title": "max_of_three_nested (next milestone)",
+      "goal": "Write .ax so score = max(max(a, b), c).",
+      "domain_context": "Three-input max composition as a harder variant of max/min benchmark coverage.",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [
+        { "a": 1.0, "b": 2.0, "c": 0.5 },
+        { "a": -1.0, "b": 3.0, "c": 0.0 },
+        { "a": 4.0, "b": 2.0, "c": 3.5 },
+        { "a": 0.2, "b": 0.3, "c": 0.4 },
+        { "a": 5.0, "b": 6.0, "c": 1.0 }
+      ],
+      "expected_rows": [
+        { "score": 2.0 },
+        { "score": 3.0 },
+        { "score": 4.0 },
+        { "score": 0.4 },
+        { "score": 6.0 }
+      ],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.000000000001],
+      "fast_path_expected": false,
+      "backend_expected": "expert_backend",
+      "category": "symbolic_minmax_harder"
+    }
+  ]
+}

@@ -33,6 +33,13 @@ def build_onyx_qwen_expert(
     return OnyxQwenBackend(u, m, api_key=key, timeout=to)
 
 
+def build_benchmark_dispatch_expert() -> SemanticExpert:
+    """Return the deterministic offline benchmark expert used by tests and CI."""
+    from axiom.copilot.benchmarks import BenchmarkDispatchExpert
+
+    return BenchmarkDispatchExpert()
+
+
 def build_copilot_expert(
     backend: str,
     *,
@@ -41,13 +48,15 @@ def build_copilot_expert(
     expert_api_key: Optional[str] = None,
     timeout: Optional[float] = None,
 ) -> SemanticExpert:
-    """Dispatch by ``backend`` name (today: ``onyx-qwen`` only)."""
+    """Dispatch by ``backend`` name."""
     b = backend.strip().lower().replace("_", "-")
+    if b == "benchmark-dispatch":
+        return build_benchmark_dispatch_expert()
     if b != "onyx-qwen":
-        raise ValueError(f"unsupported copilot backend {backend!r} (expected onyx-qwen)")
+        raise ValueError(f"unsupported copilot backend {backend!r} (expected onyx-qwen or benchmark-dispatch)")
     return build_onyx_qwen_expert(
         url=expert_url, model=expert_model, api_key=expert_api_key, timeout=timeout
     )
 
 
-__all__ = ["build_copilot_expert", "build_onyx_qwen_expert"]
+__all__ = ["build_benchmark_dispatch_expert", "build_copilot_expert", "build_onyx_qwen_expert"]

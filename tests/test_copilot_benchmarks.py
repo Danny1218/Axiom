@@ -386,3 +386,32 @@ def test_smoke_copilot_draft_script_uses_benchmark_suite_and_reports_fields():
     assert "first_failure_detail=" in script
     assert "draft_source_preview=" in script
     assert "COMPARE SUMMARY" in script
+
+
+def test_next_milestone_benchmark_tasks_json_loads():
+    root = Path(__file__).resolve().parents[1]
+    task_json = root / "benchmarks" / "copilot_symbolic_next_milestone_tasks.json"
+    raw = json.loads(task_json.read_text(encoding="utf-8"))
+    tasks = benchmark_tasks_from_json_dict(raw)
+    ids = {t.id for t in tasks}
+    assert {
+        "absolute_value_piecewise",
+        "quadratic_plus_linear",
+        "three_input_clamped_affine_shifted",
+        "min_of_max_pair",
+        "four_input_affine_bias",
+        "cross_term_signed_bias",
+        "shifted_nested_piecewise",
+        "max_of_three_nested",
+    }.issubset(ids)
+    assert len(tasks) >= 8
+
+
+def test_copilot_milestone_workflow_runs_pytest_smoke_and_benchmark():
+    root = Path(__file__).resolve().parents[1]
+    workflow = (root / ".github" / "workflows" / "copilot-milestone.yml").read_text(encoding="utf-8")
+    assert "pytest -q" in workflow
+    assert "smoke_copilot_draft.ps1" in workflow
+    assert "copilot-benchmark" in workflow
+    assert "copilot_symbolic_and_generalization_tasks.json" in workflow
+    assert "benchmark-dispatch" in workflow

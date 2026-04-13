@@ -504,6 +504,26 @@ _REFERENCE_AX_BY_TASK: Dict[str, str] = {
         "i = 0.0;\nwhile (i < 3.0) {\n  i = i + 1.0;\n}\nout_i = i;\n"
     ),
     "risk_from_json_fixture": "risk_score = max(0.0, min(1.0, risk_a * 0.6 + risk_b * 0.4));\n",
+    # Current symbolic benchmark suite (used by offline CI via benchmark-dispatch).
+    "double_x": "y = x * 2.0;\n",
+    "risk_score": "risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));\n",
+    "three_input_affine": "score = 0.5 * a + 0.3 * b + 0.2 * c;\n",
+    "quadratic_single_input": "y = x * x + 1.0;\n",
+    "max_of_two": "if (a > b) {\n    score = a;\n} else {\n    score = b;\n}\n",
+    "minmax_blend": "score = max(0.0, min(a + b, 1.0));\n",
+    "quadratic_with_cross_term": "y = a * b + a + 1.0;\n",
+    "nested_piecewise": (
+        "if (x < 0.0) {\n"
+        "    y = 0.0;\n"
+        "} else {\n"
+        "    if (x < 1.0) {\n"
+        "        y = x;\n"
+        "    } else {\n"
+        "        y = 1.0;\n"
+        "    }\n"
+        "}\n"
+    ),
+    "three_way_maxmin": "score = max(min(a, b), c);\n",
 }
 
 

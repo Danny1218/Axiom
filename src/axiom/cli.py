@@ -467,17 +467,19 @@ def _require_requests_for_copilot() -> None:
 
 def _make_copilot_expert(args: argparse.Namespace):
     """Return a :class:`~axiom.experts.base.SemanticExpert` from CLI flags (no hardcoded endpoints)."""
-    _require_requests_for_copilot()
-    if args.backend != "onyx-qwen":
-        raise SystemExit(f"Unsupported --backend {args.backend!r} (expected onyx-qwen).")
     from axiom.copilot.backend import build_copilot_expert
 
+    backend = str(args.backend).strip().lower().replace("_", "-")
     url = (args.expert_url or "").strip()
     model = (args.expert_model or "").strip()
-    if not url:
-        raise SystemExit("--expert-url is required for onyx-qwen.")
-    if not model:
-        raise SystemExit("--expert-model is required for onyx-qwen.")
+    if backend == "onyx-qwen":
+        _require_requests_for_copilot()
+        if not url:
+            raise SystemExit("--expert-url is required for onyx-qwen.")
+        if not model:
+            raise SystemExit("--expert-model is required for onyx-qwen.")
+    elif backend != "benchmark-dispatch":
+        raise SystemExit(f"Unsupported --backend {args.backend!r} (expected onyx-qwen or benchmark-dispatch).")
     key = args.expert_api_key
     if key is None or str(key).strip() == "":
         key = os.environ.get("AXIOM_EXPERT_API_KEY")
@@ -486,7 +488,7 @@ def _make_copilot_expert(args: argparse.Namespace):
         tout = float(tout)
     try:
         return build_copilot_expert(
-            args.backend,
+            backend,
             expert_url=url,
             expert_model=model,
             expert_api_key=key,
@@ -997,21 +999,23 @@ def _cmd_copilot_benchmark(args: argparse.Namespace) -> None:
 def _add_copilot_benchmark_backend_args(p: argparse.ArgumentParser) -> None:
     p.add_argument(
         "--backend",
-        choices=["onyx-qwen"],
+        choices=["onyx-qwen", "benchmark-dispatch"],
         required=True,
-        help="Semantic expert implementation (requires [copilot] / requests).",
+        help="Semantic expert implementation (`benchmark-dispatch` is deterministic/offline for CI).",
     )
     p.add_argument(
         "--expert-url",
         type=str,
-        required=True,
-        help="Base URL for chat/completions (e.g. https://api.example.com/v1/).",
+        required=False,
+        default=None,
+        help="Base URL for chat/completions (required for onyx-qwen only).",
     )
     p.add_argument(
         "--expert-model",
         type=str,
-        required=True,
-        help="Remote model id (passed through to the chat API).",
+        required=False,
+        default=None,
+        help="Remote model id (required for onyx-qwen only).",
     )
     p.add_argument(
         "--expert-api-key",
