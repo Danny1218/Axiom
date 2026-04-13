@@ -1,1 +1,0 @@
-risk_score = max(min(1.5 * risk_a, 1.5), 0);

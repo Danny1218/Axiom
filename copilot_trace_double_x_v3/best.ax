@@ -1,2 +1,0 @@
-result = neural([x], "liquid");
-y = result[0];

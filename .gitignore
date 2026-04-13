@@ -16,3 +16,18 @@ axiom_bundle_*.pt
 axiom_bundle_*_topology.json
 .axiom_inspector_upload/
 src/axiom/tools/.axiom_inspector_upload/
+
+# Copilot / benchmark generated artifacts
+benchmark_symbolic_snapshot*.json
+benchmark_symbolic_suite*.json
+best_*.ax
+pipeline_*.json
+showcase_*.ax
+showcase_*.json
+debug_*/
+showcase_*/
+copilot_run_*/
+copilot_trace_*/
+pipeline_sweeps/
+pipeline_sweeps_double_x/
+sweeps/

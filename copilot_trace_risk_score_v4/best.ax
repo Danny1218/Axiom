@@ -1,1 +1,0 @@
-risk_score = neural([0.7*risk_a, 03*risk_b], "liquid");

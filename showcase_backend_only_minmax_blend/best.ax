@@ -1,1 +1,0 @@
-score = max( min(a +  b,  1.0  ),  0.0  );
