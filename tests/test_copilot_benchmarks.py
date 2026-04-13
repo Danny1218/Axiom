@@ -147,6 +147,7 @@ def test_run_benchmark_draft_only_and_search_with_dispatch():
     ("task_id", "backend_name"),
     [
         ("double_x", "linear_xy_fast_path"),
+        ("quadratic_single_input", "quadratic_single_input_fast_path"),
         ("risk_score", "bounded_affine2_fast_path"),
         ("piecewise_threshold", "piecewise_threshold_identity_fast_path"),
         ("three_input_affine", "affine_multi_input_fast_path"),

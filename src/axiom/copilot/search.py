@@ -120,6 +120,15 @@ def _linear_xy_canonical_source(a: float, b: float) -> str:
     return f"y = x * {ca} + {cb};\n"
 
 
+def _quadratic_single_input_source(in_key: str, out_key: str, bias: float) -> str:
+    expr = f"{in_key} * {in_key}"
+    if math.isclose(bias, 0.0, abs_tol=1e-12, rel_tol=1e-12):
+        return f"{out_key} = {expr};\n"
+    if bias < 0.0:
+        return f"{out_key} = {expr} - {_linear_xy_coeff_str(abs(bias))};\n"
+    return f"{out_key} = {expr} + {_linear_xy_coeff_str(bias)};\n"
+
+
 def _piecewise_threshold_identity_source(in_key: str, out_key: str) -> str:
     return (
         f"if ({in_key} < 0.0) {{\n"
@@ -419,6 +428,76 @@ def _try_linear_xy_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraf
         ax_source=src,
         backend_name="linear_xy_fast_path",
         metadata={"fast_path": "linear_xy", "a": a, "b": b},
+    )
+
+
+def _try_quadratic_single_input_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
+    """Exact single-input square-plus-bias family: ``y = x * x + c``."""
+    if not is_exact_symbolic_examples_task(config):
+        return None
+    if config.mode != "predict_rows":
+        return None
+    inp = config.example_input_rows
+    exp = config.expected_rows
+    if not inp or not exp or len(inp) != len(exp):
+        return None
+    if len(inp) < 3:
+        return None
+
+    in_key: Optional[str] = None
+    out_key: Optional[str] = None
+    bias: Optional[float] = None
+    rows: List[tuple[float, float]] = []
+    distinct_xs: List[float] = []
+
+    for row_in, row_ex in zip(inp, exp):
+        if not isinstance(row_in, Mapping) or not isinstance(row_ex, Mapping):
+            return None
+        if len(row_in) != 1 or len(row_ex) != 1:
+            return None
+        ik = str(next(iter(row_in.keys())))
+        ok = str(next(iter(row_ex.keys())))
+        if in_key is None:
+            in_key = ik
+        elif ik != in_key:
+            return None
+        if out_key is None:
+            out_key = ok
+        elif ok != out_key:
+            return None
+        try:
+            x = float(row_in[in_key])
+            y = float(row_ex[out_key])
+        except (TypeError, ValueError, KeyError):
+            return None
+        if not math.isfinite(x) or not math.isfinite(y):
+            return None
+        row_bias = y - (x * x)
+        if bias is None:
+            bias = row_bias
+        elif not math.isclose(row_bias, bias, rel_tol=1e-12, abs_tol=1e-9):
+            return None
+        rows.append((x, y))
+        if not any(math.isclose(x, seen, rel_tol=0.0, abs_tol=1e-12) for seen in distinct_xs):
+            distinct_xs.append(x)
+
+    if bias is None or len(distinct_xs) < 3:
+        return None
+    for x, y in rows:
+        pred = x * x + bias
+        if not math.isclose(pred, y, rel_tol=1e-12, abs_tol=1e-9):
+            return None
+
+    assert in_key is not None and out_key is not None
+    return ExpertDraftResponse(
+        ax_source=_quadratic_single_input_source(in_key, out_key, bias),
+        backend_name="quadratic_single_input_fast_path",
+        metadata={
+            "fast_path": "quadratic_single_input",
+            "in_key": in_key,
+            "out_key": out_key,
+            "bias": bias,
+        },
     )
 
 
@@ -1629,6 +1708,8 @@ def _try_exact_symbolic_fast_path(config: CopilotSearchConfig) -> Optional[Exper
         fast = _try_piecewise_threshold_identity_fast_path(config)
     if fast is None:
         fast = _try_linear_xy_fast_path(config)
+    if fast is None:
+        fast = _try_quadratic_single_input_fast_path(config)
     if fast is None:
         fast = _try_max_of_two_fast_path(config)
     if fast is None:

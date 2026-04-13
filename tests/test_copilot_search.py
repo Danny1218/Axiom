@@ -32,6 +32,7 @@ from axiom.copilot.search import (
     _try_minmax_blend_fast_path,
     _try_nested_piecewise_identity_cap_fast_path,
     _try_piecewise_threshold_identity_fast_path,
+    _try_quadratic_single_input_fast_path,
     _try_three_way_maxmin_fast_path,
     _try_two_input_interaction_fast_path,
     is_exact_symbolic_examples_task,
@@ -862,6 +863,72 @@ def test_try_linear_xy_fast_path_none_when_keys_not_only_x_y():
         score_sort_key="neg_mse",
     )
     assert _try_linear_xy_fast_path(cfg) is None
+
+
+def _load_quadratic_single_input_rows():
+    p = Path(__file__).resolve().parent.parent / "examples" / "quadratic_single_input.json"
+    data = json.loads(p.read_text(encoding="utf-8"))
+    ex_in = [dict(x["inputs"]) for x in data]
+    ex_out = [dict(x["expected"]) for x in data]
+    return ex_in, ex_out
+
+
+def test_quadratic_single_input_fast_path_exact_success():
+    ex_in, ex_out = _load_quadratic_single_input_rows()
+    ex = ScriptedExpert("SHOULD_NOT_DRAFT", [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="Write .ax so y = x * x + 1.0.",
+        max_iterations=2,
+        mode="predict_rows",
+        example_input_rows=ex_in,
+        expected_rows=ex_out,
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+        repair_valid_with_metrics=False,
+    )
+    out = run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 0
+    assert out.iterations[0].producing_expert["backend_name"] == "quadratic_single_input_fast_path"
+    assert out.iterations[0].producing_expert["metadata"].get("fast_path") == "quadratic_single_input"
+    source = out.best_source.strip()
+    assert source == "y = x * x + 1.0;"
+    _assert_no_forbidden_fast_path_syntax(source)
+    assert out.converged and out.best_evaluation.success
+
+
+def test_quadratic_single_input_fast_path_falls_back_when_row_noisy():
+    ex_in, ex_out = _load_quadratic_single_input_rows()
+    ex_out = [dict(r) for r in ex_out]
+    ex_out[-1] = {"y": 10.001}
+    ex = ScriptedExpert("y = 0.0;\n", [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="Write .ax so y = x * x + 1.0.",
+        max_iterations=1,
+        mode="predict_rows",
+        example_input_rows=ex_in,
+        expected_rows=ex_out,
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+    )
+    assert _try_quadratic_single_input_fast_path(cfg) is None
+    run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 1
+
+
+def test_quadratic_single_input_fast_path_returns_none_when_ambiguous():
+    cfg = CopilotSearchConfig(
+        expert=ScriptedExpert(GOOD_AX, []),
+        goal="Write .ax so y = x * x + 1.0.",
+        max_iterations=1,
+        mode="predict_rows",
+        example_input_rows=[{"x": 0.0}, {"x": 1.0}],
+        expected_rows=[{"y": 1.0}, {"y": 2.0}],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+    )
+    assert _try_quadratic_single_input_fast_path(cfg) is None
 
 
 def _load_risk_score_v3_rows():
