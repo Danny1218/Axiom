@@ -25,6 +25,7 @@ from axiom.copilot.benchmarks import default_neg_mse_score_fn
 from axiom.copilot.search import (
     DEFAULT_METRIC_REPAIR_THRESHOLD,
     _is_better,
+    _try_absolute_value_piecewise_fast_path,
     _try_affine_multi_input_fast_path,
     _try_bounded_affine2_fast_path,
     _try_bounded_affine_multi_input_fast_path,
@@ -727,6 +728,47 @@ def test_piecewise_threshold_identity_fast_path_falls_back_noisy():
     assert len(ex.draft_calls) == 1
 
 
+def test_absolute_value_piecewise_fast_path_success():
+    ex = ScriptedExpert("SHOULD_NOT_DRAFT", [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="Write .ax so y = abs(x) using if/else, without neural().",
+        domain_context="Single-input control-flow symbolic task for exact examples.",
+        max_iterations=2,
+        mode="predict_rows",
+        example_input_rows=[{"x": -3.0}, {"x": -1.5}, {"x": 0.0}, {"x": 2.0}, {"x": 4.25}],
+        expected_rows=[{"y": 3.0}, {"y": 1.5}, {"y": 0.0}, {"y": 2.0}, {"y": 4.25}],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+    )
+    out = run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 0
+    assert out.iterations[0].producing_expert["backend_name"] == "absolute_value_piecewise_fast_path"
+    assert out.iterations[0].producing_expert["metadata"].get("fast_path") == "absolute_value_piecewise"
+    source = out.best_source.strip()
+    assert source == "if (x < 0.0) {\n    y = -x;\n} else {\n    y = x;\n}"
+    _assert_no_forbidden_fast_path_syntax(source)
+    assert out.converged and out.best_evaluation.success
+
+
+def test_absolute_value_piecewise_fast_path_falls_back_when_noisy():
+    ex = ScriptedExpert(GOOD_DOUBLE_AX, [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="Write .ax so y = abs(x) using if/else, without neural().",
+        domain_context="Single-input control-flow symbolic task for exact examples.",
+        max_iterations=1,
+        mode="predict_rows",
+        example_input_rows=[{"x": -3.0}, {"x": -1.5}, {"x": 0.0}, {"x": 2.0}, {"x": 4.25}],
+        expected_rows=[{"y": 3.0}, {"y": 1.49}, {"y": 0.0}, {"y": 2.0}, {"y": 4.25}],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+    )
+    assert _try_absolute_value_piecewise_fast_path(cfg) is None
+    run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 1
+
+
 def test_nested_piecewise_identity_cap_fast_path_success():
     ex = ScriptedExpert("SHOULD_NOT_DRAFT", [])
     cfg = CopilotSearchConfig(
@@ -811,7 +853,7 @@ def test_nested_piecewise_identity_cap_fast_path_falls_back_noisy():
         max_iterations=1,
         mode="predict_rows",
         example_input_rows=[{"x": -1.0}, {"x": 0.0}, {"x": 0.4}, {"x": 1.0}, {"x": 1.5}],
-        expected_rows=[{"y": 0.0}, {"y": 0.0}, {"y": 0.41}, {"y": 1.0}, {"y": 1.0}],
+        expected_rows=[{"y": 0.0}, {"y": 0.0}, {"y": 0.41}, {"y": 0.99}, {"y": 1.0}],
         score_fn=default_neg_mse_score_fn(),
         score_sort_key="neg_mse",
     )
@@ -820,18 +862,54 @@ def test_nested_piecewise_identity_cap_fast_path_falls_back_noisy():
     assert len(ex.draft_calls) == 1
 
 
-def test_nested_piecewise_identity_cap_fast_path_returns_none_when_caps_not_zero_one():
+def test_nested_piecewise_identity_cap_fast_path_shifted_affine_success():
+    ex = ScriptedExpert("SHOULD_NOT_DRAFT", [])
     cfg = CopilotSearchConfig(
-        expert=ScriptedExpert(GOOD_DOUBLE_AX, []),
-        goal="compute nested piecewise clamp from x",
+        expert=ex,
+        goal="Write .ax so if x < -1.0 then y = 0.0 else if x < 2.0 then y = x + 1.0 else y = 3.0.",
+        domain_context="Shifted three-region control-flow family with an affine middle branch.",
+        max_iterations=2,
+        mode="predict_rows",
+        example_input_rows=[{"x": -2.0}, {"x": -1.0}, {"x": 0.0}, {"x": 1.5}, {"x": 2.0}, {"x": 3.0}],
+        expected_rows=[{"y": 0.0}, {"y": 0.0}, {"y": 1.0}, {"y": 2.5}, {"y": 3.0}, {"y": 3.0}],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+    )
+    out = run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 0
+    assert out.iterations[0].producing_expert["backend_name"] == "nested_piecewise_identity_cap_fast_path"
+    source = out.best_source.strip()
+    assert source == (
+        "if (x < -1.0) {\n"
+        "    y = 0.0;\n"
+        "} else {\n"
+        "    if (x < 2.0) {\n"
+        "        y = x + 1.0;\n"
+        "    } else {\n"
+        "        y = 3.0;\n"
+        "    }\n"
+        "}"
+    )
+    _assert_no_forbidden_fast_path_syntax(source)
+    assert out.converged and out.best_evaluation.success
+
+
+def test_nested_piecewise_identity_cap_fast_path_shifted_affine_falls_back_when_noisy():
+    ex = ScriptedExpert(GOOD_DOUBLE_AX, [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="Write .ax so if x < -1.0 then y = 0.0 else if x < 2.0 then y = x + 1.0 else y = 3.0.",
+        domain_context="Shifted three-region control-flow family with an affine middle branch.",
         max_iterations=1,
         mode="predict_rows",
-        example_input_rows=[{"x": -2.0}, {"x": -0.1}, {"x": 0.4}, {"x": 1.0}, {"x": 1.5}],
-        expected_rows=[{"y": 2.0}, {"y": 2.0}, {"y": 0.4}, {"y": 1.0}, {"y": 1.0}],
+        example_input_rows=[{"x": -2.0}, {"x": -1.0}, {"x": 0.0}, {"x": 1.5}, {"x": 2.0}, {"x": 3.0}],
+        expected_rows=[{"y": 0.0}, {"y": 0.0}, {"y": 1.0}, {"y": 2.49}, {"y": 3.0}, {"y": 3.0}],
         score_fn=default_neg_mse_score_fn(),
         score_sort_key="neg_mse",
     )
     assert _try_nested_piecewise_identity_cap_fast_path(cfg) is None
+    run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 1
 
 
 def test_linear_xy_fast_path_affine_with_intercept():

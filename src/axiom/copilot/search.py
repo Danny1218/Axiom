@@ -30,7 +30,7 @@ DEFAULT_METRIC_REPAIR_THRESHOLD = -1e-9
 
 _GOAL_SYMBOLIC_MATH_HINT = re.compile(
     r"(compute|formula|symbolic|arithmetic|algebra|multiply|coefficient|exact|"
-    r"risk_score|linear|weighted|blend|double\b|mapping|polynomial)",
+    r"risk_score|linear|weighted|blend|double\b|mapping|polynomial|abs\b|absolute)",
     re.I,
 )
 _GOAL_EXACT_SYMBOLIC_EXTRA = re.compile(
@@ -152,6 +152,59 @@ def _piecewise_threshold_identity_source(in_key: str, out_key: str) -> str:
     )
 
 
+def _absolute_value_piecewise_source(in_key: str, out_key: str) -> str:
+    return (
+        f"if ({in_key} < 0.0) {{\n"
+        f"    {out_key} = -{in_key};\n"
+        "} else {\n"
+        f"    {out_key} = {in_key};\n"
+        "}\n"
+    )
+
+
+def _single_input_affine_expr(in_key: str, slope: float, bias: float) -> str:
+    parts: List[str] = []
+
+    def _append_signed(expr: str, negative: bool) -> None:
+        if not parts:
+            parts.append(f"-{expr}" if negative else expr)
+        else:
+            parts.append(f"- {expr}" if negative else f"+ {expr}")
+
+    if not math.isclose(slope, 0.0, abs_tol=1e-12, rel_tol=1e-12):
+        if math.isclose(abs(slope), 1.0, abs_tol=1e-12, rel_tol=1e-12):
+            term = in_key
+        else:
+            term = f"{_linear_xy_coeff_str(abs(slope))} * {in_key}"
+        _append_signed(term, slope < 0.0)
+    if not math.isclose(bias, 0.0, abs_tol=1e-12, rel_tol=1e-12):
+        _append_signed(_linear_xy_coeff_str(abs(bias)), bias < 0.0)
+    return " ".join(parts) if parts else "0.0"
+
+
+def _nested_piecewise_affine_source(
+    in_key: str,
+    out_key: str,
+    low_threshold: float,
+    high_threshold: float,
+    low_value: float,
+    mid_slope: float,
+    mid_bias: float,
+    high_value: float,
+) -> str:
+    return (
+        f"if ({in_key} < {_linear_xy_coeff_str(low_threshold)}) {{\n"
+        f"    {out_key} = {_linear_xy_coeff_str(low_value)};\n"
+        "} else {\n"
+        f"    if ({in_key} < {_linear_xy_coeff_str(high_threshold)}) {{\n"
+        f"        {out_key} = {_single_input_affine_expr(in_key, mid_slope, mid_bias)};\n"
+        "    } else {\n"
+        f"        {out_key} = {_linear_xy_coeff_str(high_value)};\n"
+        "    }\n"
+        "}\n"
+    )
+
+
 def _max_of_two_source(k1: str, k2: str, out_var: str) -> str:
     return (
         f"if ({k1} > {k2}) {{\n"
@@ -222,24 +275,118 @@ def _try_max_of_two_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDra
     )
 
 
-def _nested_piecewise_identity_cap_source(in_key: str, out_key: str, low_value: float, high_value: float) -> str:
-    low_s = _linear_xy_coeff_str(low_value)
-    high_s = _linear_xy_coeff_str(high_value)
-    return (
-        f"if ({in_key} < {low_s}) {{\n"
-        f"    {out_key} = {low_s};\n"
-        "} else {\n"
-        f"    if ({in_key} < {high_s}) {{\n"
-        f"        {out_key} = {in_key};\n"
-        "    } else {\n"
-        f"        {out_key} = {high_s};\n"
-        "    }\n"
-        "}\n"
+def _try_absolute_value_piecewise_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
+    """Exact single-input absolute value family: ``if x < 0 then -x else x``."""
+    if not is_exact_symbolic_examples_task(config):
+        return None
+    if config.mode != "predict_rows":
+        return None
+    inp = config.example_input_rows
+    exp = config.expected_rows
+    if not inp or not exp or len(inp) != len(exp):
+        return None
+
+    in_key: Optional[str] = None
+    out_key: Optional[str] = None
+    saw_neg = False
+    saw_pos = False
+
+    for row_in, row_ex in zip(inp, exp):
+        if not isinstance(row_in, Mapping) or not isinstance(row_ex, Mapping):
+            return None
+        if len(row_in) != 1 or len(row_ex) != 1:
+            return None
+        ik = str(next(iter(row_in.keys())))
+        ok = str(next(iter(row_ex.keys())))
+        if in_key is None:
+            in_key = ik
+        elif ik != in_key:
+            return None
+        if out_key is None:
+            out_key = ok
+        elif ok != out_key:
+            return None
+        try:
+            x = float(row_in[in_key])
+            y = float(row_ex[out_key])
+        except (TypeError, ValueError, KeyError):
+            return None
+        if not math.isfinite(x) or not math.isfinite(y):
+            return None
+        pred = -x if x < 0.0 else x
+        if not math.isclose(pred, y, rel_tol=1e-12, abs_tol=1e-9):
+            return None
+        if x < 0.0:
+            saw_neg = True
+        elif x > 0.0:
+            saw_pos = True
+
+    if not saw_neg or not saw_pos:
+        return None
+    assert in_key is not None and out_key is not None
+    return ExpertDraftResponse(
+        ax_source=_absolute_value_piecewise_source(in_key, out_key),
+        backend_name="absolute_value_piecewise_fast_path",
+        metadata={"fast_path": "absolute_value_piecewise", "in_key": in_key, "out_key": out_key},
     )
 
 
+def _fit_single_input_affine_rows(rows: Sequence[tuple[float, float]]) -> Optional[tuple[float, float]]:
+    if len(rows) < 2:
+        return None
+    slope: Optional[float] = None
+    bias: Optional[float] = None
+    for i in range(len(rows)):
+        for j in range(i + 1, len(rows)):
+            x0, y0 = rows[i]
+            x1, y1 = rows[j]
+            if math.isclose(x0, x1, rel_tol=0.0, abs_tol=1e-12):
+                continue
+            slope = (y1 - y0) / (x1 - x0)
+            bias = y0 - slope * x0
+            break
+        if slope is not None:
+            break
+    if slope is None or bias is None or math.isclose(slope, 0.0, abs_tol=1e-12, rel_tol=1e-12):
+        return None
+    for x, y in rows:
+        if not math.isclose(slope * x + bias, y, rel_tol=1e-12, abs_tol=1e-9):
+            return None
+    return slope, bias
+
+
+def _constant_region_value(rows: Sequence[tuple[float, float]]) -> Optional[float]:
+    if not rows:
+        return None
+    value = rows[0][1]
+    for _, y in rows[1:]:
+        if not math.isclose(y, value, rel_tol=1e-12, abs_tol=1e-9):
+            return None
+    return value
+
+
+def _nested_piecewise_affine_predict(
+    x: float,
+    low_threshold: float,
+    high_threshold: float,
+    low_value: float,
+    mid_slope: float,
+    mid_bias: float,
+    high_value: float,
+) -> float:
+    if x < low_threshold:
+        return low_value
+    if x < high_threshold:
+        return mid_slope * x + mid_bias
+    return high_value
+
+
+def _nested_piecewise_identity_cap_source(in_key: str, out_key: str, low_value: float, high_value: float) -> str:
+    return _nested_piecewise_affine_source(in_key, out_key, low_value, high_value, low_value, 1.0, 0.0, high_value)
+
+
 def _try_nested_piecewise_identity_cap_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
-    """Exact one-input/one-output three-region clamp: ``0.0`` below, identity in the middle, ``1.0`` above."""
+    """Exact one-input nested piecewise family: constant / affine / constant with nested control flow."""
     if not is_exact_symbolic_examples_task(config):
         return None
     if config.mode != "predict_rows":
@@ -254,9 +401,6 @@ def _try_nested_piecewise_identity_cap_fast_path(config: CopilotSearchConfig) ->
     in_key: Optional[str] = None
     out_key: Optional[str] = None
     rows: List[tuple[float, float]] = []
-    low_rows: List[tuple[float, float]] = []
-    mid_rows: List[tuple[float, float]] = []
-    high_rows: List[tuple[float, float]] = []
 
     for row_in, row_ex in zip(inp, exp):
         if not isinstance(row_in, Mapping) or not isinstance(row_ex, Mapping):
@@ -283,43 +427,87 @@ def _try_nested_piecewise_identity_cap_fast_path(config: CopilotSearchConfig) ->
         if not math.isfinite(x) or not math.isfinite(y):
             return None
         rows.append((x, y))
-        if math.isclose(y, x, rel_tol=1e-12, abs_tol=1e-9):
-            mid_rows.append((x, y))
-        elif y > x:
-            low_rows.append((x, y))
-        else:
-            high_rows.append((x, y))
 
-    if not low_rows or not mid_rows or not high_rows:
-        return None
+    rows.sort(key=lambda pair: pair[0])
+    valid_model: Optional[tuple[float, float, float, float, float, float]] = None
+    if len(rows) >= 4:
+        for low_end in range(1, len(rows) - 2):
+            for high_start in range(low_end + 2, len(rows)):
+                low_rows = rows[:low_end]
+                mid_rows = rows[low_end:high_start]
+                high_rows = rows[high_start:]
+                low_value = _constant_region_value(low_rows)
+                high_value = _constant_region_value(high_rows)
+                if low_value is None or high_value is None:
+                    continue
+                affine = _fit_single_input_affine_rows(mid_rows)
+                if affine is None:
+                    continue
+                mid_slope, mid_bias = affine
+                if not any(
+                    not math.isclose(mid_slope * x + mid_bias, y, rel_tol=1e-12, abs_tol=1e-9) for x, y in low_rows
+                ):
+                    continue
+                if not any(
+                    not math.isclose(mid_slope * x + mid_bias, y, rel_tol=1e-12, abs_tol=1e-9) for x, y in high_rows
+                ):
+                    continue
+                low_threshold = (low_value - mid_bias) / mid_slope
+                high_threshold = (high_value - mid_bias) / mid_slope
+                if not math.isfinite(low_threshold) or not math.isfinite(high_threshold):
+                    continue
+                if not low_threshold < high_threshold:
+                    continue
+                exact = True
+                for x, y in rows:
+                    pred = _nested_piecewise_affine_predict(
+                        x, low_threshold, high_threshold, low_value, mid_slope, mid_bias, high_value
+                    )
+                    if not math.isclose(pred, y, rel_tol=1e-12, abs_tol=1e-9):
+                        exact = False
+                        break
+                if not exact:
+                    continue
+                cand = (low_threshold, high_threshold, low_value, mid_slope, mid_bias, high_value)
+                if valid_model is None:
+                    valid_model = cand
+                elif any(not math.isclose(valid_model[i], cand[i], rel_tol=1e-10, abs_tol=1e-8) for i in range(6)):
+                    return None
 
-    low_value = low_rows[0][1]
-    high_value = high_rows[0][1]
-    for _, y in low_rows[1:]:
-        if not math.isclose(y, low_value, rel_tol=1e-12, abs_tol=1e-9):
+    if valid_model is None:
+        saw_low = False
+        saw_mid = False
+        saw_high = False
+        for x, y in rows:
+            pred = _nested_piecewise_affine_predict(x, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0)
+            if not math.isclose(pred, y, rel_tol=1e-12, abs_tol=1e-9):
+                return None
+            if x < 0.0:
+                saw_low = True
+            elif x < 1.0:
+                saw_mid = True
+            else:
+                saw_high = True
+        if not saw_low or not saw_mid or not saw_high:
             return None
-    for _, y in high_rows[1:]:
-        if not math.isclose(y, high_value, rel_tol=1e-12, abs_tol=1e-9):
-            return None
-    if not math.isclose(low_value, 0.0, rel_tol=0.0, abs_tol=1e-9):
-        return None
-    if not math.isclose(high_value, 1.0, rel_tol=0.0, abs_tol=1e-9):
-        return None
-
-    for x, y in rows:
-        pred = 0.0 if x < 0.0 else (x if x < 1.0 else 1.0)
-        if not math.isclose(pred, y, rel_tol=1e-12, abs_tol=1e-9):
-            return None
+        valid_model = (0.0, 1.0, 0.0, 1.0, 0.0, 1.0)
 
     assert in_key is not None and out_key is not None
+    low_threshold, high_threshold, low_value, mid_slope, mid_bias, high_value = valid_model
     return ExpertDraftResponse(
-        ax_source=_nested_piecewise_identity_cap_source(in_key, out_key, low_value, high_value),
+        ax_source=_nested_piecewise_affine_source(
+            in_key, out_key, low_threshold, high_threshold, low_value, mid_slope, mid_bias, high_value
+        ),
         backend_name="nested_piecewise_identity_cap_fast_path",
         metadata={
             "fast_path": "nested_piecewise_identity_cap",
             "in_key": in_key,
             "out_key": out_key,
+            "low_threshold": low_threshold,
+            "high_threshold": high_threshold,
             "low_value": low_value,
+            "mid_slope": mid_slope,
+            "mid_bias": mid_bias,
             "high_value": high_value,
         },
     )
@@ -1736,6 +1924,8 @@ def _try_exact_symbolic_fast_path(config: CopilotSearchConfig) -> Optional[Exper
     fast = _try_nested_piecewise_identity_cap_fast_path(config)
     if fast is None:
         fast = _try_piecewise_threshold_identity_fast_path(config)
+    if fast is None:
+        fast = _try_absolute_value_piecewise_fast_path(config)
     if fast is None:
         fast = _try_linear_xy_fast_path(config)
     if fast is None:

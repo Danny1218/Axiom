@@ -12,8 +12,8 @@
       "expected_rows": [{ "y": 3.0 }, { "y": 1.5 }, { "y": 0.0 }, { "y": 2.0 }, { "y": 4.25 }],
       "score_sort_key": "neg_mse",
       "metric_pass_min": ["neg_mse", -0.000000000001],
-      "fast_path_expected": false,
-      "backend_expected": "expert_backend",
+      "fast_path_expected": true,
+      "backend_expected": "absolute_value_piecewise_fast_path",
       "category": "control_flow_harder"
     },
     {
@@ -156,8 +156,8 @@
       "expected_rows": [{ "y": 0.0 }, { "y": 0.0 }, { "y": 1.0 }, { "y": 2.5 }, { "y": 3.0 }, { "y": 3.0 }],
       "score_sort_key": "neg_mse",
       "metric_pass_min": ["neg_mse", -0.000000000001],
-      "fast_path_expected": false,
-      "backend_expected": "expert_backend",
+      "fast_path_expected": true,
+      "backend_expected": "nested_piecewise_identity_cap_fast_path",
       "category": "control_flow_harder"
     },
     {
