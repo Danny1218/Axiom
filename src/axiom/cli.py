@@ -765,16 +765,24 @@ def _cmd_copilot_doctor(args: argparse.Namespace) -> None:
 
 
 def _cmd_copilot_draft(args: argparse.Namespace) -> None:
-    from axiom.copilot.search import build_draft_context
-    from axiom.experts.base import ExpertDraftRequest
+    from axiom.copilot.search import CopilotSearchConfig, run_copilot_draft
 
     expert = _make_copilot_expert(args)
-    ctx = build_draft_context(
+    ex_in = None
+    ex_out = None
+    mode = "compile_only"
+    if getattr(args, "examples_json", None) is not None:
+        ex_in, ex_out = _load_examples_json(Path(args.examples_json))
+        mode = "predict_rows"
+    cfg = CopilotSearchConfig(
+        expert=expert,
+        goal=args.goal,
         domain_context=args.context,
-        example_input_rows=None,
-        expected_rows=None,
+        example_input_rows=ex_in,
+        expected_rows=ex_out,
+        mode=mode,
     )
-    resp = expert.draft_program(ExpertDraftRequest(goal=args.goal, context=ctx))
+    _, resp = run_copilot_draft(cfg)
     ax = resp.ax_source.rstrip() + "\n"
     print(ax, end="")
     if args.out is not None:
@@ -1360,6 +1368,12 @@ def main(argv: list[str] | None = None) -> None:
         help="Ask a semantic expert to draft .ax source from a goal (requires pip install -e \".[copilot]\").",
     )
     _add_copilot_backend_args(p_cd)
+    p_cd.add_argument(
+        "--examples-json",
+        type=Path,
+        default=None,
+        help="Optional JSON array of {inputs, expected} rows; enables exact fast-path draft inference when rows match.",
+    )
     p_cd.set_defaults(_handler=_cmd_copilot_draft)
 
     p_cdoc = sub.add_parser(

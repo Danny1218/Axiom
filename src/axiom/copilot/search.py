@@ -1607,9 +1607,7 @@ def _train_tabular_meta(config: CopilotSearchConfig) -> Optional[Dict[str, Any]]
     }
 
 
-def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
-    from axiom.copilot.artifacts import expert_response_to_dict, persist_copilot_artifacts
-
+def _build_copilot_draft_request(config: CopilotSearchConfig) -> ExpertDraftRequest:
     tt_meta = _train_tabular_meta(config)
     ctx: Dict[str, Any] = build_draft_context(
         domain_context=config.domain_context,
@@ -1622,7 +1620,10 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
     if is_exact_symbolic_examples_task(config):
         ctx["exact_symbolic_examples_task"] = True
     ctx = merge_completion_overrides_into_context(ctx, config.completion_overrides)
-    draft_req = ExpertDraftRequest(goal=config.goal, context=ctx)
+    return ExpertDraftRequest(goal=config.goal, context=ctx)
+
+
+def _try_exact_symbolic_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
     fast = _try_nested_piecewise_identity_cap_fast_path(config)
     if fast is None:
         fast = _try_piecewise_threshold_identity_fast_path(config)
@@ -1640,37 +1641,54 @@ def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
         fast = _try_two_input_interaction_fast_path(config)
     if fast is None:
         fast = _try_affine_multi_input_fast_path(config)
-    if fast is not None:
-        draft_resp = fast
-    else:
-        try:
-            draft_resp = config.expert.draft_program(draft_req)
-        except OnyxQwenHTTPError as e:
-            fail_rep = _backend_http_failure_report(config, e, phase="draft")
-            metric_thr_eff = _effective_metric_threshold(config)
-            result = CopilotSearchResult(
-                best_source="",
-                best_evaluation=fail_rep,
-                final_report=fail_rep,
-                converged=False,
-                iterations=[
-                    CopilotIterationRecord(
-                        index=0,
-                        source="",
-                        evaluation=fail_rep,
-                        producing_payload=_draft_payload_dict(draft_req),
-                        outgoing_repair_error_report=None,
-                        producing_expert={},
-                        semantic_trace_summary=None,
-                    )
-                ],
-                metric_repair_enabled=bool(config.repair_valid_with_metrics),
-                metric_repair_threshold_effective=metric_thr_eff,
-                convergence_reason="failure",
-            )
-            if config.artifact_dir is not None:
-                persist_copilot_artifacts(config, result, config.artifact_dir)
-            return result
+    return fast
+
+
+def run_copilot_draft(
+    config: CopilotSearchConfig, draft_req: Optional[ExpertDraftRequest] = None
+) -> tuple[ExpertDraftRequest, ExpertDraftResponse]:
+    """One draft step with shared fast-path inference before expert fallback."""
+    if draft_req is None:
+        draft_req = _build_copilot_draft_request(config)
+    draft_resp = _try_exact_symbolic_fast_path(config)
+    if draft_resp is None:
+        draft_resp = config.expert.draft_program(draft_req)
+    return draft_req, draft_resp
+
+
+def run_copilot_search(config: CopilotSearchConfig) -> CopilotSearchResult:
+    from axiom.copilot.artifacts import expert_response_to_dict, persist_copilot_artifacts
+
+    tt_meta = _train_tabular_meta(config)
+    draft_req = _build_copilot_draft_request(config)
+    try:
+        draft_req, draft_resp = run_copilot_draft(config, draft_req)
+    except OnyxQwenHTTPError as e:
+        fail_rep = _backend_http_failure_report(config, e, phase="draft")
+        metric_thr_eff = _effective_metric_threshold(config)
+        result = CopilotSearchResult(
+            best_source="",
+            best_evaluation=fail_rep,
+            final_report=fail_rep,
+            converged=False,
+            iterations=[
+                CopilotIterationRecord(
+                    index=0,
+                    source="",
+                    evaluation=fail_rep,
+                    producing_payload=_draft_payload_dict(draft_req),
+                    outgoing_repair_error_report=None,
+                    producing_expert={},
+                    semantic_trace_summary=None,
+                )
+            ],
+            metric_repair_enabled=bool(config.repair_valid_with_metrics),
+            metric_repair_threshold_effective=metric_thr_eff,
+            convergence_reason="failure",
+        )
+        if config.artifact_dir is not None:
+            persist_copilot_artifacts(config, result, config.artifact_dir)
+        return result
     current = draft_resp.ax_source
     provenance_meta = expert_response_to_dict(draft_resp, "draft")
     sort_key = config.score_sort_key

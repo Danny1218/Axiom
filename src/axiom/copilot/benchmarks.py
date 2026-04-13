@@ -15,8 +15,7 @@ from axiom.copilot.evaluator import evaluate_program
 from axiom.copilot.models import EvaluationMode, ProgramCandidate, ProgramEvaluationReport
 from axiom.copilot.search import (
     CopilotSearchConfig,
-    build_draft_context,
-    merge_completion_overrides_into_context,
+    run_copilot_draft,
     run_copilot_search,
 )
 from axiom.experts.base import (
@@ -162,14 +161,18 @@ def run_benchmark_draft_only(
     completion_overrides: Optional[Dict[str, Any]] = None,
 ) -> BenchmarkRunRecord:
     """Single ``draft_program`` + in-memory evaluation (no repair)."""
-    ctx = build_draft_context(
+    cfg = CopilotSearchConfig(
+        expert=expert,
+        goal=task.goal,
         domain_context=task.domain_context or None,
-        example_input_rows=task.example_input_rows,
-        expected_rows=task.expected_rows,
+        example_input_rows=list(task.example_input_rows) if task.example_input_rows else None,
+        expected_rows=list(task.expected_rows) if task.expected_rows else None,
+        mode=task.evaluation_mode,
+        max_unroll=task.max_unroll,
+        draft_context_extras=_bench_extras(task),
+        completion_overrides=completion_overrides,
     )
-    ctx = {**ctx, **_bench_extras(task)}
-    ctx = merge_completion_overrides_into_context(ctx, completion_overrides)
-    resp = expert.draft_program(ExpertDraftRequest(goal=task.goal, context=ctx))
+    _, resp = run_copilot_draft(cfg)
     rep = _evaluate_for_task(task, resp.ax_source)
     co, mo = compile_success(rep), metric_success(task, rep)
     backend_name = str(resp.backend_name or "")

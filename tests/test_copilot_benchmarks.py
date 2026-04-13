@@ -130,7 +130,7 @@ def test_dispatch_expert_requires_benchmark_task_id():
 
 def test_run_benchmark_draft_only_and_search_with_dispatch():
     ex = BenchmarkDispatchExpert()
-    t = DEFAULT_BENCHMARK_TASKS[1]
+    t = next(t for t in DEFAULT_BENCHMARK_TASKS if t.id == "finance_threshold_policy")
     dr = run_benchmark_draft_only(ex, t)
     assert dr.compile_ok and dr.metric_ok
     assert dr.producing_backend_name == "benchmark_dispatch"
@@ -141,6 +141,40 @@ def test_run_benchmark_draft_only_and_search_with_dispatch():
     assert sr.producing_backend_name == "benchmark_dispatch"
     assert sr.backend_kind == "expert_backend"
     assert sr.winner_origin == "model_draft"
+
+
+@pytest.mark.parametrize(
+    ("task_id", "backend_name"),
+    [
+        ("double_x", "linear_xy_fast_path"),
+        ("risk_score", "bounded_affine2_fast_path"),
+        ("piecewise_threshold", "piecewise_threshold_identity_fast_path"),
+        ("three_input_affine", "affine_multi_input_fast_path"),
+        ("nested_piecewise", "nested_piecewise_identity_cap_fast_path"),
+    ],
+)
+def test_symbolic_benchmark_draft_only_uses_fast_path_for_expected_families(task_id: str, backend_name: str):
+    class NoDraftExpert:
+        def draft_program(self, request: ExpertDraftRequest) -> ExpertDraftResponse:
+            raise AssertionError("draft expert should be skipped when fast path matches exactly")
+
+        def repair_program(self, request: ExpertRepairRequest) -> ExpertDraftResponse:
+            raise AssertionError("repair should not run in draft-only benchmark")
+
+        def summarize_trace(self, *args, **kwargs) -> str:
+            return ""
+
+    root = Path(__file__).resolve().parents[1]
+    tasks = {
+        t.id: t
+        for t in load_benchmark_tasks_json_path(root / "benchmarks" / "copilot_symbolic_and_generalization_tasks.json")
+    }
+    rec = run_benchmark_draft_only(NoDraftExpert(), tasks[task_id])  # type: ignore[arg-type]
+    assert rec.compile_ok is True
+    assert rec.metric_ok is True
+    assert rec.backend_kind == "fast_path"
+    assert rec.winner_origin == "deterministic_inference"
+    assert rec.producing_backend_name == backend_name
 
 
 def test_run_benchmark_suite_dict_roundtrip():

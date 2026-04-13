@@ -23,9 +23,11 @@ class _FakeExpert:
     def __init__(self) -> None:
         self.draft_source = "y = neural([1.0, 2.0]);\n"
         self.repair_queue: list[str] = []
+        self.draft_calls: list[ExpertDraftRequest] = []
 
     def draft_program(self, request: ExpertDraftRequest) -> ExpertDraftResponse:
         assert request.goal
+        self.draft_calls.append(request)
         return ExpertDraftResponse(ax_source=self.draft_source, backend_name="fake")
 
     def repair_program(self, request: ExpertRepairRequest) -> ExpertDraftResponse:
@@ -98,6 +100,40 @@ def test_copilot_draft_writes_out(tmp_path: Path, monkeypatch):
         ]
     )
     assert out_ax.is_file() and "neural" in out_ax.read_text(encoding="utf-8")
+
+
+def test_copilot_draft_examples_json_uses_fast_path_without_calling_expert(tmp_path: Path, capsys, monkeypatch):
+    fake = _FakeExpert()
+    monkeypatch.setattr(cli_mod, "_make_copilot_expert", lambda _a: fake)
+    examples = tmp_path / "double_x.json"
+    examples.write_text(
+        json.dumps(
+            [
+                {"inputs": {"x": 1.0}, "expected": {"y": 2.0}},
+                {"inputs": {"x": 2.5}, "expected": {"y": 5.0}},
+                {"inputs": {"x": -3.0}, "expected": {"y": -6.0}},
+            ]
+        ),
+        encoding="utf-8",
+    )
+    main(
+        [
+            "copilot-draft",
+            "--backend",
+            "onyx-qwen",
+            "--goal",
+            "Compute y as double of x.",
+            "--expert-url",
+            "http://x/",
+            "--expert-model",
+            "m",
+            "--examples-json",
+            str(examples),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert out.strip() == "y = x * 2.0;"
+    assert fake.draft_calls == []
 
 
 def test_copilot_search_artifact_dir_writes_bundle(tmp_path: Path, monkeypatch):
