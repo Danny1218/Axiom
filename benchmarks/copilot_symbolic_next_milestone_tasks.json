@@ -27,8 +27,8 @@
       "expected_rows": [{ "y": 3.0 }, { "y": 1.0 }, { "y": 1.0 }, { "y": 4.75 }, { "y": 13.0 }],
       "score_sort_key": "neg_mse",
       "metric_pass_min": ["neg_mse", -0.000000000001],
-      "fast_path_expected": false,
-      "backend_expected": "expert_backend",
+      "fast_path_expected": true,
+      "backend_expected": "quadratic_single_input_fast_path",
       "category": "symbolic_nonlinear_harder"
     },
     {

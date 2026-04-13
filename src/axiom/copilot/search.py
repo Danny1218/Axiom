@@ -38,6 +38,7 @@ _GOAL_EXACT_SYMBOLIC_EXTRA = re.compile(
     re.I,
 )
 _GOAL_CLAMP_HINT = re.compile(r"(max\s*\(|min\s*\(|clamp|bounded|risk_score)", re.I)
+_GOAL_QUADRATIC_HINT = re.compile(r"(quadratic|square|x\s*\*\s*x)", re.I)
 _GOAL_EXACT_PIECEWISE_CONTROL = re.compile(r"\bif\b.+(?:<|>).+\bthen\b.+\belse\b", re.I)
 
 # Penalties subtracted from raw sort metric (higher-is-better, e.g. ``neg_mse``).
@@ -76,6 +77,10 @@ def _exact_symbolic_hint_text(config: CopilotSearchConfig) -> str:
 
 def _hint_suggests_clamp_family(config: CopilotSearchConfig) -> bool:
     return bool(_GOAL_CLAMP_HINT.search(_exact_symbolic_hint_text(config)))
+
+
+def _hint_suggests_quadratic_family(config: CopilotSearchConfig) -> bool:
+    return bool(_GOAL_QUADRATIC_HINT.search(_exact_symbolic_hint_text(config)))
 
 
 def _has_single_numeric_input_output_rows(config: CopilotSearchConfig) -> bool:
@@ -133,13 +138,28 @@ def _linear_xy_canonical_source(a: float, b: float) -> str:
     return f"y = x * {ca} + {cb};\n"
 
 
-def _quadratic_single_input_source(in_key: str, out_key: str, bias: float) -> str:
-    expr = f"{in_key} * {in_key}"
-    if math.isclose(bias, 0.0, abs_tol=1e-12, rel_tol=1e-12):
-        return f"{out_key} = {expr};\n"
-    if bias < 0.0:
-        return f"{out_key} = {expr} - {_linear_xy_coeff_str(abs(bias))};\n"
-    return f"{out_key} = {expr} + {_linear_xy_coeff_str(bias)};\n"
+def _quadratic_single_input_source(in_key: str, out_key: str, quad: float, linear: float, bias: float) -> str:
+    parts: List[str] = []
+
+    def _append_signed(expr: str, negative: bool) -> None:
+        if not parts:
+            parts.append(f"-{expr}" if negative else expr)
+        else:
+            parts.append(f"- {expr}" if negative else f"+ {expr}")
+
+    if not math.isclose(quad, 0.0, abs_tol=1e-12, rel_tol=1e-12):
+        quad_term = f"{in_key} * {in_key}"
+        if not math.isclose(abs(quad), 1.0, abs_tol=1e-12, rel_tol=1e-12):
+            quad_term = f"{_linear_xy_coeff_str(abs(quad))} * {quad_term}"
+        _append_signed(quad_term, quad < 0.0)
+    if not math.isclose(linear, 0.0, abs_tol=1e-12, rel_tol=1e-12):
+        linear_term = in_key
+        if not math.isclose(abs(linear), 1.0, abs_tol=1e-12, rel_tol=1e-12):
+            linear_term = f"{_linear_xy_coeff_str(abs(linear))} * {in_key}"
+        _append_signed(linear_term, linear < 0.0)
+    if not math.isclose(bias, 0.0, abs_tol=1e-12, rel_tol=1e-12):
+        _append_signed(_linear_xy_coeff_str(abs(bias)), bias < 0.0)
+    return f"{out_key} = {' '.join(parts) if parts else '0.0'};\n"
 
 
 def _piecewise_threshold_identity_source(in_key: str, out_key: str) -> str:
@@ -633,8 +653,10 @@ def _try_linear_xy_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraf
 
 
 def _try_quadratic_single_input_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
-    """Exact single-input square-plus-bias family: ``y = x * x + c``."""
+    """Exact single-input quadratic family: ``y = a*x*x + b*x + c``."""
     if not is_exact_symbolic_examples_task(config):
+        return None
+    if not _hint_suggests_quadratic_family(config):
         return None
     if config.mode != "predict_rows":
         return None
@@ -647,9 +669,8 @@ def _try_quadratic_single_input_fast_path(config: CopilotSearchConfig) -> Option
 
     in_key: Optional[str] = None
     out_key: Optional[str] = None
-    bias: Optional[float] = None
     rows: List[tuple[float, float]] = []
-    distinct_xs: List[float] = []
+    distinct_rows: List[tuple[float, float]] = []
 
     for row_in, row_ex in zip(inp, exp):
         if not isinstance(row_in, Mapping) or not isinstance(row_ex, Mapping):
@@ -673,30 +694,35 @@ def _try_quadratic_single_input_fast_path(config: CopilotSearchConfig) -> Option
             return None
         if not math.isfinite(x) or not math.isfinite(y):
             return None
-        row_bias = y - (x * x)
-        if bias is None:
-            bias = row_bias
-        elif not math.isclose(row_bias, bias, rel_tol=1e-12, abs_tol=1e-9):
-            return None
         rows.append((x, y))
-        if not any(math.isclose(x, seen, rel_tol=0.0, abs_tol=1e-12) for seen in distinct_xs):
-            distinct_xs.append(x)
+        if not any(math.isclose(x, seen_x, rel_tol=0.0, abs_tol=1e-12) for seen_x, _ in distinct_rows):
+            distinct_rows.append((x, y))
 
-    if bias is None or len(distinct_xs) < 3:
+    if len(distinct_rows) < 3:
+        return None
+    mat = [[x * x, x, 1.0] for x, _ in distinct_rows[:3]]
+    rhs = [y for _, y in distinct_rows[:3]]
+    sol = _solve_linear_system(mat, rhs)
+    if sol is None:
+        return None
+    quad, linear, bias = sol
+    if math.isclose(quad, 0.0, rel_tol=1e-12, abs_tol=1e-12):
         return None
     for x, y in rows:
-        pred = x * x + bias
+        pred = quad * x * x + linear * x + bias
         if not math.isclose(pred, y, rel_tol=1e-12, abs_tol=1e-9):
             return None
 
     assert in_key is not None and out_key is not None
     return ExpertDraftResponse(
-        ax_source=_quadratic_single_input_source(in_key, out_key, bias),
+        ax_source=_quadratic_single_input_source(in_key, out_key, quad, linear, bias),
         backend_name="quadratic_single_input_fast_path",
         metadata={
             "fast_path": "quadratic_single_input",
             "in_key": in_key,
             "out_key": out_key,
+            "quadratic_coeff": quad,
+            "linear_coeff": linear,
             "bias": bias,
         },
     )

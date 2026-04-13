@@ -185,6 +185,7 @@ def test_symbolic_benchmark_draft_only_uses_fast_path_for_expected_families(task
         ("four_input_affine_bias", "affine_multi_input_fast_path"),
         ("max_of_three_nested", "max_of_three_nested_fast_path"),
         ("min_of_max_pair", "min_of_max_pair_fast_path"),
+        ("quadratic_plus_linear", "quadratic_single_input_fast_path"),
         ("shifted_nested_piecewise", "nested_piecewise_identity_cap_fast_path"),
         ("three_input_clamped_affine_shifted", "bounded_affine_multi_input_fast_path"),
     ],
@@ -467,6 +468,8 @@ def test_next_milestone_benchmark_tasks_json_loads():
     assert by_id["max_of_three_nested"]["backend_expected"] == "max_of_three_nested_fast_path"
     assert by_id["min_of_max_pair"]["fast_path_expected"] is True
     assert by_id["min_of_max_pair"]["backend_expected"] == "min_of_max_pair_fast_path"
+    assert by_id["quadratic_plus_linear"]["fast_path_expected"] is True
+    assert by_id["quadratic_plus_linear"]["backend_expected"] == "quadratic_single_input_fast_path"
     assert by_id["shifted_nested_piecewise"]["fast_path_expected"] is True
     assert by_id["shifted_nested_piecewise"]["backend_expected"] == "nested_piecewise_identity_cap_fast_path"
     assert by_id["three_input_clamped_affine_shifted"]["fast_path_expected"] is True
