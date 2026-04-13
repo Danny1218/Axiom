@@ -568,6 +568,33 @@ _REFERENCE_AX_BY_TASK: Dict[str, str] = {
         "    }\n"
         "}\n"
     ),
+    # Fourth symbolic robustness / ambiguity stress suite.
+    "noisy_affine_thermometer": "adjusted = 1.25 * thermometer_reading - 0.2;\n",
+    "sparse_quadratic_story": "lift = knob * knob + knob + 1.0;\n",
+    "sparse_three_way_peak": "picked = max(max(left, center), right);\n",
+    "adversarial_clean_reply_clip": (
+        "reserve_score = max(0.0, min(1.0, 0.5 * inflow + 0.35 * buffer - 0.4 * drag + 0.1));\n"
+    ),
+    "near_abs_with_bias": (
+        "if (delta < 0.0) {\n"
+        "    mirrored = -delta + 0.25;\n"
+        "} else {\n"
+        "    mirrored = delta + 0.25;\n"
+        "}\n"
+    ),
+    "weighted_floor_then_ramp": (
+        "if (offset < -1.0) {\n"
+        "    band = -0.5 * offset;\n"
+        "} else {\n"
+        "    if (offset < 2.0) {\n"
+        "        band = offset + 1.5;\n"
+        "    } else {\n"
+        "        band = 4.0;\n"
+        "    }\n"
+        "}\n"
+    ),
+    "signed_cross_term_noisy": "response = exposure * hedge - 0.5 * hedge + 0.25;\n",
+    "soft_cap_prefer_signal": "decision = min(max(primary, backup + 0.2), cap);\n",
 }
 
 

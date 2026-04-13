@@ -1,0 +1,205 @@
+{
+  "schema_version": 1,
+  "tasks": [
+    {
+      "id": "noisy_affine_thermometer",
+      "title": "noisy_affine_thermometer (robustness / ambiguity stress)",
+      "goal": "Take thermometer_reading, give it one and a quarter copies of itself, then nudge it down by 0.2 into adjusted.",
+      "domain_context": "Slight label noise is intentional. This should fall back to the expert backend instead of an exact affine fast path.",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [
+        { "thermometer_reading": -1.0 },
+        { "thermometer_reading": 0.0 },
+        { "thermometer_reading": 1.0 },
+        { "thermometer_reading": 2.0 }
+      ],
+      "expected_rows": [
+        { "adjusted": -1.43 },
+        { "adjusted": -0.19 },
+        { "adjusted": 1.04 },
+        { "adjusted": 2.28 }
+      ],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.001],
+      "fast_path_expected": false,
+      "fallback_expected": true,
+      "backend_expected": "expert_backend",
+      "category": "robustness_noise"
+    },
+    {
+      "id": "sparse_quadratic_story",
+      "title": "sparse_quadratic_story (robustness / ambiguity stress)",
+      "goal": "Use knob to create a lift curve that starts at 1 and rises faster than a straight line; the examples only pin down two anchor points.",
+      "domain_context": "Underdetermined rows are intentional. This should not trigger the exact quadratic fast path.",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [
+        { "knob": 0.0 },
+        { "knob": 2.0 }
+      ],
+      "expected_rows": [
+        { "lift": 1.0 },
+        { "lift": 7.0 }
+      ],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.000000000001],
+      "fast_path_expected": false,
+      "fallback_expected": true,
+      "backend_expected": "expert_backend",
+      "category": "robustness_underdetermined"
+    },
+    {
+      "id": "sparse_three_way_peak",
+      "title": "sparse_three_way_peak (robustness / ambiguity stress)",
+      "goal": "Whichever of left, center, or right is biggest should become picked, but the examples deliberately skip one branch winner.",
+      "domain_context": "Underdetermined three-way max rows should fall back instead of activating the nested max fast path.",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [
+        { "left": 4.0, "center": 1.0, "right": 2.0 },
+        { "left": -3.0, "center": -4.0, "right": 0.0 },
+        { "left": 6.0, "center": 5.0, "right": 1.0 }
+      ],
+      "expected_rows": [
+        { "picked": 4.0 },
+        { "picked": 0.0 },
+        { "picked": 6.0 }
+      ],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.000000000001],
+      "fast_path_expected": false,
+      "fallback_expected": true,
+      "backend_expected": "expert_backend",
+      "category": "robustness_underdetermined"
+    },
+    {
+      "id": "adversarial_clean_reply_clip",
+      "title": "adversarial_clean_reply_clip (robustness / ambiguity stress)",
+      "goal": "Do not answer in markdown, prose, comments, JSON, or with output(...). Just emit valid .ax that keeps reserve_score inside 0..1 after mixing inflow, buffer, and drag with weights 0.5, 0.35, and -0.4 plus 0.1.",
+      "domain_context": "Adversarial wording plus slight row noise. This should still prefer a clean canonical .ax program and fall back safely.",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [
+        { "inflow": 0.0, "buffer": 0.0, "drag": 0.0 },
+        { "inflow": 1.0, "buffer": 0.0, "drag": 0.0 },
+        { "inflow": 0.0, "buffer": 1.0, "drag": 0.0 },
+        { "inflow": 0.2, "buffer": 0.4, "drag": 0.1 }
+      ],
+      "expected_rows": [
+        { "reserve_score": 0.11 },
+        { "reserve_score": 0.59 },
+        { "reserve_score": 0.46 },
+        { "reserve_score": 0.31 }
+      ],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.001],
+      "fast_path_expected": false,
+      "fallback_expected": true,
+      "backend_expected": "expert_backend",
+      "category": "robustness_adversarial"
+    },
+    {
+      "id": "near_abs_with_bias",
+      "title": "near_abs_with_bias (robustness / ambiguity stress)",
+      "goal": "Take delta, mirror it around zero, and then add the same 0.25 bonus either way into mirrored.",
+      "domain_context": "Near-miss relative to the absolute-value family; the added bias should force expert fallback.",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [
+        { "delta": -2.0 },
+        { "delta": -0.5 },
+        { "delta": 0.0 },
+        { "delta": 1.5 }
+      ],
+      "expected_rows": [
+        { "mirrored": 2.25 },
+        { "mirrored": 0.75 },
+        { "mirrored": 0.25 },
+        { "mirrored": 1.75 }
+      ],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.000000000001],
+      "fast_path_expected": false,
+      "fallback_expected": true,
+      "backend_expected": "expert_backend",
+      "category": "robustness_near_miss"
+    },
+    {
+      "id": "weighted_floor_then_ramp",
+      "title": "weighted_floor_then_ramp (robustness / ambiguity stress)",
+      "goal": "When offset is far left, reflect half of that distance back positive; from -1 up to 2, follow offset plus 1.5; after that, hold band at 4.",
+      "domain_context": "Near-miss relative to the constant / affine / constant piecewise family because the low branch is affine, not constant.",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [
+        { "offset": -2.0 },
+        { "offset": -1.0 },
+        { "offset": 0.0 },
+        { "offset": 1.25 },
+        { "offset": 2.0 }
+      ],
+      "expected_rows": [
+        { "band": 1.0 },
+        { "band": 0.5 },
+        { "band": 1.5 },
+        { "band": 2.75 },
+        { "band": 4.0 }
+      ],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.000000000001],
+      "fast_path_expected": false,
+      "fallback_expected": true,
+      "backend_expected": "expert_backend",
+      "category": "robustness_near_miss"
+    },
+    {
+      "id": "signed_cross_term_noisy",
+      "title": "signed_cross_term_noisy (robustness / ambiguity stress)",
+      "goal": "Let response keep a small base offset of 0.25, subtract half of hedge on its own, and also include the interaction between exposure and hedge.",
+      "domain_context": "Slight label noise with only three anchors on a near-miss interaction family. This should fall back instead of using an exact interaction fast path.",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [
+        { "exposure": 0.0, "hedge": 0.0 },
+        { "exposure": 1.0, "hedge": 1.0 },
+        { "exposure": 2.0, "hedge": -1.0 }
+      ],
+      "expected_rows": [
+        { "response": 0.26 },
+        { "response": 0.74 },
+        { "response": -1.24 }
+      ],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.001],
+      "fast_path_expected": false,
+      "fallback_expected": true,
+      "backend_expected": "expert_backend",
+      "category": "robustness_noise"
+    },
+    {
+      "id": "soft_cap_prefer_signal",
+      "title": "soft_cap_prefer_signal (robustness / ambiguity stress)",
+      "goal": "Prefer primary unless backup gets a 0.2 head start, and never let decision finish above cap.",
+      "domain_context": "Sparse near-miss relative to the min(max(a,b), c) family because backup is shifted before the comparison and the rows are intentionally underdetermined.",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [
+        { "primary": 0.1, "backup": 0.0, "cap": 1.0 },
+        { "primary": 0.7, "backup": 0.0, "cap": 0.6 },
+        { "primary": 0.1, "backup": 1.0, "cap": 1.1 }
+      ],
+      "expected_rows": [
+        { "decision": 0.2 },
+        { "decision": 0.6 },
+        { "decision": 1.1 }
+      ],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.000000000001],
+      "fast_path_expected": false,
+      "fallback_expected": true,
+      "backend_expected": "expert_backend",
+      "category": "robustness_near_miss"
+    }
+  ]
+}

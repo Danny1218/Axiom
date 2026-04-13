@@ -455,6 +455,21 @@ def test_smoke_copilot_generalization_stress_compare_script_wraps_shared_compare
     assert "-OutJson $OutJson" in script
 
 
+def test_smoke_copilot_robustness_ambiguity_stress_compare_script_wraps_shared_compare_harness():
+    root = Path(__file__).resolve().parents[1]
+    script = (root / "scripts" / "smoke_copilot_robustness_ambiguity_stress_compare.ps1").read_text(
+        encoding="utf-8"
+    )
+    assert script.lstrip().startswith("param(")
+    assert '[string]$Backend = "benchmark-dispatch"' in script
+    assert '[string]$TaskJson = "benchmarks/copilot_symbolic_robustness_ambiguity_stress_tasks.json"' in script
+    assert '[string]$OutJson = "benchmark_symbolic_suite_robustness_ambiguity_stress.json"' in script
+    assert "smoke_copilot_next_milestone_compare.ps1" in script
+    assert "-MaxIterations $MaxIterations" in script
+    assert "-TaskJson $TaskJson" in script
+    assert "-OutJson $OutJson" in script
+
+
 def test_next_milestone_benchmark_tasks_json_loads():
     root = Path(__file__).resolve().parents[1]
     task_json = root / "benchmarks" / "copilot_symbolic_next_milestone_tasks.json"
@@ -520,6 +535,36 @@ def test_generalization_stress_benchmark_tasks_json_loads():
     assert by_id["winner_then_cap"]["category"] == "generalization_minmax"
 
 
+def test_robustness_ambiguity_stress_benchmark_tasks_json_loads():
+    root = Path(__file__).resolve().parents[1]
+    task_json = root / "benchmarks" / "copilot_symbolic_robustness_ambiguity_stress_tasks.json"
+    raw = json.loads(task_json.read_text(encoding="utf-8"))
+    tasks = benchmark_tasks_from_json_dict(raw)
+    ids = {t.id for t in tasks}
+    assert {
+        "noisy_affine_thermometer",
+        "sparse_quadratic_story",
+        "sparse_three_way_peak",
+        "adversarial_clean_reply_clip",
+        "near_abs_with_bias",
+        "weighted_floor_then_ramp",
+        "signed_cross_term_noisy",
+        "soft_cap_prefer_signal",
+    }.issubset(ids)
+    assert len(tasks) >= 8
+    by_id = {t["id"]: t for t in raw["tasks"]}
+    assert by_id["noisy_affine_thermometer"]["fast_path_expected"] is False
+    assert by_id["noisy_affine_thermometer"]["category"] == "robustness_noise"
+    assert by_id["sparse_quadratic_story"]["fast_path_expected"] is False
+    assert by_id["sparse_quadratic_story"]["category"] == "robustness_underdetermined"
+    assert by_id["sparse_three_way_peak"]["fallback_expected"] is True
+    assert by_id["adversarial_clean_reply_clip"]["category"] == "robustness_adversarial"
+    assert by_id["near_abs_with_bias"]["category"] == "robustness_near_miss"
+    assert by_id["soft_cap_prefer_signal"]["backend_expected"] == "expert_backend"
+    assert all(t.get("fast_path_expected") is False for t in raw["tasks"])
+    assert all(t.get("fallback_expected") is True for t in raw["tasks"])
+
+
 def test_generalization_stress_suite_runs_with_benchmark_dispatch():
     root = Path(__file__).resolve().parents[1]
     tasks = load_benchmark_tasks_json_path(root / "benchmarks" / "copilot_symbolic_generalization_stress_tasks.json")
@@ -530,6 +575,35 @@ def test_generalization_stress_suite_runs_with_benchmark_dispatch():
     assert suite.search_summary.task_count == len(tasks)
     assert suite.draft_summary.compile_success_rate == 1.0
     assert suite.search_summary.metric_success_rate == 1.0
+
+
+def test_robustness_ambiguity_stress_suite_runs_with_benchmark_dispatch():
+    root = Path(__file__).resolve().parents[1]
+    tasks = load_benchmark_tasks_json_path(
+        root / "benchmarks" / "copilot_symbolic_robustness_ambiguity_stress_tasks.json"
+    )
+    suite = run_benchmark_suite(BenchmarkDispatchExpert(), tasks=tasks, max_iterations=2)
+    assert suite.draft_summary is not None
+    assert suite.search_summary is not None
+    assert suite.draft_summary.task_count == len(tasks) == 8
+    assert suite.search_summary.task_count == len(tasks)
+    assert suite.draft_summary.compile_success_rate == 1.0
+    assert suite.draft_summary.metric_success_rate == 1.0
+    assert suite.search_summary.metric_success_rate == 1.0
+    assert all(comp.draft_only is not None for comp in suite.tasks)
+    assert all(comp.search is not None for comp in suite.tasks)
+    assert all(comp.draft_only.backend_kind == "expert_backend" for comp in suite.tasks if comp.draft_only is not None)
+    assert all(comp.search.backend_kind == "expert_backend" for comp in suite.tasks if comp.search is not None)
+    assert all(
+        comp.draft_only.producing_backend_name == "benchmark_dispatch"
+        for comp in suite.tasks
+        if comp.draft_only is not None
+    )
+    assert all(
+        comp.search.producing_backend_name == "benchmark_dispatch"
+        for comp in suite.tasks
+        if comp.search is not None
+    )
 
 
 def test_copilot_milestone_workflow_runs_pytest_smoke_and_three_benchmarks():
