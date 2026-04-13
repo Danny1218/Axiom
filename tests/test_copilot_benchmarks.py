@@ -479,11 +479,13 @@ def test_next_milestone_benchmark_tasks_json_loads():
     )
 
 
-def test_copilot_milestone_workflow_runs_pytest_smoke_and_benchmark():
+def test_copilot_milestone_workflow_runs_pytest_smoke_and_both_benchmarks():
     root = Path(__file__).resolve().parents[1]
     workflow = (root / ".github" / "workflows" / "copilot-milestone.yml").read_text(encoding="utf-8")
     assert "pytest -q" in workflow
     assert "smoke_copilot_draft.ps1" in workflow
     assert "copilot-benchmark" in workflow
+    assert workflow.count("axiom copilot-benchmark") >= 2
     assert "copilot_symbolic_and_generalization_tasks.json" in workflow
+    assert "copilot_symbolic_next_milestone_tasks.json" in workflow
     assert "benchmark-dispatch" in workflow
