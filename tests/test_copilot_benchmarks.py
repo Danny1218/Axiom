@@ -510,8 +510,13 @@ def test_generalization_stress_benchmark_tasks_json_loads():
     }.issubset(ids)
     assert len(tasks) >= 8
     by_id = {t["id"]: t for t in raw["tasks"]}
-    assert by_id["reading_scale_and_shift"]["fast_path_expected"] is False
-    assert by_id["bounded_signal_blend"]["backend_expected"] == "expert_backend"
+    assert by_id["reading_scale_and_shift"]["fast_path_expected"] is True
+    assert by_id["reading_scale_and_shift"]["backend_expected"] == "single_input_affine_fast_path"
+    assert by_id["bounded_signal_blend"]["backend_expected"] == "bounded_affine_multi_input_fast_path"
+    assert by_id["compass_unit_clip"]["backend_expected"] == "bounded_affine_multi_input_fast_path"
+    assert by_id["largest_channel_after_merge"]["backend_expected"] == "max_of_three_nested_fast_path"
+    assert by_id["shifted_ramp_window"]["backend_expected"] == "nested_piecewise_identity_cap_fast_path"
+    assert by_id["winner_then_cap"]["backend_expected"] == "min_of_max_pair_fast_path"
     assert by_id["winner_then_cap"]["category"] == "generalization_minmax"
 
 

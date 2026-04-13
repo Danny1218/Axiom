@@ -30,14 +30,21 @@ DEFAULT_METRIC_REPAIR_THRESHOLD = -1e-9
 
 _GOAL_SYMBOLIC_MATH_HINT = re.compile(
     r"(compute|formula|symbolic|arithmetic|algebra|multiply|coefficient|exact|"
-    r"risk_score|linear|weighted|blend|double\b|mapping|polynomial|abs\b|absolute)",
+    r"risk_score|linear|weighted|blend|double\b|mapping|polynomial|abs\b|absolute|"
+    r"affine|scale|shift|offset|clip(?:ped|ping)?|unit[- ]interval|largest|highest|peak|"
+    r"piecewise|threshold|ramp|window)",
     re.I,
 )
 _GOAL_EXACT_SYMBOLIC_EXTRA = re.compile(
-    r"(max\s*\(|min\s*\(|clamp|affine|weighted\s+(sum|blend)|risk_score)",
+    r"(max\s*\(|min\s*\(|clamp|clip(?:ped|ping)?|affine|weighted\s+(sum|blend)|risk_score|"
+    r"unit[- ]interval|largest|highest|peak|piecewise|threshold|ramp|window)",
     re.I,
 )
-_GOAL_CLAMP_HINT = re.compile(r"(max\s*\(|min\s*\(|clamp|bounded|risk_score)", re.I)
+_GOAL_CLAMP_HINT = re.compile(
+    r"(max\s*\(|min\s*\(|clamp|clip(?:ped|ping)?|bounded|risk_score|unit[- ]interval|"
+    r"\[\s*0(?:\.0+)?\s*,\s*1(?:\.0+)?\s*\])",
+    re.I,
+)
 _GOAL_QUADRATIC_HINT = re.compile(r"(quadratic|square|x\s*\*\s*x)", re.I)
 _GOAL_EXACT_PIECEWISE_CONTROL = re.compile(r"\bif\b.+(?:<|>).+\bthen\b.+\belse\b", re.I)
 
@@ -200,6 +207,10 @@ def _single_input_affine_expr(in_key: str, slope: float, bias: float) -> str:
     if not math.isclose(bias, 0.0, abs_tol=1e-12, rel_tol=1e-12):
         _append_signed(_linear_xy_coeff_str(abs(bias)), bias < 0.0)
     return " ".join(parts) if parts else "0.0"
+
+
+def _single_input_affine_source(in_key: str, out_key: str, slope: float, bias: float) -> str:
+    return f"{out_key} = {_single_input_affine_expr(in_key, slope, bias)};\n"
 
 
 def _nested_piecewise_affine_source(
@@ -652,6 +663,70 @@ def _try_linear_xy_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraf
     )
 
 
+def _try_single_input_affine_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
+    """Exact generic one-input affine family: ``out = a*x + c`` for arbitrary input/output names."""
+    if not is_exact_symbolic_examples_task(config):
+        return None
+    if config.mode != "predict_rows":
+        return None
+    inp = config.example_input_rows
+    exp = config.expected_rows
+    if not inp or not exp or len(inp) != len(exp):
+        return None
+    if len(inp) < 3:
+        return None
+
+    in_key: Optional[str] = None
+    out_key: Optional[str] = None
+    rows: List[tuple[float, float]] = []
+    distinct_xs: List[float] = []
+    for row_in, row_ex in zip(inp, exp):
+        if not isinstance(row_in, Mapping) or not isinstance(row_ex, Mapping):
+            return None
+        if len(row_in) != 1 or len(row_ex) != 1:
+            return None
+        ik = str(next(iter(row_in.keys())))
+        ok = str(next(iter(row_ex.keys())))
+        if in_key is None:
+            in_key = ik
+        elif ik != in_key:
+            return None
+        if out_key is None:
+            out_key = ok
+        elif ok != out_key:
+            return None
+        try:
+            x = float(row_in[in_key])
+            y = float(row_ex[out_key])
+        except (TypeError, ValueError, KeyError):
+            return None
+        if not math.isfinite(x) or not math.isfinite(y):
+            return None
+        rows.append((x, y))
+        if not any(math.isclose(x, seen_x, rel_tol=0.0, abs_tol=1e-12) for seen_x in distinct_xs):
+            distinct_xs.append(x)
+
+    if len(distinct_xs) < 3:
+        return None
+
+    affine = _fit_single_input_affine_rows(rows)
+    if affine is None:
+        return None
+    slope, bias = affine
+    assert in_key is not None and out_key is not None
+    return ExpertDraftResponse(
+        ax_source=_single_input_affine_source(in_key, out_key, slope, bias),
+        backend_name="single_input_affine_fast_path",
+        metadata={
+            "fast_path": "single_input_affine",
+            "in_key": in_key,
+            "out_key": out_key,
+            "slope": slope,
+            "bias": bias,
+        },
+    )
+
+
 def _try_quadratic_single_input_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
     """Exact single-input quadratic family: ``y = a*x*x + b*x + c``."""
     if not is_exact_symbolic_examples_task(config):
@@ -999,6 +1074,89 @@ def _solve_linear_system(matrix: Sequence[Sequence[float]], rhs: Sequence[float]
     return [a[i][n] for i in range(n)]
 
 
+def _explicit_affine_formula_candidates(text: str) -> List[str]:
+    base = (text or "").strip()
+    if not base:
+        return []
+    candidates = [base]
+    if ":" in base:
+        candidates.append(base.rsplit(":", 1)[1].strip())
+    if "=" in base:
+        candidates.append(base.rsplit("=", 1)[1].strip())
+    for match in re.finditer(r"\bas\b\s+(.+?)(?:,|\bthen\b|\bkeep\b|\bclip\b|\binside\b|$)", base, re.I):
+        candidates.append(match.group(1).strip())
+    for cand in list(candidates):
+        match = re.search(r"\.(?=\s+[A-Z])", cand)
+        if match is not None:
+            candidates.append(cand[: match.start()].strip())
+
+    out: List[str] = []
+    seen: set[str] = set()
+    for cand in candidates:
+        norm = re.sub(r"\s+", " ", cand).strip(" .;")
+        if norm and norm not in seen:
+            seen.add(norm)
+            out.append(norm)
+    return out
+
+
+def _try_parse_affine_formula_candidate(
+    text: str, in_keys: Sequence[str]
+) -> Optional[tuple[List[float], float]]:
+    if not text:
+        return None
+    weights: List[float] = []
+    spans: List[tuple[int, int]] = []
+    for key in in_keys:
+        pattern = re.compile(
+            rf"([+\-]?\s*(?:\d+(?:\.\d+)?|\.\d+))\s*(?:\*\s*)?{re.escape(key)}\b",
+            re.I,
+        )
+        matches = list(pattern.finditer(text))
+        if len(matches) != 1:
+            return None
+        try:
+            coeff = float(re.sub(r"\s+", "", matches[0].group(1)))
+        except ValueError:
+            return None
+        if not math.isfinite(coeff):
+            return None
+        weights.append(coeff)
+        spans.append(matches[0].span())
+
+    chars = list(text)
+    for start, end in spans:
+        for idx in range(start, end):
+            chars[idx] = " "
+    residual = "".join(chars)
+    residual = re.sub(r"[()\[\],;:]", " ", residual)
+    if re.search(r"[A-Za-z_]", residual):
+        return None
+    bias = 0.0
+    for token in re.findall(r"[+\-]?\s*(?:\d+(?:\.\d+)?|\.\d+)", residual):
+        raw = re.sub(r"\s+", "", token)
+        if not raw:
+            continue
+        try:
+            value = float(raw)
+        except ValueError:
+            return None
+        if not math.isfinite(value):
+            return None
+        bias += value
+    return weights, bias
+
+
+def _try_parse_affine_formula_from_hint_text(
+    hint_text: str, in_keys: Sequence[str]
+) -> Optional[tuple[List[float], float]]:
+    for candidate in _explicit_affine_formula_candidates(hint_text):
+        parsed = _try_parse_affine_formula_candidate(candidate, in_keys)
+        if parsed is not None:
+            return parsed
+    return None
+
+
 def _signed_weighted_sum_source_expr(in_keys: Sequence[str], weights: Sequence[float], bias: float) -> str:
     parts: List[str] = []
     for key, weight in zip(in_keys, weights):
@@ -1190,39 +1348,53 @@ def _try_clamped_affine_multi_input_fast_path(
 
     assert in_keys is not None and out_key is not None
     unknowns = len(in_keys) + 1
-    if len(interior_indices) < unknowns:
-        return None
 
     valid_solution: Optional[List[float]] = None
-    for combo in itertools.combinations(interior_indices, unknowns):
-        mat = [xs[idx] + [1.0] for idx in combo]
-        rhs = [ys[idx] for idx in combo]
-        sol = _solve_linear_system(mat, rhs)
-        if sol is None:
-            continue
-        ok = True
-        for idx in interior_indices:
-            pred = sum(sol[i] * xs[idx][i] for i in range(len(in_keys))) + sol[-1]
-            if not math.isclose(pred, ys[idx], rel_tol=1e-11, abs_tol=1e-8):
+    if len(interior_indices) >= unknowns:
+        for combo in itertools.combinations(interior_indices, unknowns):
+            mat = [xs[idx] + [1.0] for idx in combo]
+            rhs = [ys[idx] for idx in combo]
+            sol = _solve_linear_system(mat, rhs)
+            if sol is None:
+                continue
+            ok = True
+            for idx in interior_indices:
+                pred = sum(sol[i] * xs[idx][i] for i in range(len(in_keys))) + sol[-1]
+                if not math.isclose(pred, ys[idx], rel_tol=1e-11, abs_tol=1e-8):
+                    ok = False
+                    break
+            if not ok:
+                continue
+            for xrow, yv in zip(xs, ys):
+                raw = sum(sol[i] * xrow[i] for i in range(len(in_keys))) + sol[-1]
+                pred = _clamp01(raw)
+                if not math.isclose(pred, yv, rel_tol=1e-11, abs_tol=1e-8):
+                    ok = False
+                    break
+            if not ok:
+                continue
+            if valid_solution is None:
+                valid_solution = sol
+            elif any(
+                not math.isclose(valid_solution[i], sol[i], rel_tol=1e-10, abs_tol=1e-8) for i in range(unknowns)
+            ):
                 ok = False
-                break
-        if not ok:
-            continue
-        for xrow, yv in zip(xs, ys):
-            raw = sum(sol[i] * xrow[i] for i in range(len(in_keys))) + sol[-1]
-            pred = _clamp01(raw)
-            if not math.isclose(pred, yv, rel_tol=1e-11, abs_tol=1e-8):
-                ok = False
-                break
-        if not ok:
-            continue
-        if valid_solution is None:
-            valid_solution = sol
-        elif any(
-            not math.isclose(valid_solution[i], sol[i], rel_tol=1e-10, abs_tol=1e-8) for i in range(unknowns)
-        ):
-            return None
+            if not ok:
+                return None
 
+    if valid_solution is None:
+        hinted = _try_parse_affine_formula_from_hint_text(_exact_symbolic_hint_text(config), in_keys)
+        if hinted is not None:
+            weights_hint, bias_hint = hinted
+            exact = True
+            for xrow, yv in zip(xs, ys):
+                raw = sum(weights_hint[i] * xrow[i] for i in range(len(in_keys))) + bias_hint
+                pred = _clamp01(raw)
+                if not math.isclose(pred, yv, rel_tol=1e-11, abs_tol=1e-8):
+                    exact = False
+                    break
+            if exact:
+                valid_solution = [*weights_hint, bias_hint]
     if valid_solution is None:
         return None
 
@@ -2035,6 +2207,8 @@ def _try_exact_symbolic_fast_path(config: CopilotSearchConfig) -> Optional[Exper
         fast = _try_absolute_value_piecewise_fast_path(config)
     if fast is None:
         fast = _try_linear_xy_fast_path(config)
+    if fast is None:
+        fast = _try_single_input_affine_fast_path(config)
     if fast is None:
         fast = _try_quadratic_single_input_fast_path(config)
     if fast is None:

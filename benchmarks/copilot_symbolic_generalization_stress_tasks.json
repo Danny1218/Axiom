@@ -12,8 +12,8 @@
       "expected_rows": [{ "target": -3.25 }, { "target": -0.25 }, { "target": 1.25 }, { "target": 5.0 }],
       "score_sort_key": "neg_mse",
       "metric_pass_min": ["neg_mse", -0.000000000001],
-      "fast_path_expected": false,
-      "backend_expected": "expert_backend",
+      "fast_path_expected": true,
+      "backend_expected": "single_input_affine_fast_path",
       "category": "generalization_affine"
     },
     {
@@ -39,8 +39,8 @@
       ],
       "score_sort_key": "neg_mse",
       "metric_pass_min": ["neg_mse", -0.000000000001],
-      "fast_path_expected": false,
-      "backend_expected": "expert_backend",
+      "fast_path_expected": true,
+      "backend_expected": "affine_multi_input_fast_path",
       "category": "generalization_affine"
     },
     {
@@ -68,8 +68,8 @@
       ],
       "score_sort_key": "neg_mse",
       "metric_pass_min": ["neg_mse", -0.000000000001],
-      "fast_path_expected": false,
-      "backend_expected": "expert_backend",
+      "fast_path_expected": true,
+      "backend_expected": "affine_multi_input_fast_path",
       "category": "generalization_affine"
     },
     {
@@ -97,8 +97,8 @@
       ],
       "score_sort_key": "neg_mse",
       "metric_pass_min": ["neg_mse", -0.000000000001],
-      "fast_path_expected": false,
-      "backend_expected": "expert_backend",
+      "fast_path_expected": true,
+      "backend_expected": "bounded_affine_multi_input_fast_path",
       "category": "generalization_clamped"
     },
     {
@@ -126,8 +126,8 @@
       ],
       "score_sort_key": "neg_mse",
       "metric_pass_min": ["neg_mse", -0.000000000001],
-      "fast_path_expected": false,
-      "backend_expected": "expert_backend",
+      "fast_path_expected": true,
+      "backend_expected": "bounded_affine_multi_input_fast_path",
       "category": "generalization_clamped"
     },
     {
@@ -153,8 +153,8 @@
       ],
       "score_sort_key": "neg_mse",
       "metric_pass_min": ["neg_mse", -0.000000000001],
-      "fast_path_expected": false,
-      "backend_expected": "expert_backend",
+      "fast_path_expected": true,
+      "backend_expected": "min_of_max_pair_fast_path",
       "category": "generalization_minmax"
     },
     {
@@ -180,8 +180,8 @@
       ],
       "score_sort_key": "neg_mse",
       "metric_pass_min": ["neg_mse", -0.000000000001],
-      "fast_path_expected": false,
-      "backend_expected": "expert_backend",
+      "fast_path_expected": true,
+      "backend_expected": "max_of_three_nested_fast_path",
       "category": "generalization_minmax"
     },
     {
@@ -195,8 +195,8 @@
       "expected_rows": [{ "level": 1.0 }, { "level": 1.0 }, { "level": 1.5 }, { "level": 2.75 }, { "level": 3.0 }, { "level": 3.0 }],
       "score_sort_key": "neg_mse",
       "metric_pass_min": ["neg_mse", -0.000000000001],
-      "fast_path_expected": false,
-      "backend_expected": "expert_backend",
+      "fast_path_expected": true,
+      "backend_expected": "nested_piecewise_identity_cap_fast_path",
       "category": "generalization_control_flow"
     }
   ]

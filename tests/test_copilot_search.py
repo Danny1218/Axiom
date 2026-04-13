@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -37,6 +38,7 @@ from axiom.copilot.search import (
     _try_nested_piecewise_identity_cap_fast_path,
     _try_piecewise_threshold_identity_fast_path,
     _try_quadratic_single_input_fast_path,
+    _try_single_input_affine_fast_path,
     _try_three_way_maxmin_fast_path,
     _try_two_input_interaction_fast_path,
     is_exact_symbolic_examples_task,
@@ -104,8 +106,10 @@ class ScriptedExpert:
 
 
 def _assert_no_forbidden_fast_path_syntax(ax_source: str) -> None:
-    for token in ("&&", "||", "else if"):
+    for token in ("&&", "||", "else if", "elseif", "clip(", "*=", "//", "/*"):
         assert token not in ax_source
+    assert re.search(r"\bmax\([^()]*,[^()]*,[^()]*\)", ax_source) is None
+    assert re.search(r"\bmin\([^()]*,[^()]*,[^()]*\)", ax_source) is None
 
 
 def test_scripted_expert_is_semantic_expert():
@@ -1150,6 +1154,33 @@ def _load_next_milestone_task_rows(task_id: str):
     return ex_in, ex_out
 
 
+def _load_generalization_task(task_id: str) -> dict:
+    p = Path(__file__).resolve().parent.parent / "benchmarks" / "copilot_symbolic_generalization_stress_tasks.json"
+    data = json.loads(p.read_text(encoding="utf-8"))
+    return next(t for t in data["tasks"] if t["id"] == task_id)
+
+
+def _build_generalization_task_config(
+    expert: SemanticExpert,
+    task_id: str,
+    *,
+    max_iterations: int,
+    expected_rows: list[dict] | None = None,
+) -> CopilotSearchConfig:
+    task = _load_generalization_task(task_id)
+    return CopilotSearchConfig(
+        expert=expert,
+        goal=task["goal"],
+        domain_context=task.get("domain_context"),
+        max_iterations=max_iterations,
+        mode=task["evaluation_mode"],
+        example_input_rows=[dict(row) for row in task["example_input_rows"]],
+        expected_rows=expected_rows or [dict(row) for row in task["expected_rows"]],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key=task["score_sort_key"],
+    )
+
+
 def test_three_way_maxmin_fast_path_exact_success():
     ex_in, ex_out = _load_three_way_maxmin_rows()
     ex = ScriptedExpert("SHOULD_NOT_DRAFT", [])
@@ -1782,5 +1813,135 @@ def test_affine_multi_input_fast_path_four_input_signed_bias_falls_back_when_noi
         score_sort_key="neg_mse",
     )
     assert _try_affine_multi_input_fast_path(cfg) is None
+    run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 1
+
+
+def test_single_input_affine_fast_path_reading_scale_and_shift_success():
+    ex = ScriptedExpert("SHOULD_NOT_DRAFT", [])
+    out = run_copilot_search(
+        _build_generalization_task_config(ex, "reading_scale_and_shift", max_iterations=2)
+    )
+    assert len(ex.draft_calls) == 0
+    assert out.iterations[0].producing_expert["backend_name"] == "single_input_affine_fast_path"
+    assert out.iterations[0].producing_expert["metadata"].get("fast_path") == "single_input_affine"
+    source = out.best_source.strip()
+    assert source == "target = 1.5 * reading - 0.25;"
+    _assert_no_forbidden_fast_path_syntax(source)
+    assert out.converged and out.best_evaluation.success
+
+
+def test_single_input_affine_fast_path_reading_scale_and_shift_falls_back_when_noisy():
+    ex = ScriptedExpert("target = 0.0;\n", [])
+    task = _load_generalization_task("reading_scale_and_shift")
+    expected_rows = [dict(row) for row in task["expected_rows"]]
+    expected_rows[-1] = {"target": 5.001}
+    cfg = _build_generalization_task_config(
+        ex,
+        "reading_scale_and_shift",
+        max_iterations=1,
+        expected_rows=expected_rows,
+    )
+    assert _try_single_input_affine_fast_path(cfg) is None
+    run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 1
+
+
+def test_bounded_affine_multi_input_fast_path_compass_unit_clip_success():
+    ex = ScriptedExpert("SHOULD_NOT_DRAFT", [])
+    out = run_copilot_search(
+        _build_generalization_task_config(ex, "compass_unit_clip", max_iterations=2)
+    )
+    assert len(ex.draft_calls) == 0
+    assert out.iterations[0].producing_expert["backend_name"] == "bounded_affine_multi_input_fast_path"
+    assert out.iterations[0].producing_expert["metadata"].get("fast_path") == "bounded_affine_multi_input"
+    source = out.best_source.strip()
+    assert source == "clipped = max(0.0, min(1.0, -0.15 * east + 0.25 * north + 0.35 * south + 0.2 * west - 0.05));"
+    _assert_no_forbidden_fast_path_syntax(source)
+    assert out.converged and out.best_evaluation.success
+
+
+def test_bounded_affine_multi_input_fast_path_compass_unit_clip_falls_back_when_noisy():
+    ex = ScriptedExpert("clipped = 0.0;\n", [])
+    task = _load_generalization_task("compass_unit_clip")
+    expected_rows = [dict(row) for row in task["expected_rows"]]
+    expected_rows[-1] = {"clipped": 1.0005}
+    cfg = _build_generalization_task_config(
+        ex,
+        "compass_unit_clip",
+        max_iterations=1,
+        expected_rows=expected_rows,
+    )
+    assert _try_bounded_affine_multi_input_fast_path(cfg) is None
+    run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 1
+
+
+def test_max_of_three_nested_fast_path_largest_channel_after_merge_success():
+    ex = ScriptedExpert("SHOULD_NOT_DRAFT", [])
+    out = run_copilot_search(
+        _build_generalization_task_config(ex, "largest_channel_after_merge", max_iterations=2)
+    )
+    assert len(ex.draft_calls) == 0
+    assert out.iterations[0].producing_expert["backend_name"] == "max_of_three_nested_fast_path"
+    assert out.iterations[0].producing_expert["metadata"].get("fast_path") == "max_of_three_nested"
+    source = out.best_source.strip()
+    assert source == "peak = max(max(left, mid), right);"
+    _assert_no_forbidden_fast_path_syntax(source)
+    assert out.converged and out.best_evaluation.success
+
+
+def test_max_of_three_nested_fast_path_largest_channel_after_merge_falls_back_when_noisy():
+    ex = ScriptedExpert("peak = 0.0;\n", [])
+    task = _load_generalization_task("largest_channel_after_merge")
+    expected_rows = [dict(row) for row in task["expected_rows"]]
+    expected_rows[-1] = {"peak": 12.001}
+    cfg = _build_generalization_task_config(
+        ex,
+        "largest_channel_after_merge",
+        max_iterations=1,
+        expected_rows=expected_rows,
+    )
+    assert _try_max_of_three_nested_fast_path(cfg) is None
+    run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 1
+
+
+def test_nested_piecewise_identity_cap_fast_path_shifted_ramp_window_success():
+    ex = ScriptedExpert("SHOULD_NOT_DRAFT", [])
+    out = run_copilot_search(
+        _build_generalization_task_config(ex, "shifted_ramp_window", max_iterations=2)
+    )
+    assert len(ex.draft_calls) == 0
+    assert out.iterations[0].producing_expert["backend_name"] == "nested_piecewise_identity_cap_fast_path"
+    assert out.iterations[0].producing_expert["metadata"].get("fast_path") == "nested_piecewise_identity_cap"
+    source = out.best_source.strip()
+    assert source == (
+        "if (offset < -0.5) {\n"
+        "    level = 1.0;\n"
+        "} else {\n"
+        "    if (offset < 1.5) {\n"
+        "        level = offset + 1.5;\n"
+        "    } else {\n"
+        "        level = 3.0;\n"
+        "    }\n"
+        "}"
+    )
+    _assert_no_forbidden_fast_path_syntax(source)
+    assert out.converged and out.best_evaluation.success
+
+
+def test_nested_piecewise_identity_cap_fast_path_shifted_ramp_window_falls_back_when_noisy():
+    ex = ScriptedExpert("level = 0.0;\n", [])
+    task = _load_generalization_task("shifted_ramp_window")
+    expected_rows = [dict(row) for row in task["expected_rows"]]
+    expected_rows[2] = {"level": 1.6}
+    cfg = _build_generalization_task_config(
+        ex,
+        "shifted_ramp_window",
+        max_iterations=1,
+        expected_rows=expected_rows,
+    )
+    assert _try_nested_piecewise_identity_cap_fast_path(cfg) is None
     run_copilot_search(cfg)
     assert len(ex.draft_calls) == 1
