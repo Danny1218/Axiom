@@ -137,9 +137,19 @@ def row_series_to_plain_dict(row: "pd.Series") -> Dict[str, Any]:
 
 
 def fetch_spy_frame(period: str = "6y") -> pd.DataFrame:
-    import yfinance as yf
+    try:
+        import yfinance as yf
 
-    return yf.Ticker("SPY").history(period=period)
+        df = yf.Ticker("SPY").history(period=period)
+    except Exception as exc:
+        raise RuntimeError(
+            f"Live SPY data unavailable from Yahoo Finance for period {period!r}: {exc}"
+        ) from exc
+    if not isinstance(df, pd.DataFrame) or df.empty or "Close" not in df.columns:
+        raise RuntimeError(
+            f"Live SPY data unavailable from Yahoo Finance for period {period!r}: returned no usable Close data."
+        )
+    return df
 
 
 def main() -> None:

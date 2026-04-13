@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import sys
+import types
 
 import pytest
 import torch
@@ -171,9 +173,28 @@ def test_mini_train_save_load_predict_backtest(tmp_path):
     assert math.isfinite(m["cumulative_strategy"]) and math.isfinite(m["cumulative_buy_hold"])
 
 
+def test_fetch_spy_frame_raises_controlled_runtime_error_on_invalid_yahoo_response(monkeypatch):
+    pd = pytest.importorskip("pandas")
+    ts = _train_spy_module()
+
+    class _FakeTicker:
+        def __init__(self, symbol: str):
+            self.symbol = symbol
+
+        def history(self, period: str):
+            return pd.DataFrame()
+
+    monkeypatch.setitem(sys.modules, "yfinance", types.SimpleNamespace(Ticker=_FakeTicker))
+    with pytest.raises(RuntimeError, match="Live SPY data unavailable from Yahoo Finance"):
+        ts.fetch_spy_frame("5d")
+
+
 @pytest.mark.integration
 def test_yfinance_spy_fetch_smoke():
     pytest.importorskip("yfinance")
     ts = _train_spy_module()
-    df = ts.fetch_spy_frame("5d")
+    try:
+        df = ts.fetch_spy_frame("5d")
+    except RuntimeError as exc:
+        pytest.skip(str(exc))
     assert len(df) >= 1 and "Close" in df.columns
