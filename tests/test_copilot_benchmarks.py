@@ -442,6 +442,19 @@ def test_smoke_copilot_next_milestone_compare_script_uses_next_suite_and_reports
     assert "Search regressed relative to draft" in script
 
 
+def test_smoke_copilot_generalization_stress_compare_script_wraps_shared_compare_harness():
+    root = Path(__file__).resolve().parents[1]
+    script = (root / "scripts" / "smoke_copilot_generalization_stress_compare.ps1").read_text(encoding="utf-8")
+    assert script.lstrip().startswith("param(")
+    assert '[string]$Backend = "benchmark-dispatch"' in script
+    assert '[string]$TaskJson = "benchmarks/copilot_symbolic_generalization_stress_tasks.json"' in script
+    assert '[string]$OutJson = "benchmark_symbolic_suite_generalization_stress.json"' in script
+    assert "smoke_copilot_next_milestone_compare.ps1" in script
+    assert "-MaxIterations $MaxIterations" in script
+    assert "-TaskJson $TaskJson" in script
+    assert "-OutJson $OutJson" in script
+
+
 def test_next_milestone_benchmark_tasks_json_loads():
     root = Path(__file__).resolve().parents[1]
     task_json = root / "benchmarks" / "copilot_symbolic_next_milestone_tasks.json"
