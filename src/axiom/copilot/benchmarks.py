@@ -549,6 +549,25 @@ _REFERENCE_AX_BY_TASK: Dict[str, str] = {
         "}\n"
     ),
     "max_of_three_nested": "score = max(max(a, b), c);\n",
+    # Third symbolic generalization stress suite.
+    "reading_scale_and_shift": "target = 1.5 * reading - 0.25;\n",
+    "sensor_mix_reordered": "mix = -0.2 * alpha + 0.6 * beta + 0.4 * gamma + 0.15;\n",
+    "portfolio_channels_signed_mix": "portfolio = 0.3 * north - 0.25 * east + 0.35 * south + 0.2 * west - 0.1;\n",
+    "bounded_signal_blend": "score = max(0.0, min(1.0, 0.45 * load + 0.4 * reserve - 0.3 * shock + 0.2));\n",
+    "compass_unit_clip": "clipped = max(0.0, min(1.0, 0.25 * north - 0.15 * east + 0.35 * south + 0.2 * west - 0.05));\n",
+    "winner_then_cap": "decision = min(max(candidate, fallback), ceiling);\n",
+    "largest_channel_after_merge": "peak = max(max(left, mid), right);\n",
+    "shifted_ramp_window": (
+        "if (offset < -0.5) {\n"
+        "    level = 1.0;\n"
+        "} else {\n"
+        "    if (offset < 1.5) {\n"
+        "        level = offset + 1.5;\n"
+        "    } else {\n"
+        "        level = 3.0;\n"
+        "    }\n"
+        "}\n"
+    ),
 }
 
 

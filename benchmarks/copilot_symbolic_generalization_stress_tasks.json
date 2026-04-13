@@ -1,0 +1,203 @@
+{
+  "schema_version": 1,
+  "tasks": [
+    {
+      "id": "reading_scale_and_shift",
+      "title": "reading_scale_and_shift (generalization stress)",
+      "goal": "Take the value named reading, scale it by 1.5, then shift the answer down by 0.25 into target.",
+      "domain_context": "Generalization stress for a single-input exact affine map with paraphrased wording.",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [{ "reading": -2.0 }, { "reading": 0.0 }, { "reading": 1.0 }, { "reading": 3.5 }],
+      "expected_rows": [{ "target": -3.25 }, { "target": -0.25 }, { "target": 1.25 }, { "target": 5.0 }],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.000000000001],
+      "fast_path_expected": false,
+      "backend_expected": "expert_backend",
+      "category": "generalization_affine"
+    },
+    {
+      "id": "sensor_mix_reordered",
+      "title": "sensor_mix_reordered (generalization stress)",
+      "goal": "Blend beta, alpha, and gamma into mix using 0.6 on beta, subtract 0.2 from alpha, add 0.4 from gamma, then add 0.15.",
+      "domain_context": "Three-input affine generalization with renamed inputs and intentionally reordered variable keys across rows.",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [
+        { "gamma": 0.0, "beta": 1.0, "alpha": 0.0 },
+        { "alpha": 1.0, "gamma": 0.0, "beta": 0.0 },
+        { "beta": 0.0, "alpha": 0.0, "gamma": 1.0 },
+        { "gamma": 1.0, "alpha": 1.0, "beta": 1.0 },
+        { "beta": -1.0, "gamma": 2.0, "alpha": 0.5 }
+      ],
+      "expected_rows": [
+        { "mix": 0.75 },
+        { "mix": -0.05 },
+        { "mix": 0.55 },
+        { "mix": 0.95 },
+        { "mix": 0.25 }
+      ],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.000000000001],
+      "fast_path_expected": false,
+      "backend_expected": "expert_backend",
+      "category": "generalization_affine"
+    },
+    {
+      "id": "portfolio_channels_signed_mix",
+      "title": "portfolio_channels_signed_mix (generalization stress)",
+      "goal": "Compute portfolio from north, east, south, and west using +0.3 north, -0.25 east, +0.35 south, +0.2 west, then subtract 0.1.",
+      "domain_context": "Higher-arity signed affine generalization with different variable names and a negative bias.",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [
+        { "north": 1.0, "east": 0.0, "south": 0.0, "west": 0.0 },
+        { "east": 1.0, "north": 0.0, "west": 0.0, "south": 0.0 },
+        { "south": 1.0, "west": 0.0, "east": 0.0, "north": 0.0 },
+        { "west": 1.0, "south": 0.0, "north": 0.0, "east": 0.0 },
+        { "north": 1.0, "south": 1.0, "east": 1.0, "west": 1.0 },
+        { "west": 3.0, "east": -1.0, "north": 2.0, "south": 0.5 }
+      ],
+      "expected_rows": [
+        { "portfolio": 0.2 },
+        { "portfolio": -0.35 },
+        { "portfolio": 0.25 },
+        { "portfolio": 0.1 },
+        { "portfolio": 0.5 },
+        { "portfolio": 1.525 }
+      ],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.000000000001],
+      "fast_path_expected": false,
+      "backend_expected": "expert_backend",
+      "category": "generalization_affine"
+    },
+    {
+      "id": "bounded_signal_blend",
+      "title": "bounded_signal_blend (generalization stress)",
+      "goal": "After combining load, reserve, and shock as 0.45 * load + 0.4 * reserve - 0.3 * shock + 0.2, keep score inside the unit interval.",
+      "domain_context": "Three-input clamped affine generalization with paraphrased clamp wording and shifted coefficients.",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [
+        { "load": 0.0, "reserve": 0.0, "shock": 0.0 },
+        { "reserve": 0.0, "shock": 0.0, "load": 1.0 },
+        { "shock": 0.0, "load": 0.0, "reserve": 1.0 },
+        { "load": 0.0, "shock": 1.0, "reserve": 0.0 },
+        { "reserve": 1.0, "load": 1.0, "shock": 1.0 },
+        { "shock": -1.0, "load": 2.0, "reserve": 2.0 }
+      ],
+      "expected_rows": [
+        { "score": 0.2 },
+        { "score": 0.65 },
+        { "score": 0.6 },
+        { "score": 0.0 },
+        { "score": 0.75 },
+        { "score": 1.0 }
+      ],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.000000000001],
+      "fast_path_expected": false,
+      "backend_expected": "expert_backend",
+      "category": "generalization_clamped"
+    },
+    {
+      "id": "compass_unit_clip",
+      "title": "compass_unit_clip (generalization stress)",
+      "goal": "Sum the signed compass contributions into clipped, then clip that result to [0, 1]: 0.25 north - 0.15 east + 0.35 south + 0.2 west - 0.05.",
+      "domain_context": "Four-input clamped affine generalization with reordered names, extra arity, and explicit unit-interval clipping.",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [
+        { "north": 1.0, "east": 0.0, "south": 0.0, "west": 0.0 },
+        { "east": 1.0, "west": 0.0, "north": 0.0, "south": 0.0 },
+        { "south": 1.0, "north": 0.0, "east": 0.0, "west": 0.0 },
+        { "west": 1.0, "south": 0.0, "east": 0.0, "north": 0.0 },
+        { "north": 1.0, "east": 1.0, "south": 1.0, "west": 1.0 },
+        { "south": 0.5, "west": 3.0, "north": 2.0, "east": -1.0 }
+      ],
+      "expected_rows": [
+        { "clipped": 0.2 },
+        { "clipped": 0.0 },
+        { "clipped": 0.3 },
+        { "clipped": 0.15 },
+        { "clipped": 0.6 },
+        { "clipped": 1.0 }
+      ],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.000000000001],
+      "fast_path_expected": false,
+      "backend_expected": "expert_backend",
+      "category": "generalization_clamped"
+    },
+    {
+      "id": "winner_then_cap",
+      "title": "winner_then_cap (generalization stress)",
+      "goal": "Choose whichever is larger between candidate and fallback, but do not let decision rise above ceiling.",
+      "domain_context": "Paraphrased nested min/max composition with different variable names and no direct min/max formula wording.",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [
+        { "candidate": 1.0, "fallback": 2.0, "ceiling": 2.5 },
+        { "ceiling": 0.3, "candidate": -2.0, "fallback": 0.5 },
+        { "fallback": 2.8, "candidate": 3.2, "ceiling": 5.0 },
+        { "candidate": 0.6, "ceiling": 0.4, "fallback": 0.1 },
+        { "fallback": 8.0, "ceiling": 7.0, "candidate": 4.0 }
+      ],
+      "expected_rows": [
+        { "decision": 2.0 },
+        { "decision": 0.3 },
+        { "decision": 3.2 },
+        { "decision": 0.4 },
+        { "decision": 7.0 }
+      ],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.000000000001],
+      "fast_path_expected": false,
+      "backend_expected": "expert_backend",
+      "category": "generalization_minmax"
+    },
+    {
+      "id": "largest_channel_after_merge",
+      "title": "largest_channel_after_merge (generalization stress)",
+      "goal": "Set peak to the largest value among left, mid, and right.",
+      "domain_context": "Paraphrased three-way max composition using renamed variables instead of the canonical a/b/c family.",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [
+        { "left": 2.5, "mid": 1.0, "right": 2.0 },
+        { "right": -2.0, "left": -3.0, "mid": -1.0 },
+        { "mid": 0.7, "right": 0.6, "left": 0.4 },
+        { "left": 4.0, "right": 4.2, "mid": 4.5 },
+        { "mid": 7.0, "left": 10.0, "right": 12.0 }
+      ],
+      "expected_rows": [
+        { "peak": 2.5 },
+        { "peak": -1.0 },
+        { "peak": 0.7 },
+        { "peak": 4.5 },
+        { "peak": 12.0 }
+      ],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.000000000001],
+      "fast_path_expected": false,
+      "backend_expected": "expert_backend",
+      "category": "generalization_minmax"
+    },
+    {
+      "id": "shifted_ramp_window",
+      "title": "shifted_ramp_window (generalization stress)",
+      "goal": "Keep level fixed at 1 below -0.5, follow offset + 1.5 until 1.5, and hold 3.0 afterwards.",
+      "domain_context": "Shifted-threshold piecewise generalization with paraphrased control-flow wording and nonzero floor/cap constants.",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [{ "offset": -2.0 }, { "offset": -0.5 }, { "offset": 0.0 }, { "offset": 1.25 }, { "offset": 1.5 }, { "offset": 3.0 }],
+      "expected_rows": [{ "level": 1.0 }, { "level": 1.0 }, { "level": 1.5 }, { "level": 2.75 }, { "level": 3.0 }, { "level": 3.0 }],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.000000000001],
+      "fast_path_expected": false,
+      "backend_expected": "expert_backend",
+      "category": "generalization_control_flow"
+    }
+  ]
+}

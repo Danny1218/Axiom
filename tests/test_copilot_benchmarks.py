@@ -479,6 +479,41 @@ def test_next_milestone_benchmark_tasks_json_loads():
     )
 
 
+def test_generalization_stress_benchmark_tasks_json_loads():
+    root = Path(__file__).resolve().parents[1]
+    task_json = root / "benchmarks" / "copilot_symbolic_generalization_stress_tasks.json"
+    raw = json.loads(task_json.read_text(encoding="utf-8"))
+    tasks = benchmark_tasks_from_json_dict(raw)
+    ids = {t.id for t in tasks}
+    assert {
+        "reading_scale_and_shift",
+        "sensor_mix_reordered",
+        "portfolio_channels_signed_mix",
+        "bounded_signal_blend",
+        "compass_unit_clip",
+        "winner_then_cap",
+        "largest_channel_after_merge",
+        "shifted_ramp_window",
+    }.issubset(ids)
+    assert len(tasks) >= 8
+    by_id = {t["id"]: t for t in raw["tasks"]}
+    assert by_id["reading_scale_and_shift"]["fast_path_expected"] is False
+    assert by_id["bounded_signal_blend"]["backend_expected"] == "expert_backend"
+    assert by_id["winner_then_cap"]["category"] == "generalization_minmax"
+
+
+def test_generalization_stress_suite_runs_with_benchmark_dispatch():
+    root = Path(__file__).resolve().parents[1]
+    tasks = load_benchmark_tasks_json_path(root / "benchmarks" / "copilot_symbolic_generalization_stress_tasks.json")
+    suite = run_benchmark_suite(BenchmarkDispatchExpert(), tasks=tasks, max_iterations=2)
+    assert suite.draft_summary is not None
+    assert suite.search_summary is not None
+    assert suite.draft_summary.task_count == len(tasks) == 8
+    assert suite.search_summary.task_count == len(tasks)
+    assert suite.draft_summary.compile_success_rate == 1.0
+    assert suite.search_summary.metric_success_rate == 1.0
+
+
 def test_copilot_milestone_workflow_runs_pytest_smoke_and_both_benchmarks():
     root = Path(__file__).resolve().parents[1]
     workflow = (root / ".github" / "workflows" / "copilot-milestone.yml").read_text(encoding="utf-8")
