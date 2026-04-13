@@ -117,6 +117,33 @@ def test_copilot_benchmark_benchmark_dispatch_backend_runs_current_symbolic_suit
     assert data["search_summary"]["metric_ok_count"] == 10
 
 
+def test_copilot_benchmark_benchmark_dispatch_backend_runs_next_milestone_suite(tmp_path: Path, capsys):
+    root = Path(__file__).resolve().parents[1]
+    out_json = tmp_path / "symbolic_next_suite.json"
+    main(
+        [
+            "copilot-benchmark",
+            "--backend",
+            "benchmark-dispatch",
+            "--task-json",
+            str(root / "benchmarks" / "copilot_symbolic_next_milestone_tasks.json"),
+            "--out",
+            str(out_json),
+        ]
+    )
+    err = capsys.readouterr().err
+    assert "[copilot-benchmark]" in err
+    data = json.loads(out_json.read_text(encoding="utf-8"))
+    assert data["kind"] == "axiom.copilot.benchmark_suite"
+    assert data["run_options"] == {"draft": True, "search": True}
+    assert data["draft_summary"]["task_count"] == 8
+    assert data["draft_summary"]["compile_ok_count"] == 8
+    assert data["draft_summary"]["metric_ok_count"] == 8
+    assert data["search_summary"]["task_count"] == 8
+    assert data["search_summary"]["compile_ok_count"] == 8
+    assert data["search_summary"]["metric_ok_count"] == 8
+
+
 def test_copilot_benchmark_accepts_temperature_and_passes_completion_override(tmp_path: Path, monkeypatch):
     calls: list[ExpertDraftRequest] = []
 

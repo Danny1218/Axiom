@@ -424,6 +424,23 @@ def test_smoke_copilot_draft_script_uses_benchmark_suite_and_reports_fields():
     assert "COMPARE SUMMARY" in script
 
 
+def test_smoke_copilot_next_milestone_compare_script_uses_next_suite_and_reports_regressions():
+    root = Path(__file__).resolve().parents[1]
+    script = (root / "scripts" / "smoke_copilot_next_milestone_compare.ps1").read_text(encoding="utf-8")
+    assert script.lstrip().startswith("param(")
+    assert "[AllowNull()]" in script
+    assert '[string]$Backend = "benchmark-dispatch"' in script
+    assert '[string]$TaskJson = "benchmarks/copilot_symbolic_next_milestone_tasks.json"' in script
+    assert '[string]$OutJson = "benchmark_symbolic_suite_next_milestone.json"' in script
+    assert "--max-iterations" in script
+    assert "copilot-benchmark" in script
+    assert "draft compile_ok=" in script
+    assert "search compile_ok=" in script
+    assert "backend_kind=" in script
+    assert "search_regressed=" in script
+    assert "Search regressed relative to draft" in script
+
+
 def test_next_milestone_benchmark_tasks_json_loads():
     root = Path(__file__).resolve().parents[1]
     task_json = root / "benchmarks" / "copilot_symbolic_next_milestone_tasks.json"

@@ -524,6 +524,31 @@ _REFERENCE_AX_BY_TASK: Dict[str, str] = {
         "}\n"
     ),
     "three_way_maxmin": "score = max(min(a, b), c);\n",
+    # Next milestone symbolic benchmark suite.
+    "absolute_value_piecewise": (
+        "if (x < 0.0) {\n"
+        "    y = -x;\n"
+        "} else {\n"
+        "    y = x;\n"
+        "}\n"
+    ),
+    "quadratic_plus_linear": "y = x * x + x + 1.0;\n",
+    "three_input_clamped_affine_shifted": "score = max(0.0, min(1.0, 0.5 * a + 0.3 * b - 0.2 * c + 0.1));\n",
+    "min_of_max_pair": "score = min(max(a, b), c);\n",
+    "four_input_affine_bias": "score = 0.4 * a + 0.3 * b - 0.1 * c + 0.2 * d + 0.05;\n",
+    "cross_term_signed_bias": "y = a * b - b + 0.5;\n",
+    "shifted_nested_piecewise": (
+        "if (x < -1.0) {\n"
+        "    y = 0.0;\n"
+        "} else {\n"
+        "    if (x < 2.0) {\n"
+        "        y = x + 1.0;\n"
+        "    } else {\n"
+        "        y = 3.0;\n"
+        "    }\n"
+        "}\n"
+    ),
+    "max_of_three_nested": "score = max(max(a, b), c);\n",
 }
 
 
