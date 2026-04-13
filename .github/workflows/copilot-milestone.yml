@@ -45,3 +45,10 @@ jobs:
             --backend benchmark-dispatch `
             --task-json benchmarks/copilot_symbolic_next_milestone_tasks.json `
             --out benchmark_symbolic_suite_next_milestone_ci.json
+
+      - name: Run Generalization Stress Benchmark
+        run: |
+          axiom copilot-benchmark `
+            --backend benchmark-dispatch `
+            --task-json benchmarks/copilot_symbolic_generalization_stress_tasks.json `
+            --out benchmark_symbolic_suite_generalization_stress_ci.json
