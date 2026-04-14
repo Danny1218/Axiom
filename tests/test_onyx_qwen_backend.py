@@ -15,6 +15,9 @@ from axiom.experts.onyx_qwen import (
     DRAFT_FEWSHOT,
     EXAMPLES_SEMANTICS_BLOCK,
     EXACT_SYMBOLIC_MATH_BLOCK,
+    ROBUSTNESS_AMBIGUITY_FALLBACK_BLOCK,
+    ROBUSTNESS_AMBIGUITY_FALLBACK_EXAMPLES_BLOCK,
+    ROBUSTNESS_AMBIGUITY_REPAIR_CLEANUP_BLOCK,
     REPAIR_NEURAL_TO_SYMBOLIC_BLOCK,
     REPAIR_UNROLL_COLLAPSE_BLOCK,
     OnyxQwenBackend,
@@ -260,6 +263,72 @@ def test_user_prompt_repair_includes_neural_to_symbolic_when_neural_and_examples
     p = user_prompt_repair("goal", 'y = neural([1.0], "liquid");\n', "err", ctx)
     assert REPAIR_NEURAL_TO_SYMBOLIC_BLOCK.splitlines()[0] in p
     assert "0.7 * risk_a" in p or "risk_score = max(min" in p
+
+
+def test_user_prompt_draft_includes_robustness_fallback_blocks_for_fourth_suite_task_id():
+    ctx = {
+        "benchmark_task_id": "noisy_affine_thermometer",
+        "domain_context": (
+            "Slight label noise is intentional. This should fall back to the expert backend "
+            "instead of an exact affine fast path."
+        ),
+        "example_input_rows": [{"thermometer_reading": 0.0}],
+        "expected_outputs": [{"adjusted": -0.19}],
+    }
+    p = user_prompt_draft("Take thermometer_reading and nudge it into adjusted.", ctx)
+    assert ROBUSTNESS_AMBIGUITY_FALLBACK_BLOCK.splitlines()[0] in p
+    assert ROBUSTNESS_AMBIGUITY_FALLBACK_EXAMPLES_BLOCK.splitlines()[0] in p
+    assert "Never use `neural(...)`." in p
+    assert "Never use `clip(...)`." in p
+    assert "adjusted = 1.25 * thermometer_reading - 0.2;" in p
+    assert "response = exposure * hedge - 0.5 * hedge + 0.25;" in p
+    assert "decision = min(max(primary, backup + 0.2), cap);" in p
+    assert "if (offset < -1.0) {" in p
+
+
+def test_user_prompt_draft_detects_robustness_fallback_from_semantics_text():
+    p = user_prompt_draft(
+        "This near-miss mapping has slight row noise and should fall back safely.",
+        {"domain_context": "Adversarial wording plus underdetermined examples."},
+    )
+    assert ROBUSTNESS_AMBIGUITY_FALLBACK_BLOCK.splitlines()[0] in p
+    assert ROBUSTNESS_AMBIGUITY_FALLBACK_EXAMPLES_BLOCK.splitlines()[0] in p
+
+
+def test_user_prompt_draft_fallback_mode_skips_exact_symbolic_anchors():
+    ctx = {
+        "fallback_expected": True,
+        "exact_symbolic_examples_task": True,
+        "domain_context": "Noisy underdetermined near-miss task that should fall back.",
+        "example_input_rows": [{"x": 1.0}],
+        "expected_outputs": [{"y": 2.0}],
+    }
+    p = user_prompt_draft("Use x to produce y.", ctx)
+    assert ROBUSTNESS_AMBIGUITY_FALLBACK_BLOCK.splitlines()[0] in p
+    assert EXAMPLES_SEMANTICS_BLOCK.splitlines()[0] in p
+    assert EXACT_SYMBOLIC_MATH_BLOCK not in p
+    assert DRAFT_FEWSHOT not in p
+
+
+def test_user_prompt_repair_includes_robustness_cleanup_block_for_fourth_suite_fallback():
+    ctx = {
+        "benchmark_task_id": "soft_cap_prefer_signal",
+        "fallback_expected": True,
+        "domain_context": "Sparse near-miss relative to min(max(a,b), c); should fall back.",
+    }
+    current = (
+        "if (primary > backup) { }\n"
+        "else if (backup > primary) { decision = clip(primary, 0.0, cap); }\n"
+        "// note\n"
+        "score *= 2.0;\n"
+    )
+    p = user_prompt_repair("Prefer primary unless backup gets a 0.2 head start.", current, "err", ctx)
+    assert ROBUSTNESS_AMBIGUITY_FALLBACK_BLOCK.splitlines()[0] in p
+    assert ROBUSTNESS_AMBIGUITY_FALLBACK_EXAMPLES_BLOCK.splitlines()[0] in p
+    assert ROBUSTNESS_AMBIGUITY_REPAIR_CLEANUP_BLOCK.splitlines()[0] in p
+    assert "`clip(expr, low, high)` -> `max(low, min(expr, high))`" in p
+    assert "`max(a, b, c)` -> `max(max(a, b), c)`" in p
+    assert "`x *= y;`, `x += y;`, `x -= y;` -> explicit assignments such as `x = x * y;`" in p
 
 
 def test_ax_source_metadata_flags_neural_and_suspicious_numeric():

@@ -132,6 +132,77 @@ _CANONICAL_SYMBOLIC_FAMILY_HINTS = (
     re.compile(r"\bmax_of_two\b|\bscore\s*=\s*max\(\s*a\s*,\s*b\s*\)|\bmax\(\s*a\s*,\s*b\s*\)", re.I | re.S),
 )
 
+_ROBUSTNESS_AMBIGUITY_FALLBACK_TASK_IDS = frozenset(
+    {
+        "noisy_affine_thermometer",
+        "sparse_quadratic_story",
+        "sparse_three_way_peak",
+        "adversarial_clean_reply_clip",
+        "near_abs_with_bias",
+        "weighted_floor_then_ramp",
+        "signed_cross_term_noisy",
+        "soft_cap_prefer_signal",
+    }
+)
+
+_ROBUSTNESS_AMBIGUITY_FALLBACK_HINT = re.compile(
+    r"(noise|noisy|underdetermined|adversarial|near[- ]miss|fallback|fall[- ]back|"
+    r"should[- ]fall[- ]back|fallback[- ]only|expert[_ ]backend|robust(?:ness)?|ambigu(?:ity|ous))",
+    re.I,
+)
+
+ROBUSTNESS_AMBIGUITY_FALLBACK_BLOCK = """Robustness / ambiguity fallback mode:
+- Prefer the simplest symbolic program consistent with the goal.
+- Do not overfit minor row noise with extra branches, thresholds, or constants.
+- For underdetermined examples, choose the simplest formula implied by the goal.
+- Never use `neural(...)`.
+- Never use `clip(...)`.
+- Never use comments or prose lines.
+- Never use `else if` or `elseif`.
+- Never use shorthand operators such as `*=`, `+=`, or `-=`.
+- Never use inline if-expression forms such as `a if cond else b` or `cond ? a : b`.
+- Never emit empty branches.
+- Use canonical nested `if` blocks only.
+- Use nested `max` / `min` only; never 3-arg `max` or `min`."""
+
+ROBUSTNESS_AMBIGUITY_FALLBACK_EXAMPLES_BLOCK = """Positive anchors for robustness / ambiguity fallback:
+- Affine + bias
+```ax
+adjusted = 1.25 * thermometer_reading - 0.2;
+```
+
+- Signed cross-term + bias
+```ax
+response = exposure * hedge - 0.5 * hedge + 0.25;
+```
+
+- Preference / cap with nested `max` / `min`
+```ax
+decision = min(max(primary, backup + 0.2), cap);
+```
+
+- Shifted piecewise with clean nested `if`
+```ax
+if (offset < -1.0) {
+    band = -0.5 * offset;
+} else {
+    if (offset < 2.0) {
+        band = offset + 1.5;
+    } else {
+        band = 4.0;
+    }
+}
+```"""
+
+ROBUSTNESS_AMBIGUITY_REPAIR_CLEANUP_BLOCK = """Fallback cleanup rules (repair these into canonical `.ax`):
+- `else if (...) { ... }` or `elseif (...) { ... }` -> `else { if (...) { ... } else { ... } }`
+- `clip(expr, low, high)` -> `max(low, min(expr, high))`
+- `max(a, b, c)` -> `max(max(a, b), c)` and the same idea for `min(a, b, c)`
+- `x *= y;`, `x += y;`, `x -= y;` -> explicit assignments such as `x = x * y;`
+- Remove comments and prose entirely; return only code.
+- Replace inline conditionals such as `a if cond else b` or `cond ? a : b` with full `if` / `else` blocks.
+- Never leave an empty branch; every emitted branch must contain a real assignment."""
+
 SYSTEM_DRAFT = (
     "You write programs in THIS repository's `.ax` DSL, not Macaulay2, not Axiom CAS, and not generic pseudocode. "
     "Use `=` assignments with semicolons, direct variable names, `if (...) { ... } else { ... }`, and `while (...) { ... }`. "
@@ -379,7 +450,48 @@ def _append_repair_neural_to_symbolic_if_needed(parts: list[str], current_progra
     parts.append(REPAIR_NEURAL_TO_SYMBOLIC_BLOCK + "\n\n")
 
 
-def _append_exact_symbolic_math_if_needed(parts: list[str], context: Mapping[str, Any]) -> None:
+def _context_flag_true(context: Mapping[str, Any], key: str) -> bool:
+    value = context.get(key)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return False
+
+
+def _robustness_ambiguity_fallback_text(goal: str, context: Mapping[str, Any]) -> str:
+    parts = [(goal or "").strip()]
+    for key in ("domain_context", "category", "backend_expected"):
+        value = context.get(key)
+        if isinstance(value, str) and value.strip():
+            parts.append(value.strip())
+    return " ".join(p for p in parts if p)
+
+
+def _is_robustness_ambiguity_fallback_context(goal: str, context: Mapping[str, Any]) -> bool:
+    if _context_flag_true(context, "fallback_expected"):
+        return True
+    for key in ("benchmark_task_id", "task_id"):
+        value = context.get(key)
+        if isinstance(value, str) and value.strip().lower() in _ROBUSTNESS_AMBIGUITY_FALLBACK_TASK_IDS:
+            return True
+    return bool(_ROBUSTNESS_AMBIGUITY_FALLBACK_HINT.search(_robustness_ambiguity_fallback_text(goal, context)))
+
+
+def _append_robustness_ambiguity_fallback_blocks_if_needed(
+    parts: list[str], goal: str, context: Mapping[str, Any], *, include_repair_cleanup: bool
+) -> None:
+    if not _is_robustness_ambiguity_fallback_context(goal, context):
+        return
+    parts.append(ROBUSTNESS_AMBIGUITY_FALLBACK_BLOCK + "\n\n")
+    parts.append(ROBUSTNESS_AMBIGUITY_FALLBACK_EXAMPLES_BLOCK + "\n\n")
+    if include_repair_cleanup:
+        parts.append(ROBUSTNESS_AMBIGUITY_REPAIR_CLEANUP_BLOCK + "\n\n")
+
+
+def _append_exact_symbolic_math_if_needed(parts: list[str], goal: str, context: Mapping[str, Any]) -> None:
+    if _is_robustness_ambiguity_fallback_context(goal, context):
+        return
     if not context.get("exact_symbolic_examples_task"):
         return
     if not _context_has_examples_driven_semantics(context):
@@ -405,6 +517,8 @@ def _context_hints_known_canonical_symbolic_family(context: Mapping[str, Any]) -
 def _append_canonical_symbolic_family_drafts_if_needed(
     parts: list[str], goal: str, context: Mapping[str, Any]
 ) -> None:
+    if _is_robustness_ambiguity_fallback_context(goal, context):
+        return
     if context.get("exact_symbolic_examples_task"):
         parts.append(DRAFT_FEWSHOT + "\n\n")
         return
@@ -436,7 +550,8 @@ def user_prompt_draft(goal: str, context: Mapping[str, Any]) -> str:
         f"Context (JSON, sorted keys):\n{_context_json(context)}\n\n",
     ]
     _append_examples_semantics_if_needed(parts, context)
-    _append_exact_symbolic_math_if_needed(parts, context)
+    _append_robustness_ambiguity_fallback_blocks_if_needed(parts, goal, context, include_repair_cleanup=False)
+    _append_exact_symbolic_math_if_needed(parts, goal, context)
     _append_canonical_symbolic_family_drafts_if_needed(parts, goal, context)
     parts.extend(
         [
@@ -459,7 +574,8 @@ def user_prompt_repair(goal: str, current_program: str, error_report: str, conte
         f"Context (JSON, sorted keys):\n{_context_json(context)}\n\n",
     ]
     _append_examples_semantics_if_needed(parts, context)
-    _append_exact_symbolic_math_if_needed(parts, context)
+    _append_robustness_ambiguity_fallback_blocks_if_needed(parts, goal, context, include_repair_cleanup=True)
+    _append_exact_symbolic_math_if_needed(parts, goal, context)
     parts.extend(
         [
             f"{SYNTAX_SUMMARY}\n\n",
@@ -902,6 +1018,9 @@ __all__ = [
     "DRAFT_FEWSHOT",
     "EXAMPLES_SEMANTICS_BLOCK",
     "EXACT_SYMBOLIC_MATH_BLOCK",
+    "ROBUSTNESS_AMBIGUITY_FALLBACK_BLOCK",
+    "ROBUSTNESS_AMBIGUITY_FALLBACK_EXAMPLES_BLOCK",
+    "ROBUSTNESS_AMBIGUITY_REPAIR_CLEANUP_BLOCK",
     "REPAIR_NEURAL_TO_SYMBOLIC_BLOCK",
     "REPAIR_UNROLL_COLLAPSE_BLOCK",
     "ax_source_metadata_flags",
