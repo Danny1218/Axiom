@@ -203,6 +203,14 @@ ROBUSTNESS_AMBIGUITY_REPAIR_CLEANUP_BLOCK = """Fallback cleanup rules (repair th
 - Replace inline conditionals such as `a if cond else b` or `cond ? a : b` with full `if` / `else` blocks.
 - Never leave an empty branch; every emitted branch must contain a real assignment."""
 
+ROBUSTNESS_AMBIGUITY_SYNTAX_REPAIR_ONLY_BLOCK = """Fallback-only syntax repair mode:
+- Preserve the intended math and variable names.
+- Rewrite only into valid canonical `.ax`; do not add new behavior.
+- Never add `neural(...)`.
+- Never add comments or prose.
+- Never use `else if` or `elseif`.
+- Never use 3-arg `max` or `min`; use nested binary `max` / `min` only."""
+
 SYSTEM_DRAFT = (
     "You write programs in THIS repository's `.ax` DSL, not Macaulay2, not Axiom CAS, and not generic pseudocode. "
     "Use `=` assignments with semicolons, direct variable names, `if (...) { ... } else { ... }`, and `while (...) { ... }`. "
@@ -390,6 +398,10 @@ Good: `risk_score = max(min(0.7 * risk_a + 0.3 * risk_b, 1.0), 0.0);`"""
 _INDEXED_VAR_PATTERN = re.compile(r"\b[a-zA-Z_][a-zA-Z0-9]*_\d+\b")
 _OUTPUT_CALL_PATTERN = re.compile(r"\boutput\s*\(", re.IGNORECASE)
 _NEURAL_CALL_PATTERN = re.compile(r"\bneural\s*\(", re.IGNORECASE)
+_CLIP_CALL_PATTERN = re.compile(r"\bclip\s*\(", re.IGNORECASE)
+_LOGICAL_OPERATOR_PATTERN = re.compile(r"&&|\|\|")
+_UNSUPPORTED_BRANCH_SURFACE_PATTERN = re.compile(r"\belse\s+if\b|\belseif\b|\botherwise\b", re.IGNORECASE)
+_SHORTHAND_ASSIGN_PATTERN = re.compile(r"^(\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*)([+\-*/])=(\s*)(.+;)\s*$")
 # Leading-zero integer literals like ``03`` (often invalid / typo); not ``0.3``.
 _LEADING_ZERO_INT_LITERAL = re.compile(r"(?<![0-9.])0[0-9]+\b")
 # Malformed multi-dot numbers (e.g. ``1.0.0``).
@@ -417,9 +429,34 @@ def _program_has_output_call(source: str) -> bool:
     return bool(_OUTPUT_CALL_PATTERN.search(source))
 
 
+def _has_inline_if_expression(source: str) -> bool:
+    for line in source.splitlines():
+        s = line.strip()
+        if not s:
+            continue
+        if "?" in s and ":" in s:
+            return True
+        if " if " in f" {s} " and " else " in f" {s} " and not s.startswith("if ") and not s.startswith("if("):
+            return True
+    return False
+
+
+def _unsupported_pattern_warnings(source: str) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    if _UNSUPPORTED_BRANCH_SURFACE_PATTERN.search(source):
+        out["unsupported_branch_surface_warning"] = True
+    if _has_inline_if_expression(source):
+        out["inline_if_expression_warning"] = True
+    if _CLIP_CALL_PATTERN.search(source):
+        out["clip_call_warning"] = True
+    if _LOGICAL_OPERATOR_PATTERN.search(source):
+        out["logical_operator_warning"] = True
+    return out
+
+
 def _pattern_warnings(ax: str) -> dict[str, Any]:
     """Metadata flags for likely per-row unrolling or invalid ``output(...)`` (source kept intact)."""
-    out: dict[str, Any] = {}
+    out: dict[str, Any] = dict(_unsupported_pattern_warnings(ax))
     if _program_has_indexed_variables(ax):
         out["indexed_variable_warning"] = True
     if _program_has_output_call(ax):
@@ -486,6 +523,7 @@ def _append_robustness_ambiguity_fallback_blocks_if_needed(
     parts.append(ROBUSTNESS_AMBIGUITY_FALLBACK_BLOCK + "\n\n")
     parts.append(ROBUSTNESS_AMBIGUITY_FALLBACK_EXAMPLES_BLOCK + "\n\n")
     if include_repair_cleanup:
+        parts.append(ROBUSTNESS_AMBIGUITY_SYNTAX_REPAIR_ONLY_BLOCK + "\n\n")
         parts.append(ROBUSTNESS_AMBIGUITY_REPAIR_CLEANUP_BLOCK + "\n\n")
 
 
@@ -691,19 +729,192 @@ def _rest_looks_code_like(rest: list[str]) -> bool:
 
 
 def _finalize_extracted_source(ax: str, extraction: dict[str, Any]) -> str:
-    """Strip a lone first-line language tag (``ax`` / ``js`` / …) when the remainder is code-like; set counts."""
+    """Strip a lone first-line language tag (``ax`` / ``js`` / …) when the remainder is code-like."""
     lines = ax.splitlines()
     if lines and _is_stray_lang_tag_line(lines[0]) and len(lines) > 1 and _rest_looks_code_like(lines[1:]):
         extraction["stripped_language_tag"] = lines[0].strip().lower()
         lines = lines[1:]
         ax = "\n".join(lines).strip()
-    extraction["code_line_count"] = len([ln for ln in ax.splitlines() if ln.strip()])
     return ax
+
+
+def _line_looks_like_ax_code(line: str) -> bool:
+    s = line.strip()
+    if not s:
+        return False
+    if _line_code_score(s) > 0:
+        return True
+    if "{" in s or "}" in s:
+        return True
+    if s.startswith("else"):
+        return True
+    return False
+
+
+def _strip_line_comments_and_trailing_prose(ax: str) -> tuple[str, dict[str, bool]]:
+    meta: dict[str, bool] = {}
+    lines: list[str] = []
+    stripped_comments = False
+    for line in ax.splitlines():
+        body, sep, _ = line.partition("//")
+        if sep:
+            line = body.rstrip()
+            stripped_comments = True
+        lines.append(line)
+    if stripped_comments:
+        meta["stripped_line_comments"] = True
+    last_code_idx: int | None = None
+    for i, line in enumerate(lines):
+        if _line_looks_like_ax_code(line):
+            last_code_idx = i
+    if last_code_idx is not None:
+        trailing = lines[last_code_idx + 1 :]
+        if any(line.strip() for line in trailing):
+            meta["stripped_trailing_prose"] = True
+        lines = lines[: last_code_idx + 1]
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return "\n".join(lines).strip(), meta
 
 
 # Lone `2.` → `2.0` without touching `2.0`, `3.14`, or the fractional part after `.` in `2.0.`
 _TRAILING_DOT_FLOAT = re.compile(r"(?<!\.\d)(\d+)\.(?![0-9.])")
 _STATEMENT_EQ_EQ_ASSIGN = re.compile(r"^(\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*)==(\s*)(.+;)\s*$")
+
+
+def _rewrite_shorthand_assignments(ax: str) -> tuple[str, dict[str, bool]]:
+    meta: dict[str, bool] = {}
+    out_lines: list[str] = []
+    changed = False
+    for line in ax.splitlines():
+        m = _SHORTHAND_ASSIGN_PATTERN.match(line)
+        if not m:
+            out_lines.append(line)
+            continue
+        indent, lhs, _, op, _, rhs = m.groups()
+        out_lines.append(f"{indent}{lhs} = {lhs} {op} {rhs.strip()}")
+        changed = True
+    if changed:
+        meta["normalized_shorthand_assignment"] = True
+    return "\n".join(out_lines).strip(), meta
+
+
+def _find_matching_paren(text: str, open_idx: int) -> Optional[int]:
+    depth = 0
+    in_string = False
+    escaped = False
+    for i in range(open_idx, len(text)):
+        ch = text[i]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+            continue
+        if ch == "(":
+            depth += 1
+            continue
+        if ch == ")":
+            depth -= 1
+            if depth == 0:
+                return i
+    return None
+
+
+def _split_top_level_args(text: str) -> list[str]:
+    parts: list[str] = []
+    start = 0
+    paren_depth = 0
+    bracket_depth = 0
+    in_string = False
+    escaped = False
+    for i, ch in enumerate(text):
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+            continue
+        if ch == "(":
+            paren_depth += 1
+            continue
+        if ch == ")":
+            paren_depth -= 1
+            continue
+        if ch == "[":
+            bracket_depth += 1
+            continue
+        if ch == "]":
+            bracket_depth -= 1
+            continue
+        if ch == "," and paren_depth == 0 and bracket_depth == 0:
+            parts.append(text[start:i].strip())
+            start = i + 1
+    parts.append(text[start:].strip())
+    return parts
+
+
+def _rewrite_three_arg_extrema_once(text: str, fn_name: str) -> tuple[str, int]:
+    pattern = re.compile(rf"\b{fn_name}\s*\(")
+    out: list[str] = []
+    i = 0
+    rewrites = 0
+    while True:
+        match = pattern.search(text, i)
+        if match is None:
+            out.append(text[i:])
+            break
+        open_idx = text.find("(", match.start(), match.end())
+        close_idx = _find_matching_paren(text, open_idx)
+        if close_idx is None:
+            out.append(text[i:])
+            break
+        args = _split_top_level_args(text[open_idx + 1 : close_idx])
+        if len(args) == 3 and all(args):
+            out.append(text[i : match.start()])
+            out.append(f"{fn_name}({fn_name}({args[0]}, {args[1]}), {args[2]})")
+            rewrites += 1
+        else:
+            out.append(text[i : close_idx + 1])
+        i = close_idx + 1
+    return "".join(out), rewrites
+
+
+def _rewrite_three_arg_extrema(ax: str) -> tuple[str, dict[str, bool]]:
+    meta: dict[str, bool] = {}
+    out = ax
+    for fn_name, meta_key in (("max", "normalized_three_arg_max"), ("min", "normalized_three_arg_min")):
+        changed = False
+        while True:
+            out2, rewrites = _rewrite_three_arg_extrema_once(out, fn_name)
+            if not rewrites:
+                break
+            out = out2
+            changed = True
+        if changed:
+            meta[meta_key] = True
+    return out, meta
+
+
+def _cleanup_extracted_ax_source(ax: str) -> tuple[str, dict[str, bool]]:
+    meta: dict[str, bool] = {}
+    out, cleanup_meta = _strip_line_comments_and_trailing_prose(ax)
+    meta.update(cleanup_meta)
+    out, cleanup_meta = _rewrite_shorthand_assignments(out)
+    meta.update(cleanup_meta)
+    out, cleanup_meta = _rewrite_three_arg_extrema(out)
+    meta.update(cleanup_meta)
+    return out, meta
 
 
 def _normalize_ax_source_conservative(ax: str) -> tuple[str, dict[str, bool]]:
@@ -737,9 +948,12 @@ def _normalize_ax_source_conservative(ax: str) -> tuple[str, dict[str, bool]]:
 def _split_ax_result(ax: str, explanation: Optional[str], extraction: dict[str, Any], raw: str) -> AxSplitResult:
     extraction.update(_forbidden_flags(ax, raw))
     ax = _finalize_extracted_source(ax, extraction)
+    ax, cleanup_meta = _cleanup_extracted_ax_source(ax)
+    extraction.update(cleanup_meta)
     ax, norm_meta = _normalize_ax_source_conservative(ax)
     extraction.update(norm_meta)
     extraction.update(_pattern_warnings(ax))
+    extraction["code_line_count"] = len([ln for ln in ax.splitlines() if ln.strip()])
     return AxSplitResult(ax, explanation, extraction)
 
 

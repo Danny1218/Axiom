@@ -331,6 +331,62 @@ def test_user_prompt_repair_includes_robustness_cleanup_block_for_fourth_suite_f
     assert "`x *= y;`, `x += y;`, `x -= y;` -> explicit assignments such as `x = x * y;`" in p
 
 
+def test_user_prompt_repair_includes_fallback_syntax_only_mode():
+    ctx = {
+        "benchmark_task_id": "soft_cap_prefer_signal",
+        "fallback_expected": True,
+        "domain_context": "Noisy underdetermined near-miss task that should fall back.",
+    }
+    p = user_prompt_repair("Prefer primary unless backup gets a 0.2 head start.", "bad", "parse err", ctx)
+    assert "Fallback-only syntax repair mode" in p
+    assert "Preserve the intended math and variable names." in p
+    assert "Rewrite only into valid canonical `.ax`; do not add new behavior." in p
+    assert "Never add `neural(...)`." in p
+    assert "Never add comments or prose." in p
+    assert "Never use 3-arg `max` or `min`" in p
+
+
+def test_split_ax_cleanup_rewrites_comments_trailing_prose_shorthand_and_three_arg_extrema():
+    raw = """```ax
+score += bonus; // keep the same math
+delta -= drag;
+mass *= scale;
+ratio /= total;
+capped = max(a, b, c);
+floored = min(low, mid, high);
+This trailing prose should disappear.
+```"""
+    r = split_ax_and_prose(raw)
+    assert r.ax_source == (
+        "score = score + bonus;\n"
+        "delta = delta - drag;\n"
+        "mass = mass * scale;\n"
+        "ratio = ratio / total;\n"
+        "capped = max(max(a, b), c);\n"
+        "floored = min(min(low, mid), high);"
+    )
+    assert r.extraction.get("stripped_line_comments") is True
+    assert r.extraction.get("stripped_trailing_prose") is True
+    assert r.extraction.get("normalized_shorthand_assignment") is True
+    assert r.extraction.get("normalized_three_arg_max") is True
+    assert r.extraction.get("normalized_three_arg_min") is True
+
+
+def test_ax_source_metadata_flags_unsupported_fallback_surface_patterns():
+    src = (
+        "if (x > 0.0) { y = x; } else if (x < 0.0) { y = -x; }\n"
+        "score = good if cond else bad;\n"
+        "bounded = clip(score, 0.0, 1.0);\n"
+        "ok = left && right;\n"
+        "fallback = alt || base;\n"
+    )
+    m = ax_source_metadata_flags(src)
+    assert m.get("unsupported_branch_surface_warning") is True
+    assert m.get("inline_if_expression_warning") is True
+    assert m.get("clip_call_warning") is True
+    assert m.get("logical_operator_warning") is True
+
+
 def test_ax_source_metadata_flags_neural_and_suspicious_numeric():
     src = 'risk_score = neural([0.7*risk_a, 03*risk_b], "liquid");\n'
     m = ax_source_metadata_flags(src)
