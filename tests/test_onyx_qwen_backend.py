@@ -40,11 +40,19 @@ from axiom.experts.onyx_qwen import (
 )
 
 
-def _ok_response(content: str, *, status: int = 200, text: str = "") -> Mock:
+def _ok_response(
+    content: str,
+    *,
+    status: int = 200,
+    text: str = "",
+    headers: dict[str, str] | None = None,
+    body: dict | None = None,
+) -> Mock:
     r = Mock()
     r.status_code = status
     r.text = text
-    r.json.return_value = {"choices": [{"message": {"content": content}}]}
+    r.headers = headers or {}
+    r.json.return_value = body or {"choices": [{"message": {"content": content}}]}
     return r
 
 
@@ -607,7 +615,11 @@ def test_request_capture_writes_success_artifact_via_env(tmp_path, monkeypatch):
 
     def fake_post(url, json=None, headers=None, timeout=None):
         calls.append(dict(json or {}))
-        return _ok_response("```ax\ny = 1.0;\n```")
+        return _ok_response(
+            "```ax\ny = 1.0;\n```",
+            headers={"x-request-id": "req-123", "content-type": "application/json"},
+            body={"id": "chatcmpl-123", "choices": [{"message": {"content": "```ax\ny = 1.0;\n```"}}]},
+        )
 
     monkeypatch.setenv(REQUEST_CAPTURE_DIR_ENV_VAR, str(tmp_path))
     b = OnyxQwenBackend("http://h", "m", _post=fake_post)
@@ -630,6 +642,11 @@ def test_request_capture_writes_success_artifact_via_env(tmp_path, monkeypatch):
     assert capture["prompt_char_count"] == (
         capture["system_prompt_char_count"] + capture["user_prompt_char_count"]
     )
+    assert capture["request_id"] == "req-123"
+    assert capture["response_id"] == "chatcmpl-123"
+    assert capture["response_headers"]["x-request-id"] == "req-123"
+    assert out.metadata.get("request_id") == "req-123"
+    assert out.metadata.get("response_id") == "chatcmpl-123"
     assert "failure_kind" not in capture
 
 
@@ -662,6 +679,7 @@ def test_request_capture_writes_http500_artifact(tmp_path):
         m = Mock()
         m.status_code = 500
         m.text = '{"detail":"CUDA error: out of memory"}'
+        m.headers = {"x-request-id": "req-500", "content-type": "application/json"}
         return m
 
     b = OnyxQwenBackend("http://h", "m", _post=fake_post)
@@ -680,6 +698,9 @@ def test_request_capture_writes_http500_artifact(tmp_path):
     assert capture["status_code"] == 500
     assert "CUDA error: out of memory" in capture["http_failure_detail"]
     assert capture["payload_sha256"] == ei.value.metadata.get("payload_sha256")
+    assert capture["request_id"] == "req-500"
+    assert capture["response_headers"]["x-request-id"] == "req-500"
+    assert ei.value.metadata.get("request_id") == "req-500"
     assert "failure_kind" not in capture
 
 

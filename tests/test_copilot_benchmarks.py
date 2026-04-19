@@ -558,6 +558,9 @@ def test_smoke_copilot_next_milestone_compare_script_uses_next_suite_and_reports
     assert "search compile_ok=" in script
     assert "backend_kind=" in script
     assert "search_regressed=" in script
+    assert '[string]$TaskId = ""' in script
+    assert '[string]$RequestCaptureDir = ""' in script
+    assert "FAILURE METADATA:" in script
     assert "Search regressed relative to draft" in script
 
 
@@ -589,6 +592,8 @@ def test_smoke_copilot_robustness_ambiguity_stress_compare_script_wraps_shared_c
     assert "-MaxIterations $MaxIterations" in script
     assert "-TaskJson $TaskJson" in script
     assert "-OutJson $OutJson" in script
+    assert '-TaskId $TaskId' in script
+    assert '-RequestCaptureDir $RequestCaptureDir' in script
 
 
 def test_next_milestone_benchmark_tasks_json_loads():

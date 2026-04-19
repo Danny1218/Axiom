@@ -8,7 +8,9 @@ param(
     [int]$MaxTokens = 96,
     [int]$MaxIterations = 10,
     [string]$TaskJson = "benchmarks/copilot_symbolic_robustness_ambiguity_stress_tasks.json",
-    [string]$OutJson = "benchmark_symbolic_suite_robustness_ambiguity_stress.json"
+    [string]$OutJson = "benchmark_symbolic_suite_robustness_ambiguity_stress.json",
+    [string]$TaskId = "",
+    [string]$RequestCaptureDir = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -24,4 +26,6 @@ Set-StrictMode -Version Latest
     -MaxTokens $MaxTokens `
     -MaxIterations $MaxIterations `
     -TaskJson $TaskJson `
-    -OutJson $OutJson
+    -OutJson $OutJson `
+    -TaskId $TaskId `
+    -RequestCaptureDir $RequestCaptureDir

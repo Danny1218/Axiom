@@ -1288,6 +1288,40 @@ def _payload_sha256(payload: Mapping[str, Any]) -> str:
     return hashlib.sha256(_stable_json_text(dict(payload)).encode("utf-8")).hexdigest()
 
 
+def _diagnostic_response_headers(response: Any) -> dict[str, str]:
+    raw = getattr(response, "headers", None)
+    if not isinstance(raw, Mapping):
+        return {}
+    out: dict[str, str] = {}
+    for key, value in raw.items():
+        name = str(key).strip()
+        if not name:
+            continue
+        lname = name.lower()
+        if lname in {"content-type", "date", "server", "via"} or "request-id" in lname or "trace" in lname:
+            out[name] = str(value)
+    return out
+
+
+def _request_id_from_response_headers(headers: Mapping[str, str]) -> Optional[str]:
+    for key, value in headers.items():
+        lname = str(key).strip().lower()
+        if "request-id" not in lname:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return None
+
+
+def _response_id_from_body(data: Any) -> Optional[str]:
+    if not isinstance(data, Mapping):
+        return None
+    response_id = data.get("id")
+    text = str(response_id).strip() if response_id is not None else ""
+    return text or None
+
+
 def _request_capture_filename(
     request_kind: str, benchmark_task_id: Optional[str], payload_sha256: str, status_code: Optional[int]
 ) -> str:
@@ -1318,6 +1352,9 @@ def _write_request_capture(
     failure_kind: Optional[str] = None,
     exception_class: Optional[str] = None,
     exception_message: Optional[str] = None,
+    response_headers: Optional[Mapping[str, str]] = None,
+    request_id: Optional[str] = None,
+    response_id: Optional[str] = None,
 ) -> Path:
     capture_dir.mkdir(parents=True, exist_ok=True)
     out: dict[str, Any] = {
@@ -1347,6 +1384,12 @@ def _write_request_capture(
         out["exception_class"] = exception_class
     if exception_message is not None:
         out["exception_message"] = exception_message
+    if response_headers:
+        out["response_headers"] = {str(k): str(v) for k, v in response_headers.items()}
+    if request_id is not None:
+        out["request_id"] = str(request_id)
+    if response_id is not None:
+        out["response_id"] = str(response_id)
     path = capture_dir / _request_capture_filename(request_kind, benchmark_task_id, payload_sha256, status_code)
     path.write_text(json.dumps(out, indent=2, sort_keys=True), encoding="utf-8")
     return path
@@ -1512,6 +1555,10 @@ class OnyxQwenBackend:
             meta = dict(request_diagnostics or {})
             meta["http_failure_detail"] = snippet[:2000]
             meta["status_code"] = int(r.status_code)
+            response_headers = _diagnostic_response_headers(r)
+            request_id = _request_id_from_response_headers(response_headers)
+            if request_id:
+                meta["request_id"] = request_id
             if capture_dir is not None:
                 capture_path = _write_request_capture(
                     capture_dir,
@@ -1530,35 +1577,48 @@ class OnyxQwenBackend:
                     payload_sha256=payload_sha,
                     status_code=int(r.status_code),
                     http_failure_detail=snippet[:2000],
+                    response_headers=response_headers,
+                    request_id=request_id,
                 )
                 meta["request_capture_path"] = str(capture_path)
                 if request_diagnostics is not None:
                     request_diagnostics["request_capture_path"] = str(capture_path)
             raise OnyxQwenHTTPError(r.status_code, snippet[:2000], metadata=meta)
 
-        if capture_dir is not None and request_diagnostics is not None:
-            capture_path = _write_request_capture(
-                capture_dir,
-                request_kind=request_kind,
-                benchmark_task_id=request_diagnostics.get("benchmark_task_id"),
-                chat_url=self._chat_url,
-                model=self._model,
-                system_prompt=system,
-                user_prompt=user,
-                prompt_char_count=int(request_diagnostics.get("prompt_char_count", len(system) + len(user))),
-                system_prompt_char_count=int(request_diagnostics.get("system_prompt_char_count", len(system))),
-                user_prompt_char_count=int(request_diagnostics.get("user_prompt_char_count", len(user))),
-                completion_overrides_applied=request_diagnostics.get("completion_overrides_applied") or {},
-                compact_benchmark_prompt_used=bool(request_diagnostics.get("compact_benchmark_prompt_used")),
-                payload=payload,
-                payload_sha256=payload_sha,
-            )
-            request_diagnostics["request_capture_path"] = str(capture_path)
-
         try:
             data = r.json()
         except ValueError as e:
             raise OnyxQwenParseError("response body is not valid JSON") from e
+
+        response_headers = _diagnostic_response_headers(r)
+        request_id = _request_id_from_response_headers(response_headers)
+        response_id = _response_id_from_body(data)
+        if request_diagnostics is not None:
+            if request_id:
+                request_diagnostics["request_id"] = request_id
+            if response_id:
+                request_diagnostics["response_id"] = response_id
+            if capture_dir is not None:
+                capture_path = _write_request_capture(
+                    capture_dir,
+                    request_kind=request_kind,
+                    benchmark_task_id=request_diagnostics.get("benchmark_task_id"),
+                    chat_url=self._chat_url,
+                    model=self._model,
+                    system_prompt=system,
+                    user_prompt=user,
+                    prompt_char_count=int(request_diagnostics.get("prompt_char_count", len(system) + len(user))),
+                    system_prompt_char_count=int(request_diagnostics.get("system_prompt_char_count", len(system))),
+                    user_prompt_char_count=int(request_diagnostics.get("user_prompt_char_count", len(user))),
+                    completion_overrides_applied=request_diagnostics.get("completion_overrides_applied") or {},
+                    compact_benchmark_prompt_used=bool(request_diagnostics.get("compact_benchmark_prompt_used")),
+                    payload=payload,
+                    payload_sha256=payload_sha,
+                    response_headers=response_headers,
+                    request_id=request_id or response_id,
+                    response_id=response_id,
+                )
+                request_diagnostics["request_capture_path"] = str(capture_path)
 
         return _assistant_content(data)
 

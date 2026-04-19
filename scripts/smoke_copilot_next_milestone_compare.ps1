@@ -8,7 +8,9 @@ param(
     [int]$MaxTokens = 96,
     [int]$MaxIterations = 10,
     [string]$TaskJson = "benchmarks/copilot_symbolic_next_milestone_tasks.json",
-    [string]$OutJson = "benchmark_symbolic_suite_next_milestone.json"
+    [string]$OutJson = "benchmark_symbolic_suite_next_milestone.json",
+    [string]$TaskId = "",
+    [string]$RequestCaptureDir = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -54,6 +56,51 @@ function _BoolText {
     return ([bool]$Value).ToString().ToLowerInvariant()
 }
 
+function _Print-LatestFailureMetadata {
+    param([string]$CaptureDir)
+    if ([string]::IsNullOrWhiteSpace($CaptureDir) -or -not (Test-Path -LiteralPath $CaptureDir)) { return }
+    $latest = Get-ChildItem -LiteralPath $CaptureDir -Filter *.json -File | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+    if ($null -eq $latest) { return }
+    $doc = _Read-JsonDoc -Path $latest.FullName
+    if ($null -eq $doc) { return }
+    Write-Host (
+        "FAILURE METADATA: task_id={0}; failure_kind={1}; exception_class={2}; exception_message={3}; payload_sha256={4}; request_capture_path={5}" -f `
+        (_Text (_Get-PropValue -Object $doc -Name "benchmark_task_id")),
+        (_Text (_Get-PropValue -Object $doc -Name "failure_kind")),
+        (_Text (_Get-PropValue -Object $doc -Name "exception_class")),
+        (_Text (_Get-PropValue -Object $doc -Name "exception_message")),
+        (_Text (_Get-PropValue -Object $doc -Name "payload_sha256")),
+        $latest.FullName
+    ) -ForegroundColor Yellow
+}
+
+$taskJsonPath = $TaskJson
+$tempTaskJsonPath = $null
+if (-not [string]::IsNullOrWhiteSpace($TaskId)) {
+    $taskDoc = _Read-JsonDoc -Path $TaskJson
+    if ($null -eq $taskDoc) {
+        throw "Failed to read or parse benchmark task JSON at '$TaskJson'."
+    }
+    $taskList = @(_Get-PropValue -Object $taskDoc -Name "tasks")
+    $filtered = @($taskList | Where-Object { (_Text (_Get-PropValue -Object $_ -Name "id")) -eq $TaskId })
+    if ($filtered.Count -ne 1) {
+        throw "Task filter '$TaskId' matched $($filtered.Count) tasks in '$TaskJson'."
+    }
+    $tempTaskJsonPath = [System.IO.Path]::ChangeExtension([System.IO.Path]::GetTempFileName(), ".json")
+    $filteredJson = [pscustomobject]@{
+        schema_version = _Get-PropValue -Object $taskDoc -Name "schema_version"
+        tasks = $filtered
+    } | ConvertTo-Json -Depth 32
+    [System.IO.File]::WriteAllText($tempTaskJsonPath, $filteredJson, [System.Text.UTF8Encoding]::new($false))
+    $taskJsonPath = $tempTaskJsonPath
+}
+
+$captureDir = if (-not [string]::IsNullOrWhiteSpace($RequestCaptureDir)) { $RequestCaptureDir } else { $env:AXIOM_ONYX_REQUEST_CAPTURE_DIR }
+$priorCaptureDir = [Environment]::GetEnvironmentVariable("AXIOM_ONYX_REQUEST_CAPTURE_DIR", "Process")
+if (-not [string]::IsNullOrWhiteSpace($RequestCaptureDir)) {
+    $env:AXIOM_ONYX_REQUEST_CAPTURE_DIR = $RequestCaptureDir
+}
+
 function _Arm-Summary {
     param(
         [Parameter(Mandatory = $true)]
@@ -80,7 +127,7 @@ $cmd = @(
     "axiom", "copilot-benchmark",
     "--backend", $Backend,
     "--timeout", ("{0}" -f $Timeout),
-    "--task-json", $TaskJson,
+    "--task-json", $taskJsonPath,
     "--max-iterations", ("{0}" -f $MaxIterations),
     "--temperature", ("{0}" -f $Temperature),
     "--max-tokens", ("{0}" -f $MaxTokens),
@@ -94,9 +141,25 @@ if ($Backend -ne "benchmark-dispatch") {
 }
 
 Write-Host ("==> Running: {0}" -f ($cmd -join " ")) -ForegroundColor Cyan
-& $cmd[0] $cmd[1..($cmd.Length - 1)]
-if ($LASTEXITCODE -ne 0) {
-    throw "copilot-benchmark comparison run failed with exit code $LASTEXITCODE."
+try {
+    & $cmd[0] $cmd[1..($cmd.Length - 1)]
+    if ($LASTEXITCODE -ne 0) {
+        _Print-LatestFailureMetadata -CaptureDir $captureDir
+        throw "copilot-benchmark comparison run failed with exit code $LASTEXITCODE."
+    }
+}
+finally {
+    if ($null -ne $tempTaskJsonPath -and (Test-Path -LiteralPath $tempTaskJsonPath)) {
+        Remove-Item -LiteralPath $tempTaskJsonPath -Force -ErrorAction SilentlyContinue
+    }
+    if (-not [string]::IsNullOrWhiteSpace($RequestCaptureDir)) {
+        if ([string]::IsNullOrWhiteSpace($priorCaptureDir)) {
+            Remove-Item Env:AXIOM_ONYX_REQUEST_CAPTURE_DIR -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:AXIOM_ONYX_REQUEST_CAPTURE_DIR = $priorCaptureDir
+        }
+    }
 }
 
 $doc = _Read-JsonDoc -Path $OutJson
