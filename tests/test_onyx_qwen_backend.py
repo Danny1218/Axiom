@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 from pathlib import Path
 from unittest.mock import Mock
@@ -49,6 +50,16 @@ def _ok_response(content: str, *, status: int = 200, text: str = "") -> Mock:
 
 def _read_capture(path: str) -> dict:
     return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
+def _load_script_module(name: str, relative_path: str):
+    root = Path(__file__).resolve().parents[1]
+    script_path = root / relative_path
+    spec = importlib.util.spec_from_file_location(name, script_path)
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 def test_backend_satisfies_semantic_expert_protocol():
@@ -730,6 +741,99 @@ def test_request_capture_payload_reflects_normalized_overrides(tmp_path):
     assert capture["payload"]["do_sample"] is False
     assert "temperature" not in capture["payload"]
     assert "top_p" not in capture["payload"]
+
+
+def test_replay_request_capture_success_request_shape(tmp_path, monkeypatch, capsys):
+    replay_mod = _load_script_module("replay_onyx_request_capture_success", "scripts/replay_onyx_request_capture.py")
+    artifact_path = tmp_path / "capture.json"
+    payload = {"model": "m", "messages": [{"role": "system", "content": "s"}, {"role": "user", "content": "u"}]}
+    artifact_path.write_text(
+        json.dumps({"chat_url": "http://live/v1/chat/completions", "payload": payload, "payload_sha256": "abc123"}),
+        encoding="utf-8",
+    )
+    calls: list[dict] = []
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        calls.append({"url": url, "json": json, "headers": headers, "timeout": timeout})
+        return _ok_response("ok", text='{"ok":true}')
+
+    monkeypatch.setattr(replay_mod.requests, "post", fake_post)
+    code = replay_mod.main([str(artifact_path)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert calls[0]["url"] == "http://live/v1/chat/completions"
+    assert calls[0]["json"] == payload
+    assert calls[0]["headers"] == {"Content-Type": "application/json"}
+    assert "payload_sha256: abc123" in out
+    assert "status_code: 200" in out
+    assert '"content": "ok"' in out
+
+
+def test_replay_request_capture_http500_handling(tmp_path, monkeypatch, capsys):
+    replay_mod = _load_script_module("replay_onyx_request_capture_http500", "scripts/replay_onyx_request_capture.py")
+    artifact_path = tmp_path / "capture.json"
+    artifact_path.write_text(
+        json.dumps({"chat_url": "http://live/v1/chat/completions", "payload": {"model": "m"}, "payload_sha256": "deadbeef"}),
+        encoding="utf-8",
+    )
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        m = Mock()
+        m.status_code = 500
+        m.text = '{"detail":"oom"}'
+        return m
+
+    monkeypatch.setattr(replay_mod.requests, "post", fake_post)
+    code = replay_mod.main([str(artifact_path)])
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "payload_sha256: deadbeef" in out
+    assert "status_code: 500" in out
+    assert 'failure_snippet: {"detail":"oom"}' in out
+
+
+def test_replay_request_capture_url_override_via_env(tmp_path, monkeypatch, capsys):
+    replay_mod = _load_script_module("replay_onyx_request_capture_url_override", "scripts/replay_onyx_request_capture.py")
+    artifact_path = tmp_path / "capture.json"
+    artifact_path.write_text(
+        json.dumps({"chat_url": "http://artifact/v1/chat/completions", "payload": {"model": "m"}, "payload_sha256": "sha"}),
+        encoding="utf-8",
+    )
+    calls: list[str] = []
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        calls.append(url)
+        return _ok_response("ok")
+
+    monkeypatch.setattr(replay_mod.requests, "post", fake_post)
+    monkeypatch.setenv(replay_mod.REPLAY_URL_ENV_VAR, "http://override/v1/chat/completions")
+    code = replay_mod.main([str(artifact_path)])
+    _ = capsys.readouterr()
+    assert code == 0
+    assert calls == ["http://override/v1/chat/completions"]
+
+
+def test_replay_request_capture_api_key_redacted_from_output(tmp_path, monkeypatch, capsys):
+    replay_mod = _load_script_module("replay_onyx_request_capture_redaction", "scripts/replay_onyx_request_capture.py")
+    artifact_path = tmp_path / "capture.json"
+    artifact_path.write_text(
+        json.dumps({"chat_url": "http://artifact/v1/chat/completions", "payload": {"model": "m"}, "payload_sha256": "sha"}),
+        encoding="utf-8",
+    )
+    calls: list[dict] = []
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        calls.append({"headers": headers})
+        return _ok_response("ok")
+
+    monkeypatch.setattr(replay_mod.requests, "post", fake_post)
+    monkeypatch.setenv(replay_mod.REPLAY_API_KEY_ENV_VAR, "sk-secret-value")
+    code = replay_mod.main([str(artifact_path)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert calls[0]["headers"]["Authorization"] == "Bearer sk-secret-value"
+    assert "sk-secret-value" not in out
+    assert "Authorization" not in out
 
 
 def test_completion_overrides_forward_max_tokens_to_http_payload():
