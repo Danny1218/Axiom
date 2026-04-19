@@ -143,6 +143,123 @@ def test_run_benchmark_draft_only_and_search_with_dispatch():
     assert sr.winner_origin == "model_draft"
 
 
+def test_run_benchmark_search_predict_rows_continues_when_compiled_but_below_metric_threshold():
+    class MetricRepairExpert:
+        def __init__(self):
+            self.repair_calls: list[ExpertRepairRequest] = []
+
+        def draft_program(self, request: ExpertDraftRequest) -> ExpertDraftResponse:
+            return ExpertDraftResponse(
+                ax_source="adjusted = 0.75 * thermometer_reading - 0.0;\n",
+                backend_name="metric_repair_expert",
+            )
+
+        def repair_program(self, request: ExpertRepairRequest) -> ExpertDraftResponse:
+            self.repair_calls.append(request)
+            return ExpertDraftResponse(
+                ax_source="adjusted = 1.25 * thermometer_reading - 0.2;\n",
+                backend_name="metric_repair_expert",
+            )
+
+        def summarize_trace(self, *args, **kwargs) -> str:
+            return ""
+
+    ex = MetricRepairExpert()
+    t = BenchmarkTask(
+        id="metric_continue",
+        title="metric_continue",
+        goal="Take thermometer_reading, give it one and a quarter copies of itself, then nudge it down by 0.2 into adjusted.",
+        evaluation_mode="predict_rows",
+        example_input_rows=(
+            {"thermometer_reading": -1.0},
+            {"thermometer_reading": 0.0},
+            {"thermometer_reading": 1.0},
+            {"thermometer_reading": 2.0},
+        ),
+        expected_rows=(
+            {"adjusted": -1.43},
+            {"adjusted": -0.19},
+            {"adjusted": 1.04},
+            {"adjusted": 2.28},
+        ),
+        score_sort_key="neg_mse",
+        metric_pass_min=("neg_mse", -0.001),
+    )
+    rec = run_benchmark_search(ex, t, max_iterations=3)
+    assert len(ex.repair_calls) == 1
+    assert rec.compile_ok is True
+    assert rec.metric_ok is True
+    assert rec.converged is True
+    assert rec.iterations_run == 2
+    assert rec.winner_origin == "model_repair"
+    assert rec.source.strip() == "adjusted = 1.25 * thermometer_reading - 0.2;"
+
+
+def test_run_benchmark_search_predict_rows_uses_default_neg_mse_threshold_when_metric_key_mismatches():
+    class MetricRepairExpert:
+        def __init__(self):
+            self.repair_calls: list[ExpertRepairRequest] = []
+
+        def draft_program(self, request: ExpertDraftRequest) -> ExpertDraftResponse:
+            return ExpertDraftResponse(
+                ax_source="adjusted = 0.75 * thermometer_reading - 0.0;\n",
+                backend_name="metric_repair_expert",
+            )
+
+        def repair_program(self, request: ExpertRepairRequest) -> ExpertDraftResponse:
+            self.repair_calls.append(request)
+            return ExpertDraftResponse(
+                ax_source=(
+                    "if (thermometer_reading == -1.0) {\n"
+                    "    adjusted = -1.43;\n"
+                    "} else {\n"
+                    "    if (thermometer_reading == 0.0) {\n"
+                    "        adjusted = -0.19;\n"
+                    "    } else {\n"
+                    "        if (thermometer_reading == 1.0) {\n"
+                    "            adjusted = 1.04;\n"
+                    "        } else {\n"
+                    "            adjusted = 2.28;\n"
+                    "        }\n"
+                    "    }\n"
+                    "}\n"
+                ),
+                backend_name="metric_repair_expert",
+            )
+
+        def summarize_trace(self, *args, **kwargs) -> str:
+            return ""
+
+    ex = MetricRepairExpert()
+    t = BenchmarkTask(
+        id="metric_default",
+        title="metric_default",
+        goal="Take thermometer_reading, give it one and a quarter copies of itself, then nudge it down by 0.2 into adjusted.",
+        evaluation_mode="predict_rows",
+        example_input_rows=(
+            {"thermometer_reading": -1.0},
+            {"thermometer_reading": 0.0},
+            {"thermometer_reading": 1.0},
+            {"thermometer_reading": 2.0},
+        ),
+        expected_rows=(
+            {"adjusted": -1.43},
+            {"adjusted": -0.19},
+            {"adjusted": 1.04},
+            {"adjusted": 2.28},
+        ),
+        score_sort_key="neg_mse",
+        metric_pass_min=("quality", 0.99),
+    )
+    rec = run_benchmark_search(ex, t, max_iterations=3)
+    assert len(ex.repair_calls) == 1
+    assert rec.compile_ok is True
+    assert rec.metric_ok is False
+    assert rec.converged is True
+    assert rec.iterations_run == 2
+    assert rec.winner_origin == "model_repair"
+
+
 @pytest.mark.parametrize(
     ("task_id", "backend_name"),
     [

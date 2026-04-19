@@ -200,6 +200,12 @@ def run_benchmark_search(
     """Full copilot search (draft → eval → repair loop)."""
     score_fn = default_neg_mse_score_fn() if task.evaluation_mode == "predict_rows" else None
     sk = task.score_sort_key if task.evaluation_mode == "predict_rows" else None
+    repair_valid_with_metrics = task.evaluation_mode == "predict_rows"
+    metric_repair_if_below: Optional[float] = None
+    if repair_valid_with_metrics and task.metric_pass_min is not None and sk is not None:
+        metric_key, metric_threshold = task.metric_pass_min
+        if str(metric_key) == str(sk):
+            metric_repair_if_below = float(metric_threshold)
     cfg = CopilotSearchConfig(
         expert=expert,
         goal=task.goal,
@@ -211,6 +217,8 @@ def run_benchmark_search(
         max_unroll=task.max_unroll,
         score_fn=score_fn,
         score_sort_key=sk,
+        repair_valid_with_metrics=repair_valid_with_metrics,
+        metric_repair_if_below=metric_repair_if_below,
         include_trace_snippet=False,
         draft_context_extras=_bench_extras(task),
         repair_context_extras=_bench_extras(task),
