@@ -245,6 +245,24 @@ SYSTEM_REPAIR = (
     + RETURN_VALID_AX_SEMICOLON_LINE
 )
 
+SYSTEM_DRAFT_BENCHMARK_COMPACT = (
+    "Write only this repository's `.ax` DSL. Use `=` assignments with semicolons, direct variable names, "
+    "`if (...) { ... } else { ... }`, and `while (...) { ... }`. Use only `>`, `<`, `==`, `!=` for comparisons. "
+    "Never emit `:=`, `print`, dotted access, `else if`, `elseif`, `otherwise`, `&&`, `||`, `>=`, `<=`, "
+    "chained comparisons, inline conditionals, comments/prose, `clip(...)`, flat 3-arg `max`/`min`, or malformed numerics. "
+    "Use nested `else { if (...) { ... } else { ... } }` when piecewise logic is needed.\n"
+    + RETURN_VALID_AX_SEMICOLON_LINE
+)
+
+SYSTEM_REPAIR_BENCHMARK_COMPACT = (
+    "Repair only into this repository's `.ax` DSL. Return ONLY the corrected full `.ax` program. "
+    "Use `=` assignments with semicolons, direct variable names, and canonical nested `if` / `else` blocks. "
+    "Use only `>`, `<`, `==`, `!=` for comparisons. Never emit `:=`, `print`, dotted access, `else if`, `elseif`, "
+    "`otherwise`, `&&`, `||`, `>=`, `<=`, chained comparisons, inline conditionals, comments/prose, `clip(...)`, "
+    "flat 3-arg `max`/`min`, or malformed numerics.\n"
+    + RETURN_VALID_AX_SEMICOLON_LINE
+)
+
 SYSTEM_SUMMARY = (
     "You summarize symbolic execution traces for engineers. Be concise and factual; "
     "do not invent variables absent from the trace."
@@ -274,6 +292,14 @@ ALLOWED_SYNTAX_BLOCK = """Allowed syntax:
 - Use the real variable names from examples directly (`a`, `b`, `c`, `x`, `y`, `score`) — no dotted prefixes
 - Nested branching form: `else { if (...) { ... } else { ... } }`
 - Comparisons only: `>`, `<`, `==`, `!=` (express range checks with `min`/`max` and/or nested `if`/`else`, not `&&`/`||`/`>=`/`<=`)"""
+
+BENCHMARK_COMPACT_SYNTAX_BLOCK = """Benchmark compact syntax guardrails:
+- Return only valid `.ax` source with semicolon-terminated assignments.
+- Use direct variable names only; no dotted access or prose/comments.
+- Control flow only as `if (...) { ... } else { ... }` / `while (...) { ... }`.
+- Comparisons only: `>`, `<`, `==`, `!=`.
+- Never emit `:=`, `print`, `else if`, `elseif`, `otherwise`, `&&`, `||`, `>=`, `<=`, chained comparisons, inline conditionals, `clip(...)`, flat 3-arg `max`/`min`, malformed numerics, or missing semicolons.
+- Use nested `else { if (...) { ... } else { ... } }` when piecewise logic is needed."""
 
 REPAIR_PARSE_ERROR_RULE = """Repair-specific rule: if parse errors mention unexpected `=`, `|`, or `.`, rewrite using only grammar-supported operators and canonical floats like `2.0` (not `2.`)."""
 
@@ -573,6 +599,17 @@ def _context_has_examples_driven_semantics(context: Mapping[str, Any]) -> bool:
     return (isinstance(eo, list) and len(eo) > 0) or (isinstance(ei, list) and len(ei) > 0)
 
 
+def _benchmark_task_id(context: Mapping[str, Any]) -> Optional[str]:
+    value = context.get("benchmark_task_id")
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
+def _use_compact_benchmark_prompt(context: Mapping[str, Any]) -> bool:
+    return _benchmark_task_id(context) is not None
+
+
 def _append_examples_semantics_if_needed(parts: list[str], context: Mapping[str, Any]) -> None:
     if _context_has_examples_driven_semantics(context):
         parts.append(EXAMPLES_SEMANTICS_BLOCK)
@@ -582,49 +619,100 @@ def _context_json(context: Mapping[str, Any]) -> str:
     return json.dumps(dict(context), sort_keys=True, separators=(",", ":"), default=str)
 
 
-def user_prompt_draft(goal: str, context: Mapping[str, Any]) -> str:
-    parts = [
-        f"Goal:\n{goal}\n\n",
-        f"Context (JSON, sorted keys):\n{_context_json(context)}\n\n",
-    ]
+def _compact_benchmark_context_text(context: Mapping[str, Any]) -> str:
+    parts: list[str] = []
+    bench_id = _benchmark_task_id(context)
+    if bench_id:
+        parts.append(f"Benchmark task id: {bench_id}")
+    domain_context = context.get("domain_context")
+    if isinstance(domain_context, str) and domain_context.strip():
+        parts.append(f"Domain context: {domain_context.strip()}")
+    example_rows = context.get("example_input_rows")
+    if isinstance(example_rows, list) and example_rows:
+        parts.append(
+            "Example inputs (JSON):\n"
+            + json.dumps(example_rows, sort_keys=True, separators=(",", ":"), default=str)
+        )
+    expected_outputs = context.get("expected_outputs")
+    if isinstance(expected_outputs, list) and expected_outputs:
+        parts.append(
+            "Expected outputs (JSON):\n"
+            + json.dumps(expected_outputs, sort_keys=True, separators=(",", ":"), default=str)
+        )
+    return "\n\n".join(parts)
+
+
+def _draft_prompt_impl(goal: str, context: Mapping[str, Any], *, compact_benchmark_prompt: bool) -> str:
+    parts = [f"Goal:\n{goal}\n\n"]
+    if compact_benchmark_prompt:
+        compact_context = _compact_benchmark_context_text(context)
+        if compact_context:
+            parts.append(compact_context + "\n\n")
+    else:
+        parts.append(f"Context (JSON, sorted keys):\n{_context_json(context)}\n\n")
     _append_examples_semantics_if_needed(parts, context)
     _append_robustness_ambiguity_fallback_blocks_if_needed(parts, goal, context, include_repair_cleanup=False)
     _append_exact_symbolic_math_if_needed(parts, goal, context)
     _append_canonical_symbolic_family_drafts_if_needed(parts, goal, context)
-    parts.extend(
-        [
-            f"{SYNTAX_SUMMARY}\n\n",
-            f"{FORBIDDEN_SYNTAX_BLOCK}\n\n",
-            f"{ALLOWED_SYNTAX_BLOCK}\n\n",
-            f"{SYNTAX_BAD_GOOD_FEWSHOT}\n\n",
-            f"{CONTROL_FLOW_FEWSHOT}\n\n",
-            "Respond with the complete `.ax` program only (fenced with `ax` if you use a fence).\n"
-            + RETURN_VALID_AX_SEMICOLON_LINE,
-        ]
-    )
+    if compact_benchmark_prompt:
+        parts.extend(
+            [
+                f"{BENCHMARK_COMPACT_SYNTAX_BLOCK}\n\n",
+                "Respond with the complete `.ax` program only.\n" + RETURN_VALID_AX_SEMICOLON_LINE,
+            ]
+        )
+    else:
+        parts.extend(
+            [
+                f"{SYNTAX_SUMMARY}\n\n",
+                f"{FORBIDDEN_SYNTAX_BLOCK}\n\n",
+                f"{ALLOWED_SYNTAX_BLOCK}\n\n",
+                f"{SYNTAX_BAD_GOOD_FEWSHOT}\n\n",
+                f"{CONTROL_FLOW_FEWSHOT}\n\n",
+                "Respond with the complete `.ax` program only (fenced with `ax` if you use a fence).\n"
+                + RETURN_VALID_AX_SEMICOLON_LINE,
+            ]
+        )
     return "".join(parts)
 
 
-def user_prompt_repair(goal: str, current_program: str, error_report: str, context: Mapping[str, Any]) -> str:
-    parts = [
-        f"Goal:\n{goal}\n\n",
-        f"Error report:\n{error_report}\n\n",
-        f"Context (JSON, sorted keys):\n{_context_json(context)}\n\n",
-    ]
+def _repair_prompt_impl(
+    goal: str,
+    current_program: str,
+    error_report: str,
+    context: Mapping[str, Any],
+    *,
+    compact_benchmark_prompt: bool,
+) -> str:
+    parts = [f"Goal:\n{goal}\n\n", f"Error report:\n{error_report}\n\n"]
+    if compact_benchmark_prompt:
+        compact_context = _compact_benchmark_context_text(context)
+        if compact_context:
+            parts.append(compact_context + "\n\n")
+    else:
+        parts.append(f"Context (JSON, sorted keys):\n{_context_json(context)}\n\n")
     _append_examples_semantics_if_needed(parts, context)
     _append_robustness_ambiguity_fallback_blocks_if_needed(parts, goal, context, include_repair_cleanup=True)
     _append_exact_symbolic_math_if_needed(parts, goal, context)
-    parts.extend(
-        [
-            f"{SYNTAX_SUMMARY}\n\n",
-            f"{FORBIDDEN_SYNTAX_BLOCK}\n\n",
-            f"{ALLOWED_SYNTAX_BLOCK}\n\n",
-            f"{REPAIR_PARSE_ERROR_RULE}\n\n",
-            f"{SYNTAX_BAD_GOOD_FEWSHOT}\n\n",
-            f"{CONTROL_FLOW_FEWSHOT}\n\n",
-            f"{REPAIR_FEWSHOT}\n\n",
-        ]
-    )
+    if compact_benchmark_prompt:
+        parts.extend(
+            [
+                f"{BENCHMARK_COMPACT_SYNTAX_BLOCK}\n\n",
+                f"{REPAIR_PARSE_ERROR_RULE}\n\n",
+            ]
+        )
+    else:
+        parts.extend(
+            [
+                f"{SYNTAX_SUMMARY}\n\n",
+                f"{FORBIDDEN_SYNTAX_BLOCK}\n\n",
+                f"{ALLOWED_SYNTAX_BLOCK}\n\n",
+                f"{REPAIR_PARSE_ERROR_RULE}\n\n",
+                f"{SYNTAX_BAD_GOOD_FEWSHOT}\n\n",
+                f"{CONTROL_FLOW_FEWSHOT}\n\n",
+                f"{REPAIR_FEWSHOT}\n\n",
+            ]
+        )
     _append_repair_unroll_hints_if_needed(parts, current_program)
     _append_repair_neural_to_symbolic_if_needed(parts, current_program, context)
     parts.extend(
@@ -635,6 +723,20 @@ def user_prompt_repair(goal: str, current_program: str, error_report: str, conte
         ]
     )
     return "".join(parts)
+
+
+def user_prompt_draft(goal: str, context: Mapping[str, Any]) -> str:
+    return _draft_prompt_impl(goal, context, compact_benchmark_prompt=_use_compact_benchmark_prompt(context))
+
+
+def user_prompt_repair(goal: str, current_program: str, error_report: str, context: Mapping[str, Any]) -> str:
+    return _repair_prompt_impl(
+        goal,
+        current_program,
+        error_report,
+        context,
+        compact_benchmark_prompt=_use_compact_benchmark_prompt(context),
+    )
 
 
 def user_prompt_trace_summary(
@@ -1065,10 +1167,24 @@ class OnyxQwenTransportError(OnyxQwenError):
 
 
 class OnyxQwenHTTPError(OnyxQwenError):
-    def __init__(self, status_code: int, body_snippet: str) -> None:
+    def __init__(self, status_code: int, body_snippet: str, *, metadata: Optional[Mapping[str, Any]] = None) -> None:
         self.status_code = status_code
         self.body_snippet = body_snippet
-        super().__init__(f"HTTP {status_code}: {body_snippet[:200]}")
+        self.metadata = dict(metadata or {})
+        summary_parts: list[str] = []
+        for key in (
+            "benchmark_task_id",
+            "prompt_char_count",
+            "system_prompt_char_count",
+            "user_prompt_char_count",
+            "compact_benchmark_prompt_used",
+        ):
+            if key in self.metadata:
+                summary_parts.append(f"{key}={self.metadata[key]}")
+        if "completion_overrides_applied" in self.metadata:
+            summary_parts.append(f"completion_overrides_applied={self.metadata['completion_overrides_applied']}")
+        summary = f" [{' ; '.join(summary_parts)}]" if summary_parts else ""
+        super().__init__(f"HTTP {status_code}{summary}: {body_snippet[:200]}")
 
 
 class OnyxQwenParseError(OnyxQwenError):
@@ -1102,6 +1218,38 @@ def _assistant_content(data: Any) -> str:
         return str(data["choices"][0]["message"]["content"])
     except (KeyError, IndexError, TypeError) as e:
         raise OnyxQwenParseError("response missing choices[0].message.content") from e
+
+
+def _completion_overrides_applied(overrides: Optional[Mapping[str, Any]]) -> dict[str, Any]:
+    payload: dict[str, Any] = {"model": "m", "messages": []}
+    if overrides:
+        for k, v in overrides.items():
+            if k != "messages" and k != "model":
+                payload[k] = v
+        normalize_onyx_chat_completion_payload(payload)
+    return {k: payload[k] for k in sorted(payload) if k not in {"model", "messages"}}
+
+
+def _request_diagnostics(
+    context: Mapping[str, Any],
+    *,
+    system_prompt: str,
+    user_prompt: str,
+    completion_overrides: Optional[Mapping[str, Any]],
+    compact_benchmark_prompt_used: bool,
+) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "prompt_char_count": len(system_prompt) + len(user_prompt),
+        "system_prompt_char_count": len(system_prompt),
+        "user_prompt_char_count": len(user_prompt),
+        "completion_overrides_applied": _completion_overrides_applied(completion_overrides),
+        "compact_benchmark_prompt_used": bool(compact_benchmark_prompt_used),
+        "http_failure_detail": None,
+    }
+    bench_id = _benchmark_task_id(context)
+    if bench_id is not None:
+        out["benchmark_task_id"] = bench_id
+    return out
 
 
 class OnyxQwenBackend:
@@ -1139,7 +1287,14 @@ class OnyxQwenBackend:
             )
         return requests.post
 
-    def _chat(self, system: str, user: str, *, completion_overrides: Optional[dict[str, Any]] = None) -> str:
+    def _chat(
+        self,
+        system: str,
+        user: str,
+        *,
+        completion_overrides: Optional[dict[str, Any]] = None,
+        request_diagnostics: Optional[Mapping[str, Any]] = None,
+    ) -> str:
         post = self._resolve_post()
 
         payload: dict[str, Any] = {
@@ -1170,7 +1325,9 @@ class OnyxQwenBackend:
 
         if r.status_code >= 400:
             snippet = r.text if isinstance(r.text, str) else ""
-            raise OnyxQwenHTTPError(r.status_code, snippet[:2000])
+            meta = dict(request_diagnostics or {})
+            meta["http_failure_detail"] = snippet[:2000]
+            raise OnyxQwenHTTPError(r.status_code, snippet[:2000], metadata=meta)
 
         try:
             data = r.json()
@@ -1179,41 +1336,69 @@ class OnyxQwenBackend:
 
         return _assistant_content(data)
 
-    def _metadata(self, raw: str, split: AxSplitResult) -> dict[str, Any]:
-        return {"model": self._model, "raw_chars": len(raw), **split.extraction}
+    def _metadata(self, raw: str, split: AxSplitResult, request_diagnostics: Optional[Mapping[str, Any]] = None) -> dict[str, Any]:
+        return {"model": self._model, "raw_chars": len(raw), **(request_diagnostics or {}), **split.extraction}
 
     def draft_program(self, request: ExpertDraftRequest) -> ExpertDraftResponse:
         ctx = dict(request.context) if isinstance(request.context, Mapping) else {}
         co = ctx.pop(COMPLETION_OVERRIDES_CONTEXT_KEY, None)
         overrides = co if isinstance(co, dict) else None
-        raw = self._chat(
-            SYSTEM_DRAFT,
-            user_prompt_draft(request.goal, ctx),
+        compact_benchmark_prompt_used = _use_compact_benchmark_prompt(ctx)
+        system_prompt = SYSTEM_DRAFT_BENCHMARK_COMPACT if compact_benchmark_prompt_used else SYSTEM_DRAFT
+        user_prompt = _draft_prompt_impl(request.goal, ctx, compact_benchmark_prompt=compact_benchmark_prompt_used)
+        request_diagnostics = _request_diagnostics(
+            ctx,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
             completion_overrides=overrides,
+            compact_benchmark_prompt_used=compact_benchmark_prompt_used,
+        )
+        raw = self._chat(
+            system_prompt,
+            user_prompt,
+            completion_overrides=overrides,
+            request_diagnostics=request_diagnostics,
         )
         split = split_ax_and_prose(raw)
         return ExpertDraftResponse(
             ax_source=split.ax_source,
             backend_name=BACKEND_NAME,
             explanation=split.prose,
-            metadata=self._metadata(raw, split),
+            metadata=self._metadata(raw, split, request_diagnostics),
         )
 
     def repair_program(self, request: ExpertRepairRequest) -> ExpertDraftResponse:
         ctx = dict(request.context) if isinstance(request.context, Mapping) else {}
         co = ctx.pop(COMPLETION_OVERRIDES_CONTEXT_KEY, None)
         overrides = co if isinstance(co, dict) else None
-        raw = self._chat(
-            SYSTEM_REPAIR,
-            user_prompt_repair(request.goal, request.current_program, request.error_report, ctx),
+        compact_benchmark_prompt_used = _use_compact_benchmark_prompt(ctx)
+        system_prompt = SYSTEM_REPAIR_BENCHMARK_COMPACT if compact_benchmark_prompt_used else SYSTEM_REPAIR
+        user_prompt = _repair_prompt_impl(
+            request.goal,
+            request.current_program,
+            request.error_report,
+            ctx,
+            compact_benchmark_prompt=compact_benchmark_prompt_used,
+        )
+        request_diagnostics = _request_diagnostics(
+            ctx,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
             completion_overrides=overrides,
+            compact_benchmark_prompt_used=compact_benchmark_prompt_used,
+        )
+        raw = self._chat(
+            system_prompt,
+            user_prompt,
+            completion_overrides=overrides,
+            request_diagnostics=request_diagnostics,
         )
         split = split_ax_and_prose(raw)
         return ExpertDraftResponse(
             ax_source=split.ax_source,
             backend_name=BACKEND_NAME,
             explanation=split.prose,
-            metadata=self._metadata(raw, split),
+            metadata=self._metadata(raw, split, request_diagnostics),
         )
 
     def summarize_trace(self, request: ExpertTraceSummaryRequest) -> str:

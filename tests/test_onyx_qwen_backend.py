@@ -200,6 +200,21 @@ def test_user_prompt_draft_includes_canonical_symbolic_family_anchor_block_for_k
     assert "score = max(0.0, min(a + b, 1.0));" in p
 
 
+def test_user_prompt_draft_uses_compact_benchmark_mode_only_for_benchmark_context():
+    ctx_plain = {"example_input_rows": [{"x": 1.0}], "expected_outputs": [{"y": 2.0}]}
+    ctx_bench = {
+        "benchmark_task_id": "noisy_affine_thermometer",
+        "example_input_rows": [{"x": 1.0}],
+        "expected_outputs": [{"y": 2.0}],
+    }
+    plain = user_prompt_draft("goal", ctx_plain)
+    compact = user_prompt_draft("goal", ctx_bench)
+    assert "Context (JSON, sorted keys):" in plain
+    assert "Context (JSON, sorted keys):" not in compact
+    assert "Benchmark task id: noisy_affine_thermometer" in compact
+    assert len(compact) < len(plain)
+
+
 def test_user_prompt_draft_includes_canonical_symbolic_family_anchor_block_for_known_family_goal():
     p = user_prompt_draft("Write .ax so score = max(a, b).", {})
     assert DRAFT_FEWSHOT in p
@@ -236,6 +251,22 @@ def test_user_prompt_repair_includes_examples_semantics_when_expected_outputs():
     assert "y = x * 2.0" in p and "x = 5.0" in p
     assert "SINGLE general" in p
     assert "x_0" in p and "output(" in p
+
+
+def test_user_prompt_repair_compact_benchmark_mode_keeps_hard_constraints():
+    ctx = {
+        "benchmark_task_id": "soft_cap_prefer_signal",
+        "example_input_rows": [{"primary": 0.1, "backup": 0.0, "cap": 1.0}],
+        "expected_outputs": [{"decision": 0.2}],
+    }
+    p = user_prompt_repair("goal", "bad", "err", ctx)
+    assert "Benchmark task id: soft_cap_prefer_signal" in p
+    assert "Benchmark compact syntax guardrails" in p
+    assert "Never emit `:=`" in p
+    assert "Never emit `:=`, `print`, `else if`" in p
+    assert "Current program:" in p
+    assert "Return the corrected full `.ax` program only" in p
+    assert "Context (JSON, sorted keys):" not in p
 
 
 def test_user_prompt_draft_includes_examples_semantics_when_rows_present():
@@ -527,6 +558,31 @@ def test_successful_draft():
     assert SYSTEM_DRAFT in calls[0]["json"]["messages"][0]["content"]
 
 
+def test_draft_metadata_includes_request_diagnostics_for_benchmark_context():
+    def fake_post(url, json=None, headers=None, timeout=None):
+        return _ok_response("```ax\ny = 1.0;\n```")
+
+    b = OnyxQwenBackend("http://h", "m", _post=fake_post)
+    out = b.draft_program(
+        ExpertDraftRequest(
+            "goal",
+            context={
+                "benchmark_task_id": "noisy_affine_thermometer",
+                "example_input_rows": [{"x": 1.0}],
+                "expected_outputs": [{"y": 2.0}],
+                COMPLETION_OVERRIDES_CONTEXT_KEY: {"max_tokens": 64},
+            },
+        )
+    )
+    assert out.metadata.get("benchmark_task_id") == "noisy_affine_thermometer"
+    assert out.metadata.get("compact_benchmark_prompt_used") is True
+    assert out.metadata.get("completion_overrides_applied") == {"max_tokens": 64}
+    assert out.metadata.get("prompt_char_count") == (
+        out.metadata.get("system_prompt_char_count") + out.metadata.get("user_prompt_char_count")
+    )
+    assert out.metadata.get("http_failure_detail") is None
+
+
 def test_repair_completion_overrides_merged_and_stripped_from_user_json():
     calls: list[dict] = []
 
@@ -549,6 +605,31 @@ def test_repair_completion_overrides_merged_and_stripped_from_user_json():
     assert calls[0].get("top_p") == 0.9
     user = calls[0]["messages"][1]["content"]
     assert COMPLETION_OVERRIDES_CONTEXT_KEY not in user
+
+
+def test_http_error_carries_request_diagnostics_metadata():
+    def fake_post(url, json=None, headers=None, timeout=None):
+        m = Mock()
+        m.status_code = 500
+        m.text = '{"detail":"CUDA error: out of memory"}'
+        return m
+
+    b = OnyxQwenBackend("http://h", "m", _post=fake_post)
+    with pytest.raises(OnyxQwenHTTPError) as ei:
+        b.draft_program(
+            ExpertDraftRequest(
+                "goal",
+                context={
+                    "benchmark_task_id": "noisy_affine_thermometer",
+                    COMPLETION_OVERRIDES_CONTEXT_KEY: {"max_tokens": 32, "temperature": 0},
+                },
+            )
+        )
+    meta = ei.value.metadata
+    assert meta.get("benchmark_task_id") == "noisy_affine_thermometer"
+    assert meta.get("compact_benchmark_prompt_used") is True
+    assert meta.get("completion_overrides_applied") == {"do_sample": False, "max_tokens": 32}
+    assert "CUDA error: out of memory" in (meta.get("http_failure_detail") or "")
 
 
 def test_completion_overrides_forward_max_tokens_to_http_payload():
