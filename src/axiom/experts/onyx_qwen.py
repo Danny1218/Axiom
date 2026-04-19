@@ -5,10 +5,13 @@ Install: ``pip install -e ".[copilot]"`` (pulls ``requests``). Not imported from
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import re
+from pathlib import Path
 from typing import Any, Callable, Mapping, NamedTuple, Optional
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 from axiom.experts.base import (
     ExpertDraftRequest,
@@ -26,6 +29,10 @@ BACKEND_NAME = "onyx_qwen"
 
 # Merged into OpenAI-style chat ``payload`` for ``draft_program`` only; stripped from user context JSON.
 COMPLETION_OVERRIDES_CONTEXT_KEY = "_onyx_completion_overrides"
+REQUEST_CAPTURE_DIR_CONTEXT_KEY = "_onyx_request_capture_dir"
+REQUEST_CAPTURE_ENABLED_CONTEXT_KEY = "_onyx_request_capture"
+REQUEST_CAPTURE_DIR_ENV_VAR = "AXIOM_ONYX_REQUEST_CAPTURE_DIR"
+DEFAULT_REQUEST_CAPTURE_DIR = "debug_onyx_request_capture"
 
 # --- Deterministic prompt templates (edit here only) ---
 
@@ -1252,6 +1259,82 @@ def _request_diagnostics(
     return out
 
 
+def _request_capture_dir_from_context(context: dict[str, Any]) -> Optional[Path]:
+    capture_dir = context.pop(REQUEST_CAPTURE_DIR_CONTEXT_KEY, None)
+    capture_enabled = bool(context.pop(REQUEST_CAPTURE_ENABLED_CONTEXT_KEY, False))
+    if isinstance(capture_dir, str) and capture_dir.strip():
+        return Path(capture_dir.strip())
+    env_dir = os.environ.get(REQUEST_CAPTURE_DIR_ENV_VAR, "").strip()
+    if env_dir:
+        return Path(env_dir)
+    if capture_enabled:
+        return Path(DEFAULT_REQUEST_CAPTURE_DIR)
+    return None
+
+
+def _stable_json_text(data: Any) -> str:
+    return json.dumps(data, sort_keys=True, separators=(",", ":"), default=str)
+
+
+def _payload_sha256(payload: Mapping[str, Any]) -> str:
+    return hashlib.sha256(_stable_json_text(dict(payload)).encode("utf-8")).hexdigest()
+
+
+def _request_capture_filename(
+    request_kind: str, benchmark_task_id: Optional[str], payload_sha256: str, status_code: Optional[int]
+) -> str:
+    stem = benchmark_task_id or "request"
+    stem = re.sub(r"[^A-Za-z0-9_.-]+", "_", stem).strip("._-") or "request"
+    suffix = f"_http{status_code}" if status_code is not None else ""
+    return f"{request_kind}_{stem}_{payload_sha256[:12]}{suffix}.json"
+
+
+def _write_request_capture(
+    capture_dir: Path,
+    *,
+    request_kind: str,
+    benchmark_task_id: Optional[str],
+    chat_url: str,
+    model: str,
+    system_prompt: str,
+    user_prompt: str,
+    prompt_char_count: int,
+    system_prompt_char_count: int,
+    user_prompt_char_count: int,
+    completion_overrides_applied: Mapping[str, Any],
+    compact_benchmark_prompt_used: bool,
+    payload: Mapping[str, Any],
+    payload_sha256: str,
+    status_code: Optional[int] = None,
+    http_failure_detail: Optional[str] = None,
+) -> Path:
+    capture_dir.mkdir(parents=True, exist_ok=True)
+    out: dict[str, Any] = {
+        "kind": "axiom.onyx_qwen.request_capture",
+        "request_kind": request_kind,
+        "benchmark_task_id": benchmark_task_id,
+        "model": model,
+        "chat_path": urlparse(chat_url).path,
+        "chat_url": chat_url,
+        "system_prompt": system_prompt,
+        "user_prompt": user_prompt,
+        "prompt_char_count": prompt_char_count,
+        "system_prompt_char_count": system_prompt_char_count,
+        "user_prompt_char_count": user_prompt_char_count,
+        "completion_overrides_applied": dict(completion_overrides_applied),
+        "compact_benchmark_prompt_used": bool(compact_benchmark_prompt_used),
+        "payload_sha256": payload_sha256,
+        "payload": dict(payload),
+    }
+    if status_code is not None:
+        out["status_code"] = int(status_code)
+    if http_failure_detail is not None:
+        out["http_failure_detail"] = http_failure_detail
+    path = capture_dir / _request_capture_filename(request_kind, benchmark_task_id, payload_sha256, status_code)
+    path.write_text(json.dumps(out, indent=2, sort_keys=True), encoding="utf-8")
+    return path
+
+
 class OnyxQwenBackend:
     """``SemanticExpert`` over an OpenAI-compatible ``/v1/chat/completions`` endpoint."""
 
@@ -1293,7 +1376,9 @@ class OnyxQwenBackend:
         user: str,
         *,
         completion_overrides: Optional[dict[str, Any]] = None,
-        request_diagnostics: Optional[Mapping[str, Any]] = None,
+        request_diagnostics: Optional[dict[str, Any]] = None,
+        request_kind: str = "draft",
+        capture_dir: Optional[Path] = None,
     ) -> str:
         post = self._resolve_post()
 
@@ -1309,6 +1394,9 @@ class OnyxQwenBackend:
                 if k != "messages" and k != "model":
                     payload[k] = v
             normalize_onyx_chat_completion_payload(payload)
+        payload_sha = _payload_sha256(payload)
+        if request_diagnostics is not None:
+            request_diagnostics["payload_sha256"] = payload_sha
         try:
             r = post(
                 self._chat_url,
@@ -1327,7 +1415,49 @@ class OnyxQwenBackend:
             snippet = r.text if isinstance(r.text, str) else ""
             meta = dict(request_diagnostics or {})
             meta["http_failure_detail"] = snippet[:2000]
+            meta["status_code"] = int(r.status_code)
+            if capture_dir is not None:
+                capture_path = _write_request_capture(
+                    capture_dir,
+                    request_kind=request_kind,
+                    benchmark_task_id=meta.get("benchmark_task_id"),
+                    chat_url=self._chat_url,
+                    model=self._model,
+                    system_prompt=system,
+                    user_prompt=user,
+                    prompt_char_count=int(meta.get("prompt_char_count", len(system) + len(user))),
+                    system_prompt_char_count=int(meta.get("system_prompt_char_count", len(system))),
+                    user_prompt_char_count=int(meta.get("user_prompt_char_count", len(user))),
+                    completion_overrides_applied=meta.get("completion_overrides_applied") or {},
+                    compact_benchmark_prompt_used=bool(meta.get("compact_benchmark_prompt_used")),
+                    payload=payload,
+                    payload_sha256=payload_sha,
+                    status_code=int(r.status_code),
+                    http_failure_detail=snippet[:2000],
+                )
+                meta["request_capture_path"] = str(capture_path)
+                if request_diagnostics is not None:
+                    request_diagnostics["request_capture_path"] = str(capture_path)
             raise OnyxQwenHTTPError(r.status_code, snippet[:2000], metadata=meta)
+
+        if capture_dir is not None and request_diagnostics is not None:
+            capture_path = _write_request_capture(
+                capture_dir,
+                request_kind=request_kind,
+                benchmark_task_id=request_diagnostics.get("benchmark_task_id"),
+                chat_url=self._chat_url,
+                model=self._model,
+                system_prompt=system,
+                user_prompt=user,
+                prompt_char_count=int(request_diagnostics.get("prompt_char_count", len(system) + len(user))),
+                system_prompt_char_count=int(request_diagnostics.get("system_prompt_char_count", len(system))),
+                user_prompt_char_count=int(request_diagnostics.get("user_prompt_char_count", len(user))),
+                completion_overrides_applied=request_diagnostics.get("completion_overrides_applied") or {},
+                compact_benchmark_prompt_used=bool(request_diagnostics.get("compact_benchmark_prompt_used")),
+                payload=payload,
+                payload_sha256=payload_sha,
+            )
+            request_diagnostics["request_capture_path"] = str(capture_path)
 
         try:
             data = r.json()
@@ -1343,6 +1473,7 @@ class OnyxQwenBackend:
         ctx = dict(request.context) if isinstance(request.context, Mapping) else {}
         co = ctx.pop(COMPLETION_OVERRIDES_CONTEXT_KEY, None)
         overrides = co if isinstance(co, dict) else None
+        capture_dir = _request_capture_dir_from_context(ctx)
         compact_benchmark_prompt_used = _use_compact_benchmark_prompt(ctx)
         system_prompt = SYSTEM_DRAFT_BENCHMARK_COMPACT if compact_benchmark_prompt_used else SYSTEM_DRAFT
         user_prompt = _draft_prompt_impl(request.goal, ctx, compact_benchmark_prompt=compact_benchmark_prompt_used)
@@ -1358,6 +1489,8 @@ class OnyxQwenBackend:
             user_prompt,
             completion_overrides=overrides,
             request_diagnostics=request_diagnostics,
+            request_kind="draft",
+            capture_dir=capture_dir,
         )
         split = split_ax_and_prose(raw)
         return ExpertDraftResponse(
@@ -1371,6 +1504,7 @@ class OnyxQwenBackend:
         ctx = dict(request.context) if isinstance(request.context, Mapping) else {}
         co = ctx.pop(COMPLETION_OVERRIDES_CONTEXT_KEY, None)
         overrides = co if isinstance(co, dict) else None
+        capture_dir = _request_capture_dir_from_context(ctx)
         compact_benchmark_prompt_used = _use_compact_benchmark_prompt(ctx)
         system_prompt = SYSTEM_REPAIR_BENCHMARK_COMPACT if compact_benchmark_prompt_used else SYSTEM_REPAIR
         user_prompt = _repair_prompt_impl(
@@ -1392,6 +1526,8 @@ class OnyxQwenBackend:
             user_prompt,
             completion_overrides=overrides,
             request_diagnostics=request_diagnostics,
+            request_kind="repair",
+            capture_dir=capture_dir,
         )
         split = split_ax_and_prose(raw)
         return ExpertDraftResponse(
@@ -1414,12 +1550,16 @@ __all__ = [
     "AxSplitResult",
     "BACKEND_NAME",
     "COMPLETION_OVERRIDES_CONTEXT_KEY",
+    "DEFAULT_REQUEST_CAPTURE_DIR",
     "DRAFT_FEWSHOT",
     "EXAMPLES_SEMANTICS_BLOCK",
     "EXACT_SYMBOLIC_MATH_BLOCK",
     "ROBUSTNESS_AMBIGUITY_FALLBACK_BLOCK",
     "ROBUSTNESS_AMBIGUITY_FALLBACK_EXAMPLES_BLOCK",
     "ROBUSTNESS_AMBIGUITY_REPAIR_CLEANUP_BLOCK",
+    "REQUEST_CAPTURE_DIR_CONTEXT_KEY",
+    "REQUEST_CAPTURE_DIR_ENV_VAR",
+    "REQUEST_CAPTURE_ENABLED_CONTEXT_KEY",
     "REPAIR_NEURAL_TO_SYMBOLIC_BLOCK",
     "REPAIR_UNROLL_COLLAPSE_BLOCK",
     "ax_source_metadata_flags",

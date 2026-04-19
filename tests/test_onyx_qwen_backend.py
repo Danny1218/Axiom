@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
@@ -18,6 +20,8 @@ from axiom.experts.onyx_qwen import (
     ROBUSTNESS_AMBIGUITY_FALLBACK_BLOCK,
     ROBUSTNESS_AMBIGUITY_FALLBACK_EXAMPLES_BLOCK,
     ROBUSTNESS_AMBIGUITY_REPAIR_CLEANUP_BLOCK,
+    REQUEST_CAPTURE_DIR_CONTEXT_KEY,
+    REQUEST_CAPTURE_DIR_ENV_VAR,
     REPAIR_NEURAL_TO_SYMBOLIC_BLOCK,
     REPAIR_UNROLL_COLLAPSE_BLOCK,
     OnyxQwenBackend,
@@ -41,6 +45,10 @@ def _ok_response(content: str, *, status: int = 200, text: str = "") -> Mock:
     r.text = text
     r.json.return_value = {"choices": [{"message": {"content": content}}]}
     return r
+
+
+def _read_capture(path: str) -> dict:
+    return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
 def test_backend_satisfies_semantic_expert_protocol():
@@ -583,6 +591,36 @@ def test_draft_metadata_includes_request_diagnostics_for_benchmark_context():
     assert out.metadata.get("http_failure_detail") is None
 
 
+def test_request_capture_writes_success_artifact_via_env(tmp_path, monkeypatch):
+    calls: list[dict] = []
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        calls.append(dict(json or {}))
+        return _ok_response("```ax\ny = 1.0;\n```")
+
+    monkeypatch.setenv(REQUEST_CAPTURE_DIR_ENV_VAR, str(tmp_path))
+    b = OnyxQwenBackend("http://h", "m", _post=fake_post)
+    out = b.draft_program(
+        ExpertDraftRequest(
+            "goal",
+            context={
+                "benchmark_task_id": "noisy_affine_thermometer",
+                COMPLETION_OVERRIDES_CONTEXT_KEY: {"max_tokens": 64},
+            },
+        )
+    )
+    capture = _read_capture(str(out.metadata.get("request_capture_path")))
+    assert capture["benchmark_task_id"] == "noisy_affine_thermometer"
+    assert capture["chat_url"] == "http://h/v1/chat/completions"
+    assert capture["payload"] == calls[0]
+    assert capture["payload_sha256"] == out.metadata.get("payload_sha256")
+    assert capture["system_prompt"] == calls[0]["messages"][0]["content"]
+    assert capture["user_prompt"] == calls[0]["messages"][1]["content"]
+    assert capture["prompt_char_count"] == (
+        capture["system_prompt_char_count"] + capture["user_prompt_char_count"]
+    )
+
+
 def test_repair_completion_overrides_merged_and_stripped_from_user_json():
     calls: list[dict] = []
 
@@ -605,6 +643,31 @@ def test_repair_completion_overrides_merged_and_stripped_from_user_json():
     assert calls[0].get("top_p") == 0.9
     user = calls[0]["messages"][1]["content"]
     assert COMPLETION_OVERRIDES_CONTEXT_KEY not in user
+
+
+def test_request_capture_writes_http500_artifact(tmp_path):
+    def fake_post(url, json=None, headers=None, timeout=None):
+        m = Mock()
+        m.status_code = 500
+        m.text = '{"detail":"CUDA error: out of memory"}'
+        return m
+
+    b = OnyxQwenBackend("http://h", "m", _post=fake_post)
+    with pytest.raises(OnyxQwenHTTPError) as ei:
+        b.draft_program(
+            ExpertDraftRequest(
+                "goal",
+                context={
+                    "benchmark_task_id": "noisy_affine_thermometer",
+                    REQUEST_CAPTURE_DIR_CONTEXT_KEY: str(tmp_path),
+                    COMPLETION_OVERRIDES_CONTEXT_KEY: {"max_tokens": 32},
+                },
+            )
+        )
+    capture = _read_capture(str(ei.value.metadata.get("request_capture_path")))
+    assert capture["status_code"] == 500
+    assert "CUDA error: out of memory" in capture["http_failure_detail"]
+    assert capture["payload_sha256"] == ei.value.metadata.get("payload_sha256")
 
 
 def test_http_error_carries_request_diagnostics_metadata():
@@ -630,6 +693,43 @@ def test_http_error_carries_request_diagnostics_metadata():
     assert meta.get("compact_benchmark_prompt_used") is True
     assert meta.get("completion_overrides_applied") == {"do_sample": False, "max_tokens": 32}
     assert "CUDA error: out of memory" in (meta.get("http_failure_detail") or "")
+
+
+def test_request_capture_redacts_api_key_and_authorization(tmp_path):
+    def fake_post(url, json=None, headers=None, timeout=None):
+        return _ok_response("```ax\ny = 1.0;\n```")
+
+    b = OnyxQwenBackend("http://h", "m", api_key="sk-secret-value", _post=fake_post)
+    out = b.draft_program(
+        ExpertDraftRequest(
+            "goal",
+            context={REQUEST_CAPTURE_DIR_CONTEXT_KEY: str(tmp_path)},
+        )
+    )
+    text = Path(str(out.metadata.get("request_capture_path"))).read_text(encoding="utf-8")
+    assert "sk-secret-value" not in text
+    assert "Authorization" not in text
+
+
+def test_request_capture_payload_reflects_normalized_overrides(tmp_path):
+    def fake_post(url, json=None, headers=None, timeout=None):
+        return _ok_response("```ax\ny = 1.0;\n```")
+
+    b = OnyxQwenBackend("http://h", "m", _post=fake_post)
+    out = b.draft_program(
+        ExpertDraftRequest(
+            "goal",
+            context={
+                REQUEST_CAPTURE_DIR_CONTEXT_KEY: str(tmp_path),
+                COMPLETION_OVERRIDES_CONTEXT_KEY: {"temperature": 0.0, "top_p": 0.88},
+            },
+        )
+    )
+    capture = _read_capture(str(out.metadata.get("request_capture_path")))
+    assert capture["completion_overrides_applied"] == {"do_sample": False}
+    assert capture["payload"]["do_sample"] is False
+    assert "temperature" not in capture["payload"]
+    assert "top_p" not in capture["payload"]
 
 
 def test_completion_overrides_forward_max_tokens_to_http_payload():
