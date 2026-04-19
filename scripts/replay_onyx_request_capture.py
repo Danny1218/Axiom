@@ -27,6 +27,14 @@ def _headers_from_env() -> dict[str, str]:
     return headers
 
 
+def _request_id_from_artifact(artifact: dict, payload_sha: str) -> str:
+    request_id = str(artifact.get("request_id") or "").strip()
+    if request_id:
+        return request_id
+    sha_prefix = payload_sha[:12] if payload_sha else "unknown"
+    return f"replay-{sha_prefix}"
+
+
 def replay_capture(path: Path) -> int:
     if requests is None:
         raise SystemExit('requests is required: pip install -e ".[copilot]"')
@@ -34,7 +42,13 @@ def replay_capture(path: Path) -> int:
     payload = artifact["payload"]
     chat_url = os.environ.get(REPLAY_URL_ENV_VAR, "").strip() or str(artifact["chat_url"])
     payload_sha = str(artifact.get("payload_sha256") or "")
-    response = requests.post(chat_url, json=payload, headers=_headers_from_env(), timeout=120.0)
+    request_id = _request_id_from_artifact(artifact, payload_sha)
+    headers = _headers_from_env()
+    if payload_sha:
+        headers["X-Payload-SHA256"] = payload_sha
+    headers["X-Request-ID"] = request_id
+    response = requests.post(chat_url, json=payload, headers=headers, timeout=120.0)
+    print(f"request_id: {request_id}")
     print(f"payload_sha256: {payload_sha}")
     print(f"status_code: {response.status_code}")
     if response.status_code >= 400:

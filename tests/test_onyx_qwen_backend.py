@@ -748,7 +748,14 @@ def test_replay_request_capture_success_request_shape(tmp_path, monkeypatch, cap
     artifact_path = tmp_path / "capture.json"
     payload = {"model": "m", "messages": [{"role": "system", "content": "s"}, {"role": "user", "content": "u"}]}
     artifact_path.write_text(
-        json.dumps({"chat_url": "http://live/v1/chat/completions", "payload": payload, "payload_sha256": "abc123"}),
+        json.dumps(
+            {
+                "chat_url": "http://live/v1/chat/completions",
+                "payload": payload,
+                "payload_sha256": "abc123",
+                "request_id": "artifact-req-1",
+            }
+        ),
         encoding="utf-8",
     )
     calls: list[dict] = []
@@ -763,10 +770,37 @@ def test_replay_request_capture_success_request_shape(tmp_path, monkeypatch, cap
     assert code == 0
     assert calls[0]["url"] == "http://live/v1/chat/completions"
     assert calls[0]["json"] == payload
-    assert calls[0]["headers"] == {"Content-Type": "application/json"}
+    assert calls[0]["headers"] == {
+        "Content-Type": "application/json",
+        "X-Payload-SHA256": "abc123",
+        "X-Request-ID": "artifact-req-1",
+    }
+    assert "request_id: artifact-req-1" in out
     assert "payload_sha256: abc123" in out
     assert "status_code: 200" in out
     assert '"content": "ok"' in out
+
+
+def test_replay_request_capture_generates_fallback_request_id(tmp_path, monkeypatch, capsys):
+    replay_mod = _load_script_module("replay_onyx_request_capture_generated_id", "scripts/replay_onyx_request_capture.py")
+    artifact_path = tmp_path / "capture.json"
+    artifact_path.write_text(
+        json.dumps({"chat_url": "http://live/v1/chat/completions", "payload": {"model": "m"}, "payload_sha256": "deadbeefcafebabe"}),
+        encoding="utf-8",
+    )
+    calls: list[dict] = []
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        calls.append({"headers": headers})
+        return _ok_response("ok")
+
+    monkeypatch.setattr(replay_mod.requests, "post", fake_post)
+    code = replay_mod.main([str(artifact_path)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert calls[0]["headers"]["X-Payload-SHA256"] == "deadbeefcafebabe"
+    assert calls[0]["headers"]["X-Request-ID"] == "replay-deadbeefcafe"
+    assert "request_id: replay-deadbeefcafe" in out
 
 
 def test_replay_request_capture_http500_handling(tmp_path, monkeypatch, capsys):
@@ -817,7 +851,14 @@ def test_replay_request_capture_api_key_redacted_from_output(tmp_path, monkeypat
     replay_mod = _load_script_module("replay_onyx_request_capture_redaction", "scripts/replay_onyx_request_capture.py")
     artifact_path = tmp_path / "capture.json"
     artifact_path.write_text(
-        json.dumps({"chat_url": "http://artifact/v1/chat/completions", "payload": {"model": "m"}, "payload_sha256": "sha"}),
+        json.dumps(
+            {
+                "chat_url": "http://artifact/v1/chat/completions",
+                "payload": {"model": "m"},
+                "payload_sha256": "sha",
+                "request_id": "artifact-visible-id",
+            }
+        ),
         encoding="utf-8",
     )
     calls: list[dict] = []
@@ -832,6 +873,7 @@ def test_replay_request_capture_api_key_redacted_from_output(tmp_path, monkeypat
     out = capsys.readouterr().out
     assert code == 0
     assert calls[0]["headers"]["Authorization"] == "Bearer sk-secret-value"
+    assert calls[0]["headers"]["X-Request-ID"] == "artifact-visible-id"
     assert "sk-secret-value" not in out
     assert "Authorization" not in out
 
