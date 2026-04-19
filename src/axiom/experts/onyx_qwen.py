@@ -1168,9 +1168,17 @@ class OnyxQwenError(Exception):
 class OnyxQwenTimeoutError(OnyxQwenError):
     """Request exceeded ``timeout``."""
 
+    def __init__(self, message: str, *, metadata: Optional[Mapping[str, Any]] = None) -> None:
+        self.metadata = dict(metadata or {})
+        super().__init__(message)
+
 
 class OnyxQwenTransportError(OnyxQwenError):
     """Network / connection failure before a response."""
+
+    def __init__(self, message: str, *, metadata: Optional[Mapping[str, Any]] = None) -> None:
+        self.metadata = dict(metadata or {})
+        super().__init__(message)
 
 
 class OnyxQwenHTTPError(OnyxQwenError):
@@ -1307,6 +1315,9 @@ def _write_request_capture(
     payload_sha256: str,
     status_code: Optional[int] = None,
     http_failure_detail: Optional[str] = None,
+    failure_kind: Optional[str] = None,
+    exception_class: Optional[str] = None,
+    exception_message: Optional[str] = None,
 ) -> Path:
     capture_dir.mkdir(parents=True, exist_ok=True)
     out: dict[str, Any] = {
@@ -1330,9 +1341,56 @@ def _write_request_capture(
         out["status_code"] = int(status_code)
     if http_failure_detail is not None:
         out["http_failure_detail"] = http_failure_detail
+    if failure_kind is not None:
+        out["failure_kind"] = failure_kind
+    if exception_class is not None:
+        out["exception_class"] = exception_class
+    if exception_message is not None:
+        out["exception_message"] = exception_message
     path = capture_dir / _request_capture_filename(request_kind, benchmark_task_id, payload_sha256, status_code)
     path.write_text(json.dumps(out, indent=2, sort_keys=True), encoding="utf-8")
     return path
+
+
+def _capture_exception_artifact(
+    *,
+    capture_dir: Optional[Path],
+    request_kind: str,
+    request_diagnostics: Optional[dict[str, Any]],
+    chat_url: str,
+    model: str,
+    system_prompt: str,
+    user_prompt: str,
+    payload: Mapping[str, Any],
+    payload_sha256: str,
+    failure_kind: str,
+    exc: Exception,
+) -> Optional[str]:
+    if capture_dir is None:
+        return None
+    meta = dict(request_diagnostics or {})
+    capture_path = _write_request_capture(
+        capture_dir,
+        request_kind=request_kind,
+        benchmark_task_id=meta.get("benchmark_task_id"),
+        chat_url=chat_url,
+        model=model,
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        prompt_char_count=int(meta.get("prompt_char_count", len(system_prompt) + len(user_prompt))),
+        system_prompt_char_count=int(meta.get("system_prompt_char_count", len(system_prompt))),
+        user_prompt_char_count=int(meta.get("user_prompt_char_count", len(user_prompt))),
+        completion_overrides_applied=meta.get("completion_overrides_applied") or {},
+        compact_benchmark_prompt_used=bool(meta.get("compact_benchmark_prompt_used")),
+        payload=payload,
+        payload_sha256=payload_sha256,
+        failure_kind=failure_kind,
+        exception_class=type(exc).__name__,
+        exception_message=str(exc),
+    )
+    if request_diagnostics is not None:
+        request_diagnostics["request_capture_path"] = str(capture_path)
+    return str(capture_path)
 
 
 class OnyxQwenBackend:
@@ -1406,9 +1464,47 @@ class OnyxQwenBackend:
             )
         except Exception as e:
             if requests is not None and isinstance(e, requests.exceptions.Timeout):
-                raise OnyxQwenTimeoutError(str(e)) from e
+                meta = dict(request_diagnostics or {})
+                meta["failure_kind"] = "timeout"
+                meta["exception_class"] = type(e).__name__
+                meta["exception_message"] = str(e)
+                capture_path = _capture_exception_artifact(
+                    capture_dir=capture_dir,
+                    request_kind=request_kind,
+                    request_diagnostics=request_diagnostics,
+                    chat_url=self._chat_url,
+                    model=self._model,
+                    system_prompt=system,
+                    user_prompt=user,
+                    payload=payload,
+                    payload_sha256=payload_sha,
+                    failure_kind="timeout",
+                    exc=e,
+                )
+                if capture_path is not None:
+                    meta["request_capture_path"] = capture_path
+                raise OnyxQwenTimeoutError(str(e), metadata=meta) from e
             if requests is not None and isinstance(e, requests.exceptions.RequestException):
-                raise OnyxQwenTransportError(str(e)) from e
+                meta = dict(request_diagnostics or {})
+                meta["failure_kind"] = "transport"
+                meta["exception_class"] = type(e).__name__
+                meta["exception_message"] = str(e)
+                capture_path = _capture_exception_artifact(
+                    capture_dir=capture_dir,
+                    request_kind=request_kind,
+                    request_diagnostics=request_diagnostics,
+                    chat_url=self._chat_url,
+                    model=self._model,
+                    system_prompt=system,
+                    user_prompt=user,
+                    payload=payload,
+                    payload_sha256=payload_sha,
+                    failure_kind="transport",
+                    exc=e,
+                )
+                if capture_path is not None:
+                    meta["request_capture_path"] = capture_path
+                raise OnyxQwenTransportError(str(e), metadata=meta) from e
             raise
 
         if r.status_code >= 400:

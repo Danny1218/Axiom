@@ -630,6 +630,7 @@ def test_request_capture_writes_success_artifact_via_env(tmp_path, monkeypatch):
     assert capture["prompt_char_count"] == (
         capture["system_prompt_char_count"] + capture["user_prompt_char_count"]
     )
+    assert "failure_kind" not in capture
 
 
 def test_repair_completion_overrides_merged_and_stripped_from_user_json():
@@ -679,6 +680,60 @@ def test_request_capture_writes_http500_artifact(tmp_path):
     assert capture["status_code"] == 500
     assert "CUDA error: out of memory" in capture["http_failure_detail"]
     assert capture["payload_sha256"] == ei.value.metadata.get("payload_sha256")
+    assert "failure_kind" not in capture
+
+
+def test_request_capture_writes_timeout_artifact_during_repair(tmp_path):
+    def fake_post(url, json=None, headers=None, timeout=None):
+        raise requests.exceptions.ReadTimeout("read timed out")
+
+    b = OnyxQwenBackend("http://h", "m", _post=fake_post)
+    with pytest.raises(OnyxQwenTimeoutError) as ei:
+        b.repair_program(
+            ExpertRepairRequest(
+                "goal",
+                current_program="y = 0.0;",
+                error_report="metric mismatch",
+                context={
+                    "benchmark_task_id": "noisy_affine_thermometer",
+                    REQUEST_CAPTURE_DIR_CONTEXT_KEY: str(tmp_path),
+                    COMPLETION_OVERRIDES_CONTEXT_KEY: {"max_tokens": 64},
+                },
+            )
+        )
+    capture = _read_capture(str(ei.value.metadata.get("request_capture_path")))
+    assert capture["request_kind"] == "repair"
+    assert capture["failure_kind"] == "timeout"
+    assert capture["exception_class"] == "ReadTimeout"
+    assert "timed out" in capture["exception_message"]
+    assert capture["payload_sha256"] == ei.value.metadata.get("payload_sha256")
+
+
+def test_request_capture_writes_transport_artifact_during_draft_without_secret_leak(tmp_path):
+    def fake_post(url, json=None, headers=None, timeout=None):
+        raise requests.exceptions.ConnectionError("refused")
+
+    b = OnyxQwenBackend("http://h", "m", api_key="sk-secret-value", _post=fake_post)
+    with pytest.raises(OnyxQwenTransportError) as ei:
+        b.draft_program(
+            ExpertDraftRequest(
+                "goal",
+                context={
+                    "benchmark_task_id": "noisy_affine_thermometer",
+                    REQUEST_CAPTURE_DIR_CONTEXT_KEY: str(tmp_path),
+                    COMPLETION_OVERRIDES_CONTEXT_KEY: {"max_tokens": 64},
+                },
+            )
+        )
+    capture_path = str(ei.value.metadata.get("request_capture_path"))
+    capture = _read_capture(capture_path)
+    assert capture["request_kind"] == "draft"
+    assert capture["failure_kind"] == "transport"
+    assert capture["exception_class"] == "ConnectionError"
+    assert "refused" in capture["exception_message"]
+    text = Path(capture_path).read_text(encoding="utf-8")
+    assert "sk-secret-value" not in text
+    assert "Authorization" not in text
 
 
 def test_http_error_carries_request_diagnostics_metadata():
