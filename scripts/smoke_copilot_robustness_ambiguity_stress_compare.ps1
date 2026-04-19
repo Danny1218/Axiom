@@ -3,6 +3,7 @@ param(
     [string]$ExpertUrl = "http://127.0.0.1:8000",
     [string]$ExpertModel = "onyx-qwen-production-v1",
     [string]$ExpertApiKey = "",
+    [double]$Timeout = 45,
     [double]$Temperature = 0,
     [int]$MaxTokens = 96,
     [int]$MaxIterations = 10,
@@ -18,6 +19,7 @@ Set-StrictMode -Version Latest
     -ExpertUrl $ExpertUrl `
     -ExpertModel $ExpertModel `
     -ExpertApiKey $ExpertApiKey `
+    -Timeout $Timeout `
     -Temperature $Temperature `
     -MaxTokens $MaxTokens `
     -MaxIterations $MaxIterations `

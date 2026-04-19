@@ -548,9 +548,11 @@ def test_smoke_copilot_next_milestone_compare_script_uses_next_suite_and_reports
     assert script.lstrip().startswith("param(")
     assert "[AllowNull()]" in script
     assert '[string]$Backend = "benchmark-dispatch"' in script
+    assert "[double]$Timeout = 45" in script
     assert '[string]$TaskJson = "benchmarks/copilot_symbolic_next_milestone_tasks.json"' in script
     assert '[string]$OutJson = "benchmark_symbolic_suite_next_milestone.json"' in script
     assert "--max-iterations" in script
+    assert "--timeout" in script
     assert "copilot-benchmark" in script
     assert "draft compile_ok=" in script
     assert "search compile_ok=" in script
@@ -579,9 +581,11 @@ def test_smoke_copilot_robustness_ambiguity_stress_compare_script_wraps_shared_c
     )
     assert script.lstrip().startswith("param(")
     assert '[string]$Backend = "benchmark-dispatch"' in script
+    assert "[double]$Timeout = 45" in script
     assert '[string]$TaskJson = "benchmarks/copilot_symbolic_robustness_ambiguity_stress_tasks.json"' in script
     assert '[string]$OutJson = "benchmark_symbolic_suite_robustness_ambiguity_stress.json"' in script
     assert "smoke_copilot_next_milestone_compare.ps1" in script
+    assert "-Timeout $Timeout" in script
     assert "-MaxIterations $MaxIterations" in script
     assert "-TaskJson $TaskJson" in script
     assert "-OutJson $OutJson" in script

@@ -1543,6 +1543,15 @@ def main(argv: list[str] | None = None) -> None:
     )
     _add_copilot_benchmark_backend_args(p_cb)
     p_cb.add_argument(
+        "--timeout",
+        "--expert-timeout",
+        type=float,
+        default=None,
+        dest="expert_timeout",
+        metavar="SEC",
+        help="Per-request HTTP timeout in seconds (default: 120).",
+    )
+    p_cb.add_argument(
         "--task-json",
         type=Path,
         default=None,

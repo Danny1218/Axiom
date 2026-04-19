@@ -3,6 +3,7 @@ param(
     [string]$ExpertUrl = "http://127.0.0.1:8000",
     [string]$ExpertModel = "onyx-qwen-production-v1",
     [string]$ExpertApiKey = "",
+    [double]$Timeout = 45,
     [double]$Temperature = 0,
     [int]$MaxTokens = 96,
     [int]$MaxIterations = 10,
@@ -78,6 +79,7 @@ function _Arm-Pass {
 $cmd = @(
     "axiom", "copilot-benchmark",
     "--backend", $Backend,
+    "--timeout", ("{0}" -f $Timeout),
     "--task-json", $TaskJson,
     "--max-iterations", ("{0}" -f $MaxIterations),
     "--temperature", ("{0}" -f $Temperature),

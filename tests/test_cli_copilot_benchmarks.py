@@ -35,6 +35,15 @@ def test_copilot_benchmark_help_includes_max_tokens(capsys):
     assert "--max-tokens" in capsys.readouterr().out
 
 
+def test_copilot_benchmark_help_includes_timeout(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["copilot-benchmark", "--help"])
+    assert exc.value.code == 0
+    out = capsys.readouterr().out
+    assert "--timeout" in out
+    assert "--expert-timeout" in out
+
+
 def test_copilot_benchmark_runs_with_dispatch_expert(tmp_path: Path, capsys, monkeypatch):
     monkeypatch.setattr(cli_mod, "_make_copilot_expert", lambda _a: BenchmarkDispatchExpert())
     out_json = tmp_path / "bench.json"
@@ -246,6 +255,27 @@ def test_copilot_benchmark_accepts_temperature_and_passes_completion_override(tm
     assert calls
     overrides = calls[0].context.get(COMPLETION_OVERRIDES_CONTEXT_KEY)
     assert overrides == {"temperature": 0.0}
+
+
+def test_copilot_benchmark_default_timeout_is_unchanged_when_omitted(tmp_path: Path, monkeypatch):
+    seen_timeout: list[object] = []
+
+    def fake_make_copilot_expert(args):
+        seen_timeout.append(getattr(args, "expert_timeout", "missing"))
+        return BenchmarkDispatchExpert()
+
+    monkeypatch.setattr(cli_mod, "_make_copilot_expert", fake_make_copilot_expert)
+    out_json = tmp_path / "bench_timeout_default.json"
+    main(
+        [
+            "copilot-benchmark",
+            "--backend",
+            "benchmark-dispatch",
+            "--out",
+            str(out_json),
+        ]
+    )
+    assert seen_timeout == [None]
 
 
 def test_copilot_benchmark_rejects_draft_and_search_together(monkeypatch):
