@@ -4,6 +4,7 @@ param(
     [string]$ExpertModel = "onyx-qwen-production-v1",
     [string]$ExpertApiKey = "",
     [double]$Temperature = 0,
+    [int]$MaxTokens = 96,
     [int]$MaxIterations = 10,
     [string]$TaskJson = "benchmarks/copilot_symbolic_robustness_ambiguity_stress_tasks.json",
     [string]$OutJson = "benchmark_symbolic_suite_robustness_ambiguity_stress.json"
@@ -18,6 +19,7 @@ Set-StrictMode -Version Latest
     -ExpertModel $ExpertModel `
     -ExpertApiKey $ExpertApiKey `
     -Temperature $Temperature `
+    -MaxTokens $MaxTokens `
     -MaxIterations $MaxIterations `
     -TaskJson $TaskJson `
     -OutJson $OutJson

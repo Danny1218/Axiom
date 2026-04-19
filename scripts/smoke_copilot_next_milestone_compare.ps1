@@ -4,6 +4,7 @@ param(
     [string]$ExpertModel = "onyx-qwen-production-v1",
     [string]$ExpertApiKey = "",
     [double]$Temperature = 0,
+    [int]$MaxTokens = 96,
     [int]$MaxIterations = 10,
     [string]$TaskJson = "benchmarks/copilot_symbolic_next_milestone_tasks.json",
     [string]$OutJson = "benchmark_symbolic_suite_next_milestone.json"
@@ -80,6 +81,7 @@ $cmd = @(
     "--task-json", $TaskJson,
     "--max-iterations", ("{0}" -f $MaxIterations),
     "--temperature", ("{0}" -f $Temperature),
+    "--max-tokens", ("{0}" -f $MaxTokens),
     "--out", $OutJson
 )
 if ($Backend -ne "benchmark-dispatch") {

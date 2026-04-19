@@ -28,6 +28,13 @@ def test_copilot_benchmark_help_exits_ok():
     assert exc.value.code == 0
 
 
+def test_copilot_benchmark_help_includes_max_tokens(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["copilot-benchmark", "--help"])
+    assert exc.value.code == 0
+    assert "--max-tokens" in capsys.readouterr().out
+
+
 def test_copilot_benchmark_runs_with_dispatch_expert(tmp_path: Path, capsys, monkeypatch):
     monkeypatch.setattr(cli_mod, "_make_copilot_expert", lambda _a: BenchmarkDispatchExpert())
     out_json = tmp_path / "bench.json"

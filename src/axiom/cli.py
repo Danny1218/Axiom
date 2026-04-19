@@ -574,6 +574,8 @@ def _completion_overrides_from_args(args: argparse.Namespace) -> Optional[Dict[s
         out["temperature"] = float(args.temperature)
     if getattr(args, "top_p", None) is not None:
         out["top_p"] = float(args.top_p)
+    if getattr(args, "max_tokens", None) is not None:
+        out["max_tokens"] = int(args.max_tokens)
     return out if out else None
 
 
@@ -1138,6 +1140,14 @@ def _add_copilot_completion_args(p: argparse.ArgumentParser) -> None:
         dest="top_p",
         metavar="FLOAT",
         help="Optional nucleus sampling top_p (expert draft+repair when set).",
+    )
+    p.add_argument(
+        "--max-tokens",
+        type=int,
+        default=None,
+        dest="max_tokens",
+        metavar="INT",
+        help="Optional cap for expert draft/repair max_tokens without changing the server globally.",
     )
 
 

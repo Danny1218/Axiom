@@ -551,6 +551,25 @@ def test_repair_completion_overrides_merged_and_stripped_from_user_json():
     assert COMPLETION_OVERRIDES_CONTEXT_KEY not in user
 
 
+def test_completion_overrides_forward_max_tokens_to_http_payload():
+    calls: list[dict] = []
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        calls.append(json)
+        return _ok_response("```ax\ny = 1.0;\n```")
+
+    b = OnyxQwenBackend("http://h", "m", _post=fake_post)
+    b.draft_program(
+        ExpertDraftRequest(
+            "goal-text",
+            context={COMPLETION_OVERRIDES_CONTEXT_KEY: {"max_tokens": 96}, "extra": 1},
+        )
+    )
+    assert calls[0].get("max_tokens") == 96
+    user = calls[0]["messages"][1]["content"]
+    assert COMPLETION_OVERRIDES_CONTEXT_KEY not in user
+
+
 def test_draft_completion_overrides_merged_and_stripped_from_user_json():
     calls: list[dict] = []
 
