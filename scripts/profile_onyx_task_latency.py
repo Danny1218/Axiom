@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import statistics
@@ -39,6 +40,29 @@ def _resolve_setting(
             f"Missing required setting: {setting_name}. Provide --{setting_name.replace('_', '-')} or set {env_name}."
         )
     return None
+
+
+def _resolve_expert_api_key(explicit_cli: str, key_file: str) -> str | None:
+    """API key only. Precedence: --expert-api-key, --expert-api-key-file, AXIOM_EXPERT_API_KEY."""
+    if str(explicit_cli).strip():
+        return str(explicit_cli).strip()
+    path = str(key_file).strip() if key_file else ""
+    if path:
+        p = Path(path)
+        if not p.is_file():
+            raise SystemExit(f"expert-api-key-file not found: {p}")
+        raw = p.read_text(encoding="utf-8").strip()
+        if raw:
+            return raw
+    env_value = os.environ.get("AXIOM_EXPERT_API_KEY", "").strip()
+    if env_value:
+        return env_value
+    return None
+
+
+def _api_key_fingerprint(key: str) -> str:
+    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
+    return f"sha256:{digest[:12]}"
 
 
 def _format_elapsed(value: Any) -> str:
@@ -186,11 +210,9 @@ def _resolve_live_config(args: argparse.Namespace) -> tuple[str, str, str | None
         setting_name="expert_model",
         required=True,
     )
-    expert_api_key = _resolve_setting(
-        args.expert_api_key,
-        env_name="AXIOM_EXPERT_API_KEY",
-        setting_name="expert_api_key",
-        required=False,
+    expert_api_key = _resolve_expert_api_key(
+        str(args.expert_api_key),
+        str(getattr(args, "expert_api_key_file", "") or ""),
     )
     capture_dir_text = _resolve_setting(
         args.request_capture_dir,
@@ -225,7 +247,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--expert-api-key",
         default="",
-        help="Optional live expert API key. Overrides AXIOM_EXPERT_API_KEY when provided.",
+        help="Optional API key. Precedence over --expert-api-key-file and AXIOM_EXPERT_API_KEY.",
+    )
+    parser.add_argument(
+        "--expert-api-key-file",
+        default="",
+        help="File containing the raw API key (used only when --expert-api-key is empty). Precedence: --expert-api-key, then this file, then AXIOM_EXPERT_API_KEY.",
     )
     parser.add_argument(
         "--request-capture-dir",

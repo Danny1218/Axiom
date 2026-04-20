@@ -6,7 +6,9 @@ from urllib.parse import urlsplit, urlunsplit
 
 from profile_onyx_task_latency import (  # noqa: E402 - loads src/ onto sys.path before axiom imports
     REQUEST_CAPTURE_DIR_ENV_VAR,
+    _api_key_fingerprint,
     _build_draft_request,
+    _resolve_expert_api_key,
     _resolve_live_config,
     _resolve_setting,
 )
@@ -50,6 +52,7 @@ def _run_auth_probe(args: argparse.Namespace) -> int:
         expert_url=args.expert_url,
         expert_model=args.expert_model,
         expert_api_key=args.expert_api_key,
+        expert_api_key_file=args.expert_api_key_file,
         request_capture_dir=args.request_capture_dir,
     )
     url, model, api_key, capture_dir = _resolve_live_config(ns)
@@ -129,7 +132,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--expert-api-key",
         default="",
-        help="Optional live expert API key. Overrides AXIOM_EXPERT_API_KEY when provided.",
+        help="Optional API key. Precedence over --expert-api-key-file and AXIOM_EXPERT_API_KEY.",
+    )
+    parser.add_argument(
+        "--expert-api-key-file",
+        default="",
+        help="File containing the raw API key (used only when --expert-api-key is empty). Precedence: --expert-api-key, then this file, then AXIOM_EXPERT_API_KEY.",
     )
     parser.add_argument(
         "--request-capture-dir",
@@ -155,12 +163,7 @@ def main(argv: list[str] | None = None) -> int:
         setting_name="expert_model",
         required=False,
     )
-    expert_api_key = _resolve_setting(
-        args.expert_api_key,
-        env_name="AXIOM_EXPERT_API_KEY",
-        setting_name="expert_api_key",
-        required=False,
-    )
+    expert_api_key = _resolve_expert_api_key(str(args.expert_api_key), str(args.expert_api_key_file))
     request_capture_dir = _resolve_setting(
         args.request_capture_dir,
         env_name=REQUEST_CAPTURE_DIR_ENV_VAR,
@@ -179,6 +182,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"expert_url: {'present' if expert_url else 'missing'}")
     print(f"expert_model: {'present' if expert_model else 'missing'}")
     print(f"expert_api_key: {'present' if expert_api_key else 'missing (optional)'}")
+    if expert_api_key:
+        print(f"expert_api_key_fingerprint: {_api_key_fingerprint(expert_api_key)}")
     if missing:
         for setting in missing:
             print(f"missing required setting: {setting}")

@@ -617,6 +617,10 @@ def test_profile_onyx_task_latency_script_exposes_expected_args():
     assert 'parser.add_argument("--expert-url", default=""' in script
     assert '"--expert-model"' in script
     assert '"--expert-api-key"' in script
+    assert '"--expert-api-key-file"' in script
+    assert "def _resolve_expert_api_key" in script
+    assert "def _api_key_fingerprint" in script
+    assert "expert-api-key-file not found" in script
     assert '"--request-capture-dir"' in script
     assert 'ATTEMPT {0}: task_id={1} status={2}' in script
     assert "SUMMARY: repeats={0} success_count={1} timeout_count={2}" in script
@@ -641,6 +645,10 @@ def test_check_onyx_live_preflight_script_exposes_expected_contract():
     assert 'parser.add_argument("--expert-url", default=""' in script
     assert '"--expert-model"' in script
     assert '"--expert-api-key"' in script
+    assert '"--expert-api-key-file"' in script
+    assert "expert_api_key_fingerprint:" in script
+    assert "_api_key_fingerprint" in script
+    assert "Authorization" not in script
     assert '"--request-capture-dir"' in script
     assert '"--probe"' in script and "action=\"store_true\"" in script
     assert 'print("probe result: success")' in script
