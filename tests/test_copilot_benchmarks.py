@@ -654,6 +654,22 @@ def test_sweep_robustness_task_latency_wrapper_uses_expected_grid_and_json_outpu
     assert '$doc.attempts' in script
 
 
+def test_summarize_onyx_latency_sweeps_script_exposes_expected_contract():
+    root = Path(__file__).resolve().parents[1]
+    script = (root / "scripts" / "summarize_onyx_latency_sweeps.py").read_text(encoding="utf-8")
+    assert 'parser.add_argument("artifact_dir"' in script
+    assert '"config"' in script
+    assert '"attempts"' in script
+    assert '"summary"' in script
+    assert "ROW timeout={0} max_tokens={1} repeats={2}" in script
+    assert '_print_best("fastest_compile_ok"' in script
+    assert '_print_best("fastest_metric_ok"' in script
+    assert '_print_best("highest_success_ratio"' in script
+    assert '_print_best("highest_metric_ratio"' in script
+    assert "_ratio_key(row, \"success_count\")" in script
+    assert "_ratio_key(row, \"metric_ok_count\")" in script
+
+
 def test_next_milestone_benchmark_tasks_json_loads():
     root = Path(__file__).resolve().parents[1]
     task_json = root / "benchmarks" / "copilot_symbolic_next_milestone_tasks.json"
