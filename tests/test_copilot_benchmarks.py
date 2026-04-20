@@ -604,8 +604,15 @@ def test_profile_onyx_task_latency_script_exposes_expected_args():
     assert 'parser.add_argument("--timeout", type=float, required=True' in script
     assert 'parser.add_argument("--max-tokens", type=int, required=True' in script
     assert 'parser.add_argument("--repeats", type=int, required=True' in script
+    assert 'parser.add_argument("--json-out", default=""' in script
     assert 'ATTEMPT {0}: task_id={1} status={2}' in script
     assert "SUMMARY: repeats={0} success_count={1} timeout_count={2}" in script
+    assert '"config": {' in script
+    assert '"attempts": attempts' in script
+    assert '"summary": summary' in script
+    assert '"task_id": task.id' in script
+    assert '"timeout": float(args.timeout)' in script
+    assert '"max_tokens": int(args.max_tokens)' in script
 
 
 def test_profile_robustness_task_latency_wrapper_forwards_expected_args():
@@ -629,6 +636,22 @@ def test_profile_robustness_task_latency_wrapper_forwards_expected_args():
     assert '--timeout", ("{0}" -f $Timeout)' in script
     assert '--max-tokens", ("{0}" -f $MaxTokens)' in script
     assert '--repeats", ("{0}" -f $Repeats)' in script
+
+
+def test_sweep_robustness_task_latency_wrapper_uses_expected_grid_and_json_outputs():
+    root = Path(__file__).resolve().parents[1]
+    script = (root / "scripts" / "sweep_robustness_task_latency.ps1").read_text(encoding="utf-8")
+    assert script.lstrip().startswith("param(")
+    assert '[string]$TaskId = "noisy_affine_thermometer"' in script
+    assert '[int]$Repeats = 3' in script
+    assert '[string]$OutDir = "debug_onyx_latency_sweeps"' in script
+    assert 'foreach ($Timeout in @(45, 60, 90, 120))' in script
+    assert 'foreach ($MaxTokens in @(16, 32, 64))' in script
+    assert 'scripts/profile_onyx_task_latency.py' in script
+    assert '--json-out", $jsonOut' in script
+    assert 'SWEEP timeout={0} max_tokens={1}' in script
+    assert '$doc.summary' in script
+    assert '$doc.attempts' in script
 
 
 def test_next_milestone_benchmark_tasks_json_loads():

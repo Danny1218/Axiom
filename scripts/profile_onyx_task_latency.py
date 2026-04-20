@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import statistics
 import sys
@@ -14,8 +15,9 @@ for _p in (str(_SRC), str(_ROOT)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+from axiom.copilot.artifacts import evaluation_report_to_dict  # noqa: E402
 from axiom.copilot.backend import build_copilot_expert  # noqa: E402
-from axiom.copilot.benchmarks import load_benchmark_tasks_json_path  # noqa: E402
+from axiom.copilot.benchmarks import _evaluate_for_task, compile_success, load_benchmark_tasks_json_path, metric_success  # noqa: E402
 from axiom.copilot.search import CopilotSearchConfig, _build_copilot_draft_request  # noqa: E402
 from axiom.experts.onyx_qwen import REQUEST_CAPTURE_DIR_CONTEXT_KEY, REQUEST_CAPTURE_DIR_ENV_VAR  # noqa: E402
 
@@ -40,6 +42,14 @@ def _summary_elapsed(values: list[float]) -> tuple[str, str]:
     if not values:
         return "n/a", "n/a"
     return f"{statistics.fmean(values):.6f}", f"{statistics.median(values):.6f}"
+
+
+def _summary_elapsed_number(values: list[float], kind: str) -> float | None:
+    if not values:
+        return None
+    if kind == "mean":
+        return round(float(statistics.fmean(values)), 6)
+    return round(float(statistics.median(values)), 6)
 
 
 def _load_task(task_id: str, task_json: Path):
@@ -72,6 +82,29 @@ def _build_draft_request(*, expert: Any, task_id: str, task_json: Path, capture_
     return task, _build_copilot_draft_request(cfg)
 
 
+def _grade_response(task: Any, source: str) -> dict[str, Any]:
+    try:
+        report = _evaluate_for_task(task, source)
+    except Exception as exc:  # pragma: no cover - defensive grading path
+        return {
+            "parse_ok": None,
+            "compile_ok": None,
+            "metric_ok": None,
+            "grading_error": str(exc),
+        }
+    return {
+        "parse_ok": not any(f.stage == "parse" for f in report.failures),
+        "compile_ok": compile_success(report),
+        "metric_ok": metric_success(task, report),
+        "evaluation": evaluation_report_to_dict(report),
+    }
+
+
+def _write_json_out(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Profile repeated live Onyx draft latency for one benchmark task.")
     parser.add_argument("--task-id", required=True, help="Benchmark task id to profile.")
@@ -83,6 +116,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--timeout", type=float, required=True, help="Expert timeout in seconds.")
     parser.add_argument("--max-tokens", type=int, required=True, help="max_tokens override for the live draft call.")
     parser.add_argument("--repeats", type=int, required=True, help="Number of repeated draft attempts to run.")
+    parser.add_argument("--json-out", default="", help="Optional path to write structured JSON results.")
     args = parser.parse_args(argv)
 
     if args.repeats < 1:
@@ -112,18 +146,21 @@ def main(argv: list[str] | None = None) -> int:
     elapsed_values: list[float] = []
     success_count = 0
     timeout_count = 0
+    attempts: list[dict[str, Any]] = []
 
     for idx in range(1, int(args.repeats) + 1):
         started = time.perf_counter()
         status = "failure"
         failure_kind = "n/a"
         metadata: dict[str, Any] = {}
+        grading: dict[str, Any] = {"parse_ok": None, "compile_ok": None, "metric_ok": None}
         try:
             resp = expert.draft_program(draft_req)
             metadata = dict(resp.metadata or {})
             status = "success"
             failure_kind = "n/a"
             success_count += 1
+            grading = _grade_response(task, resp.ax_source)
         except Exception as exc:  # pragma: no cover - live-only branch behavior varies by backend
             metadata = dict(getattr(exc, "metadata", {}) or {})
             failure_kind = str(metadata.get("failure_kind") or type(exc).__name__)
@@ -136,8 +173,24 @@ def main(argv: list[str] | None = None) -> int:
             elapsed_values.append(float(elapsed))
         except (TypeError, ValueError):
             pass
+        attempt = {
+            "index": idx,
+            "status": status,
+            "failure_kind": failure_kind,
+            "elapsed_seconds": round(float(elapsed), 6) if elapsed is not None else None,
+            "payload_sha256": str(metadata.get("payload_sha256") or ""),
+            "request_capture_path": str(metadata.get("request_capture_path") or ""),
+            "parse_ok": grading.get("parse_ok"),
+            "compile_ok": grading.get("compile_ok"),
+            "metric_ok": grading.get("metric_ok"),
+        }
+        if "grading_error" in grading:
+            attempt["grading_error"] = grading["grading_error"]
+        if "evaluation" in grading:
+            attempt["evaluation"] = grading["evaluation"]
+        attempts.append(attempt)
         print(
-            "ATTEMPT {0}: task_id={1} status={2} failure_kind={3} elapsed_seconds={4} payload_sha256={5} request_capture_path={6}".format(
+            "ATTEMPT {0}: task_id={1} status={2} failure_kind={3} elapsed_seconds={4} payload_sha256={5} request_capture_path={6} parse_ok={7} compile_ok={8} metric_ok={9}".format(
                 idx,
                 task.id,
                 status,
@@ -145,19 +198,44 @@ def main(argv: list[str] | None = None) -> int:
                 _format_elapsed(elapsed),
                 str(metadata.get("payload_sha256") or "n/a"),
                 str(metadata.get("request_capture_path") or "n/a"),
+                str(grading.get("parse_ok")),
+                str(grading.get("compile_ok")),
+                str(grading.get("metric_ok")),
             )
         )
 
     mean_elapsed, median_elapsed = _summary_elapsed(elapsed_values)
+    summary = {
+        "repeats": int(args.repeats),
+        "success_count": success_count,
+        "timeout_count": timeout_count,
+        "mean_elapsed": _summary_elapsed_number(elapsed_values, "mean"),
+        "median_elapsed": _summary_elapsed_number(elapsed_values, "median"),
+    }
     print(
         "SUMMARY: repeats={0} success_count={1} timeout_count={2} mean_elapsed={3} median_elapsed={4}".format(
-            int(args.repeats),
-            success_count,
-            timeout_count,
+            summary["repeats"],
+            summary["success_count"],
+            summary["timeout_count"],
             mean_elapsed,
             median_elapsed,
         )
     )
+    if args.json_out:
+        _write_json_out(
+            Path(args.json_out),
+            {
+                "config": {
+                    "task_id": task.id,
+                    "task_json": str(task_json),
+                    "timeout": float(args.timeout),
+                    "max_tokens": int(args.max_tokens),
+                    "repeats": int(args.repeats),
+                },
+                "attempts": attempts,
+                "summary": summary,
+            },
+        )
     return 0
 
 
