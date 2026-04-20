@@ -5,6 +5,9 @@ param(
     [string]$ExpertModel = "onyx-qwen-production-v1",
     [string]$ExpertApiKey = "",
     [int]$Repeats = 3,
+    [string]$Timeouts = "45,60,90,120",
+    [string]$MaxTokensList = "16,32,64",
+    [int]$WarmupRuns = 0,
     [string]$RequestCaptureDir = "",
     [string]$OutDir = "debug_onyx_latency_sweeps"
 )
@@ -48,8 +51,10 @@ else {
 
 try {
     New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
-    foreach ($Timeout in @(45, 60, 90, 120)) {
-        foreach ($MaxTokens in @(16, 32, 64)) {
+    $timeoutValues = @($Timeouts -split ',' | ForEach-Object { [double]($_.Trim()) })
+    $maxTokenValues = @($MaxTokensList -split ',' | ForEach-Object { [int]($_.Trim()) })
+    foreach ($Timeout in $timeoutValues) {
+        foreach ($MaxTokens in $maxTokenValues) {
             $jsonOut = Join-Path $OutDir ("{0}_timeout{1}_maxtokens{2}.json" -f $TaskId, $Timeout, $MaxTokens)
             $cmd = @(
                 "python",
@@ -59,6 +64,7 @@ try {
                 "--timeout", ("{0}" -f $Timeout),
                 "--max-tokens", ("{0}" -f $MaxTokens),
                 "--repeats", ("{0}" -f $Repeats),
+                "--warmup-runs", ("{0}" -f $WarmupRuns),
                 "--json-out", $jsonOut
             )
             Write-Host ("==> Running: {0}" -f ($cmd -join " ")) -ForegroundColor Cyan

@@ -147,6 +147,16 @@ def _run_probe_draft(args: argparse.Namespace) -> int:
         capture_dir=capture_dir,
         max_tokens=int(args.probe_max_tokens),
     )
+    wr = int(args.probe_warmup_runs)
+    if wr < 0:
+        raise SystemExit("--probe-warmup-runs must be >= 0.")
+    if wr > 0:
+        print(f"warmup runs: {wr}")
+        for _ in range(wr):
+            try:
+                expert.draft_program(draft_req)
+            except Exception:
+                pass
     try:
         resp = expert.draft_program(draft_req)
         meta = dict(resp.metadata or {})
@@ -237,6 +247,12 @@ def main(argv: list[str] | None = None) -> int:
         "--probe-task-id",
         default="noisy_affine_thermometer",
         help="Benchmark task id for draft probe only.",
+    )
+    parser.add_argument(
+        "--probe-warmup-runs",
+        type=int,
+        default=0,
+        help="Draft-only: optional draft_program calls before the measured probe (not scored).",
     )
     args = parser.parse_args(argv)
 

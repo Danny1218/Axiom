@@ -622,6 +622,8 @@ def test_profile_onyx_task_latency_script_exposes_expected_args():
     assert "def _api_key_fingerprint" in script
     assert "expert-api-key-file not found" in script
     assert '"--request-capture-dir"' in script
+    assert '"--warmup-runs"' in script
+    assert "WARMUP:" in script
     assert 'ATTEMPT {0}: task_id={1} status={2}' in script
     assert "SUMMARY: repeats={0} success_count={1} timeout_count={2}" in script
     assert "AGGREGATES: failure_kind_counts=" in script
@@ -656,6 +658,8 @@ def test_check_onyx_live_preflight_script_exposes_expected_contract():
     assert '"--probe-timeout"' in script
     assert '"--probe-max-tokens"' in script
     assert '"--probe-task-id"' in script
+    assert '"--probe-warmup-runs"' in script
+    assert "warmup runs:" in script
     assert 'print("probe mode: auth")' in script
     assert 'print("probe mode: draft")' in script
     assert "v1/models" in script
@@ -706,9 +710,14 @@ def test_sweep_robustness_task_latency_wrapper_uses_expected_grid_and_json_outpu
     assert '[string]$TaskId = "noisy_affine_thermometer"' in script
     assert '[int]$Repeats = 3' in script
     assert '[string]$OutDir = "debug_onyx_latency_sweeps"' in script
-    assert 'foreach ($Timeout in @(45, 60, 90, 120))' in script
-    assert 'foreach ($MaxTokens in @(16, 32, 64))' in script
+    assert '[string]$Timeouts = "45,60,90,120"' in script
+    assert '[string]$MaxTokensList = "16,32,64"' in script
+    assert '[int]$WarmupRuns = 0' in script
+    assert '-split' in script
+    assert 'foreach ($Timeout in $timeoutValues)' in script
+    assert 'foreach ($MaxTokens in $maxTokenValues)' in script
     assert 'scripts/profile_onyx_task_latency.py' in script
+    assert '--warmup-runs"' in script
     assert '--json-out", $jsonOut' in script
     assert 'SWEEP timeout={0} max_tokens={1}' in script
     assert '$doc.summary' in script

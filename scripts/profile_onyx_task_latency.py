@@ -259,10 +259,18 @@ def main(argv: list[str] | None = None) -> int:
         default="",
         help=f"Optional request capture directory. Overrides {REQUEST_CAPTURE_DIR_ENV_VAR} when provided.",
     )
+    parser.add_argument(
+        "--warmup-runs",
+        type=int,
+        default=0,
+        help="Optional draft calls before measured attempts (not recorded in JSON).",
+    )
     args = parser.parse_args(argv)
 
     if args.repeats < 1:
         raise SystemExit("--repeats must be >= 1.")
+    if int(args.warmup_runs) < 0:
+        raise SystemExit("--warmup-runs must be >= 0.")
 
     url, model, api_key, capture_dir = _resolve_live_config(args)
     task_json = Path(args.task_json)
@@ -280,6 +288,15 @@ def main(argv: list[str] | None = None) -> int:
         capture_dir=capture_dir,
         max_tokens=args.max_tokens,
     )
+
+    warmup_n = int(args.warmup_runs)
+    if warmup_n > 0:
+        print(f"WARMUP: runs={warmup_n}")
+        for _ in range(warmup_n):
+            try:
+                expert.draft_program(draft_req)
+            except Exception:
+                pass
 
     elapsed_values: list[float] = []
     success_count = 0
