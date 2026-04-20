@@ -10,7 +10,8 @@ param(
     [string]$TaskJson = "benchmarks/copilot_symbolic_next_milestone_tasks.json",
     [string]$OutJson = "benchmark_symbolic_suite_next_milestone.json",
     [string]$TaskId = "",
-    [string]$RequestCaptureDir = ""
+    [string]$RequestCaptureDir = "",
+    [string]$ConfigJson = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -72,6 +73,33 @@ function _Print-LatestFailureMetadata {
         (_Text (_Get-PropValue -Object $doc -Name "payload_sha256")),
         $latest.FullName
     ) -ForegroundColor Yellow
+}
+
+if (-not [string]::IsNullOrWhiteSpace($ConfigJson)) {
+    $cfgPath = $ConfigJson
+    if (-not (Test-Path -LiteralPath $cfgPath)) {
+        throw "ConfigJson not found: '$cfgPath'."
+    }
+    $cfgDoc = _Read-JsonDoc -Path $cfgPath
+    if ($null -eq $cfgDoc) {
+        throw "Failed to read or parse ConfigJson at '$cfgPath'."
+    }
+    $cfgBlock = _Get-PropValue -Object $cfgDoc -Name "config"
+    if ($null -eq $cfgBlock) {
+        throw "ConfigJson missing top-level 'config' object: '$cfgPath'."
+    }
+    $tFrom = _Get-PropValue -Object $cfgBlock -Name "timeout"
+    $mtFrom = _Get-PropValue -Object $cfgBlock -Name "max_tokens"
+    if (-not $PSBoundParameters.ContainsKey("Timeout") -and $null -ne $tFrom) {
+        $Timeout = [double]$tFrom
+    }
+    if (-not $PSBoundParameters.ContainsKey("MaxTokens") -and $null -ne $mtFrom) {
+        $MaxTokens = [int]$mtFrom
+    }
+    Write-Host (
+        "CONFIG_JSON: path={0} timeout={1} max_tokens={2} (explicit -Timeout/-MaxTokens override file when provided)" -f `
+        $cfgPath, $Timeout, $MaxTokens
+    ) -ForegroundColor DarkGray
 }
 
 $taskJsonPath = $TaskJson

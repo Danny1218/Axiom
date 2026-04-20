@@ -551,6 +551,10 @@ def test_smoke_copilot_next_milestone_compare_script_uses_next_suite_and_reports
     assert "[double]$Timeout = 45" in script
     assert '[string]$TaskJson = "benchmarks/copilot_symbolic_next_milestone_tasks.json"' in script
     assert '[string]$OutJson = "benchmark_symbolic_suite_next_milestone.json"' in script
+    assert '[string]$ConfigJson = ""' in script
+    assert "PSBoundParameters.ContainsKey" in script
+    assert "CONFIG_JSON:" in script
+    assert "ConfigJson missing top-level" in script
     assert "--max-iterations" in script
     assert "--timeout" in script
     assert "copilot-benchmark" in script
@@ -587,13 +591,18 @@ def test_smoke_copilot_robustness_ambiguity_stress_compare_script_wraps_shared_c
     assert "[double]$Timeout = 45" in script
     assert '[string]$TaskJson = "benchmarks/copilot_symbolic_robustness_ambiguity_stress_tasks.json"' in script
     assert '[string]$OutJson = "benchmark_symbolic_suite_robustness_ambiguity_stress.json"' in script
+    assert '[string]$ConfigJson = ""' in script
     assert "smoke_copilot_next_milestone_compare.ps1" in script
-    assert "-Timeout $Timeout" in script
-    assert "-MaxIterations $MaxIterations" in script
-    assert "-TaskJson $TaskJson" in script
-    assert "-OutJson $OutJson" in script
-    assert '-TaskId $TaskId' in script
-    assert '-RequestCaptureDir $RequestCaptureDir' in script
+    assert "PSBoundParameters.ContainsKey" in script
+    assert '$splat.ConfigJson = $ConfigJson' in script
+    assert '$splat.Timeout = $Timeout' in script
+    assert '$splat.MaxTokens = $MaxTokens' in script
+    assert "@splat" in script
+    assert "MaxIterations = $MaxIterations" in script
+    assert "TaskJson = $TaskJson" in script
+    assert "OutJson = $OutJson" in script
+    assert "TaskId = $TaskId" in script
+    assert "RequestCaptureDir = $RequestCaptureDir" in script
 
 
 def test_profile_onyx_task_latency_script_exposes_expected_args():
