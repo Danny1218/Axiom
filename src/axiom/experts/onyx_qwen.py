@@ -5,6 +5,8 @@ Install: ``pip install -e ".[copilot]"`` (pulls ``requests``). Not imported from
 
 from __future__ import annotations
 
+import time
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -1267,6 +1269,30 @@ def _request_diagnostics(
     return out
 
 
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _request_timing_metadata(
+    *,
+    request_started_at: str,
+    elapsed_seconds: float,
+    timeout_seconds: float,
+    max_tokens: Optional[Any] = None,
+    response_received_at: Optional[str] = None,
+) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "request_started_at": request_started_at,
+        "elapsed_seconds": round(float(elapsed_seconds), 6),
+        "timeout_seconds": float(timeout_seconds),
+    }
+    if response_received_at is not None:
+        out["response_received_at"] = response_received_at
+    if max_tokens is not None:
+        out["max_tokens"] = max_tokens
+    return out
+
+
 def _request_capture_dir_from_context(context: dict[str, Any]) -> Optional[Path]:
     capture_dir = context.pop(REQUEST_CAPTURE_DIR_CONTEXT_KEY, None)
     capture_enabled = bool(context.pop(REQUEST_CAPTURE_ENABLED_CONTEXT_KEY, False))
@@ -1355,6 +1381,7 @@ def _write_request_capture(
     response_headers: Optional[Mapping[str, str]] = None,
     request_id: Optional[str] = None,
     response_id: Optional[str] = None,
+    timing_metadata: Optional[Mapping[str, Any]] = None,
 ) -> Path:
     capture_dir.mkdir(parents=True, exist_ok=True)
     out: dict[str, Any] = {
@@ -1390,6 +1417,8 @@ def _write_request_capture(
         out["request_id"] = str(request_id)
     if response_id is not None:
         out["response_id"] = str(response_id)
+    if timing_metadata:
+        out.update({str(k): v for k, v in timing_metadata.items() if v is not None})
     path = capture_dir / _request_capture_filename(request_kind, benchmark_task_id, payload_sha256, status_code)
     path.write_text(json.dumps(out, indent=2, sort_keys=True), encoding="utf-8")
     return path
@@ -1408,6 +1437,7 @@ def _capture_exception_artifact(
     payload_sha256: str,
     failure_kind: str,
     exc: Exception,
+    timing_metadata: Mapping[str, Any],
 ) -> Optional[str]:
     if capture_dir is None:
         return None
@@ -1430,6 +1460,7 @@ def _capture_exception_artifact(
         failure_kind=failure_kind,
         exception_class=type(exc).__name__,
         exception_message=str(exc),
+        timing_metadata=timing_metadata,
     )
     if request_diagnostics is not None:
         request_diagnostics["request_capture_path"] = str(capture_path)
@@ -1495,6 +1526,9 @@ class OnyxQwenBackend:
                 if k != "messages" and k != "model":
                     payload[k] = v
             normalize_onyx_chat_completion_payload(payload)
+        request_started_at = _utc_now_iso()
+        started_perf = time.perf_counter()
+        max_tokens = payload.get("max_tokens")
         payload_sha = _payload_sha256(payload)
         if request_diagnostics is not None:
             request_diagnostics["payload_sha256"] = payload_sha
@@ -1506,8 +1540,15 @@ class OnyxQwenBackend:
                 timeout=self._timeout,
             )
         except Exception as e:
+            timing_metadata = _request_timing_metadata(
+                request_started_at=request_started_at,
+                elapsed_seconds=time.perf_counter() - started_perf,
+                timeout_seconds=self._timeout,
+                max_tokens=max_tokens,
+            )
             if requests is not None and isinstance(e, requests.exceptions.Timeout):
                 meta = dict(request_diagnostics or {})
+                meta.update(timing_metadata)
                 meta["failure_kind"] = "timeout"
                 meta["exception_class"] = type(e).__name__
                 meta["exception_message"] = str(e)
@@ -1523,12 +1564,14 @@ class OnyxQwenBackend:
                     payload_sha256=payload_sha,
                     failure_kind="timeout",
                     exc=e,
+                    timing_metadata=timing_metadata,
                 )
                 if capture_path is not None:
                     meta["request_capture_path"] = capture_path
                 raise OnyxQwenTimeoutError(str(e), metadata=meta) from e
             if requests is not None and isinstance(e, requests.exceptions.RequestException):
                 meta = dict(request_diagnostics or {})
+                meta.update(timing_metadata)
                 meta["failure_kind"] = "transport"
                 meta["exception_class"] = type(e).__name__
                 meta["exception_message"] = str(e)
@@ -1544,15 +1587,25 @@ class OnyxQwenBackend:
                     payload_sha256=payload_sha,
                     failure_kind="transport",
                     exc=e,
+                    timing_metadata=timing_metadata,
                 )
                 if capture_path is not None:
                     meta["request_capture_path"] = capture_path
                 raise OnyxQwenTransportError(str(e), metadata=meta) from e
             raise
 
+        response_received_at = _utc_now_iso()
+        timing_metadata = _request_timing_metadata(
+            request_started_at=request_started_at,
+            response_received_at=response_received_at,
+            elapsed_seconds=time.perf_counter() - started_perf,
+            timeout_seconds=self._timeout,
+            max_tokens=max_tokens,
+        )
         if r.status_code >= 400:
             snippet = r.text if isinstance(r.text, str) else ""
             meta = dict(request_diagnostics or {})
+            meta.update(timing_metadata)
             meta["http_failure_detail"] = snippet[:2000]
             meta["status_code"] = int(r.status_code)
             response_headers = _diagnostic_response_headers(r)
@@ -1579,6 +1632,7 @@ class OnyxQwenBackend:
                     http_failure_detail=snippet[:2000],
                     response_headers=response_headers,
                     request_id=request_id,
+                    timing_metadata=timing_metadata,
                 )
                 meta["request_capture_path"] = str(capture_path)
                 if request_diagnostics is not None:
@@ -1594,6 +1648,7 @@ class OnyxQwenBackend:
         request_id = _request_id_from_response_headers(response_headers)
         response_id = _response_id_from_body(data)
         if request_diagnostics is not None:
+            request_diagnostics.update(timing_metadata)
             if request_id:
                 request_diagnostics["request_id"] = request_id
             if response_id:
@@ -1617,6 +1672,7 @@ class OnyxQwenBackend:
                     response_headers=response_headers,
                     request_id=request_id or response_id,
                     response_id=response_id,
+                    timing_metadata=timing_metadata,
                 )
                 request_diagnostics["request_capture_path"] = str(capture_path)
 

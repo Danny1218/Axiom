@@ -60,6 +60,29 @@ def _read_capture(path: str) -> dict:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
+def _assert_capture_timing_fields(
+    data: dict,
+    *,
+    timeout_seconds: float,
+    max_tokens: int | None,
+    has_response_received_at: bool,
+) -> None:
+    assert isinstance(data.get("request_started_at"), str)
+    assert data.get("request_started_at", "").endswith("Z")
+    assert data.get("timeout_seconds") == timeout_seconds
+    assert isinstance(data.get("elapsed_seconds"), float)
+    assert data.get("elapsed_seconds") >= 0.0
+    if max_tokens is None:
+        assert "max_tokens" not in data
+    else:
+        assert data.get("max_tokens") == max_tokens
+    if has_response_received_at:
+        assert isinstance(data.get("response_received_at"), str)
+        assert data.get("response_received_at", "").endswith("Z")
+    else:
+        assert "response_received_at" not in data
+
+
 def _load_script_module(name: str, relative_path: str):
     root = Path(__file__).resolve().parents[1]
     script_path = root / relative_path
@@ -647,6 +670,8 @@ def test_request_capture_writes_success_artifact_via_env(tmp_path, monkeypatch):
     assert capture["response_headers"]["x-request-id"] == "req-123"
     assert out.metadata.get("request_id") == "req-123"
     assert out.metadata.get("response_id") == "chatcmpl-123"
+    _assert_capture_timing_fields(capture, timeout_seconds=120.0, max_tokens=64, has_response_received_at=True)
+    _assert_capture_timing_fields(dict(out.metadata), timeout_seconds=120.0, max_tokens=64, has_response_received_at=True)
     assert "failure_kind" not in capture
 
 
@@ -701,6 +726,8 @@ def test_request_capture_writes_http500_artifact(tmp_path):
     assert capture["request_id"] == "req-500"
     assert capture["response_headers"]["x-request-id"] == "req-500"
     assert ei.value.metadata.get("request_id") == "req-500"
+    _assert_capture_timing_fields(capture, timeout_seconds=120.0, max_tokens=32, has_response_received_at=True)
+    _assert_capture_timing_fields(dict(ei.value.metadata), timeout_seconds=120.0, max_tokens=32, has_response_received_at=True)
     assert "failure_kind" not in capture
 
 
@@ -728,6 +755,8 @@ def test_request_capture_writes_timeout_artifact_during_repair(tmp_path):
     assert capture["exception_class"] == "ReadTimeout"
     assert "timed out" in capture["exception_message"]
     assert capture["payload_sha256"] == ei.value.metadata.get("payload_sha256")
+    _assert_capture_timing_fields(capture, timeout_seconds=120.0, max_tokens=64, has_response_received_at=False)
+    _assert_capture_timing_fields(dict(ei.value.metadata), timeout_seconds=120.0, max_tokens=64, has_response_received_at=False)
 
 
 def test_request_capture_writes_transport_artifact_during_draft_without_secret_leak(tmp_path):

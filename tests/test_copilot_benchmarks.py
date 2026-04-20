@@ -596,6 +596,41 @@ def test_smoke_copilot_robustness_ambiguity_stress_compare_script_wraps_shared_c
     assert '-RequestCaptureDir $RequestCaptureDir' in script
 
 
+def test_profile_onyx_task_latency_script_exposes_expected_args():
+    root = Path(__file__).resolve().parents[1]
+    script = (root / "scripts" / "profile_onyx_task_latency.py").read_text(encoding="utf-8")
+    assert 'parser.add_argument("--task-id", required=True' in script
+    assert '"--task-json"' in script
+    assert 'parser.add_argument("--timeout", type=float, required=True' in script
+    assert 'parser.add_argument("--max-tokens", type=int, required=True' in script
+    assert 'parser.add_argument("--repeats", type=int, required=True' in script
+    assert 'ATTEMPT {0}: task_id={1} status={2}' in script
+    assert "SUMMARY: repeats={0} success_count={1} timeout_count={2}" in script
+
+
+def test_profile_robustness_task_latency_wrapper_forwards_expected_args():
+    root = Path(__file__).resolve().parents[1]
+    script = (root / "scripts" / "profile_robustness_task_latency.ps1").read_text(encoding="utf-8")
+    assert script.lstrip().startswith("param(")
+    assert '[string]$TaskId = "noisy_affine_thermometer"' in script
+    assert '[string]$TaskJson = "benchmarks/copilot_symbolic_robustness_ambiguity_stress_tasks.json"' in script
+    assert '[string]$ExpertUrl = "http://127.0.0.1:8000"' in script
+    assert '[string]$ExpertModel = "onyx-qwen-production-v1"' in script
+    assert '[double]$Timeout = 45' in script
+    assert '[int]$MaxTokens = 64' in script
+    assert '[int]$Repeats = 3' in script
+    assert '[string]$RequestCaptureDir = ""' in script
+    assert '$env:AXIOM_EXPERT_URL = $ExpertUrl' in script
+    assert '$env:AXIOM_EXPERT_MODEL = $ExpertModel' in script
+    assert 'AXIOM_ONYX_REQUEST_CAPTURE_DIR' in script
+    assert 'scripts/profile_onyx_task_latency.py' in script
+    assert '--task-id", $TaskId' in script
+    assert '--task-json", $TaskJson' in script
+    assert '--timeout", ("{0}" -f $Timeout)' in script
+    assert '--max-tokens", ("{0}" -f $MaxTokens)' in script
+    assert '--repeats", ("{0}" -f $Repeats)' in script
+
+
 def test_next_milestone_benchmark_tasks_json_loads():
     root = Path(__file__).resolve().parents[1]
     task_json = root / "benchmarks" / "copilot_symbolic_next_milestone_tasks.json"
