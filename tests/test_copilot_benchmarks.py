@@ -620,6 +620,13 @@ def test_profile_onyx_task_latency_script_exposes_expected_args():
     assert '"--request-capture-dir"' in script
     assert 'ATTEMPT {0}: task_id={1} status={2}' in script
     assert "SUMMARY: repeats={0} success_count={1} timeout_count={2}" in script
+    assert "AGGREGATES: failure_kind_counts=" in script
+    assert "failure_kind_counts" in script
+    assert "status_code_counts" in script
+    assert '"exception_class"' in script
+    assert '"status_code"' in script
+    assert '"request_id"' in script
+    assert '"response_id"' in script
     assert '"config": {' in script
     assert '"attempts": attempts' in script
     assert '"summary": summary' in script
@@ -635,6 +642,15 @@ def test_check_onyx_live_preflight_script_exposes_expected_contract():
     assert '"--expert-model"' in script
     assert '"--expert-api-key"' in script
     assert '"--request-capture-dir"' in script
+    assert '"--probe"' in script and "action=\"store_true\"" in script
+    assert 'print("probe result: success")' in script
+    assert 'print(f"probe result: {label}")' in script
+    assert 'label = "unauthorized"' in script
+    assert 'label = "forbidden"' in script
+    assert 'label = "timeout"' in script
+    assert 'label = "transport"' in script
+    assert 'label = "http_error"' in script
+    assert "_run_auth_probe" in script
     assert "live execution is possible" in script
     assert "missing required setting" in script
     assert "scripts/sweep_robustness_task_latency.ps1" in script
@@ -689,6 +705,10 @@ def test_summarize_onyx_latency_sweeps_script_exposes_expected_contract():
     assert '"config"' in script
     assert '"attempts"' in script
     assert '"summary"' in script
+    assert "failure_kind_counts" in script
+    assert "status_code_counts" in script
+    assert "AUTH BLOCKER: all attempts unauthorized (401)" in script
+    assert "AGGREGATE total_attempts=" in script
     assert "ROW timeout={0} max_tokens={1} repeats={2}" in script
     assert '_print_best("fastest_compile_ok"' in script
     assert '_print_best("fastest_metric_ok"' in script

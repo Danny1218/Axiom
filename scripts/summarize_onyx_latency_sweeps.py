@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -52,6 +52,40 @@ def _as_float(value: Any) -> float | None:
         return None
 
 
+def _status_code_key(value: Any) -> str:
+    if value is None:
+        return "n/a"
+    try:
+        return str(int(value))
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _as_int_or_none(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _counts_from_attempts(attempts: list[dict[str, Any]], kind: str) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for item in attempts:
+        if kind == "failure_kind":
+            key = str(item.get("failure_kind") or "n/a")
+        else:
+            key = _status_code_key(item.get("status_code"))
+        out[key] = out.get(key, 0) + 1
+    return out
+
+
+def _merge_counts(dst: dict[str, int], src: Mapping[str, int]) -> None:
+    for key, val in src.items():
+        dst[str(key)] = dst.get(str(key), 0) + int(val)
+
+
 def _row_from_file(path: Path) -> dict[str, Any]:
     doc = _load_json(path)
     config = _require_mapping(doc, "config", path)
@@ -71,6 +105,18 @@ def _row_from_file(path: Path) -> dict[str, Any]:
             path,
             "attempt",
         )
+    fk_src = summary.get("failure_kind_counts")
+    sc_src = summary.get("status_code_counts")
+    failure_kind_counts: dict[str, int]
+    status_code_counts: dict[str, int]
+    if isinstance(fk_src, dict):
+        failure_kind_counts = {str(k): int(v) for k, v in fk_src.items()}
+    else:
+        failure_kind_counts = _counts_from_attempts(attempts, "failure_kind")
+    if isinstance(sc_src, dict):
+        status_code_counts = {str(k): int(v) for k, v in sc_src.items()}
+    else:
+        status_code_counts = _counts_from_attempts(attempts, "status_code")
     return {
         "path": path,
         "timeout": int(config["timeout"]),
@@ -82,6 +128,8 @@ def _row_from_file(path: Path) -> dict[str, Any]:
         "metric_ok_count": sum(1 for item in attempts if item.get("metric_ok") is True),
         "mean_elapsed": _as_float(summary.get("mean_elapsed")),
         "median_elapsed": _as_float(summary.get("median_elapsed")),
+        "failure_kind_counts": failure_kind_counts,
+        "status_code_counts": status_code_counts,
     }
 
 
@@ -146,7 +194,7 @@ def main(argv: list[str] | None = None) -> int:
     rows = sorted((_row_from_file(path) for path in paths), key=lambda row: (row["timeout"], row["max_tokens"], row["path"].name))
     for row in rows:
         print(
-            "ROW timeout={0} max_tokens={1} repeats={2} success_count={3} timeout_count={4} compile_ok_count={5} metric_ok_count={6} mean_elapsed={7} median_elapsed={8} file={9}".format(
+            "ROW timeout={0} max_tokens={1} repeats={2} success_count={3} timeout_count={4} compile_ok_count={5} metric_ok_count={6} mean_elapsed={7} median_elapsed={8} failure_kind_counts={9} status_code_counts={10} file={11}".format(
                 row["timeout"],
                 row["max_tokens"],
                 row["repeats"],
@@ -156,6 +204,8 @@ def main(argv: list[str] | None = None) -> int:
                 row["metric_ok_count"],
                 _format_number(row["mean_elapsed"]),
                 _format_number(row["median_elapsed"]),
+                json.dumps(row["failure_kind_counts"], sort_keys=True),
+                json.dumps(row["status_code_counts"], sort_keys=True),
                 row["path"].name,
             )
         )
@@ -169,6 +219,29 @@ def main(argv: list[str] | None = None) -> int:
     _print_best("fastest_metric_ok", fastest_metric, "mean_elapsed")
     _print_best("highest_success_ratio", best_success_ratio)
     _print_best("highest_metric_ratio", best_metric_ratio)
+
+    all_attempts: list[dict[str, Any]] = []
+    for path in paths:
+        doc = _load_json(path)
+        all_attempts.extend(_require_list(doc, "attempts", path))
+    total_attempts = len(all_attempts)
+    agg_fk: dict[str, int] = {}
+    agg_sc: dict[str, int] = {}
+    for row in rows:
+        _merge_counts(agg_fk, row["failure_kind_counts"])
+        _merge_counts(agg_sc, row["status_code_counts"])
+    print(
+        "AGGREGATE total_attempts={0} status_code_counts={1} failure_kind_counts={2}".format(
+            total_attempts,
+            json.dumps(agg_sc, sort_keys=True),
+            json.dumps(agg_fk, sort_keys=True),
+        )
+    )
+    if (
+        total_attempts > 0
+        and all(_as_int_or_none(item.get("status_code")) == 401 for item in all_attempts)
+    ):
+        print("AUTH BLOCKER: all attempts unauthorized (401)")
     return 0
 
 

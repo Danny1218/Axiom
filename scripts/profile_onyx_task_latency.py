@@ -64,6 +64,62 @@ def _summary_elapsed_number(values: list[float], kind: str) -> float | None:
     return round(float(statistics.median(values)), 6)
 
 
+def _status_code_key(value: Any) -> str:
+    if value is None:
+        return "n/a"
+    try:
+        return str(int(value))
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _increment_count(bucket: dict[str, int], key: str) -> None:
+    bucket[key] = bucket.get(key, 0) + 1
+
+
+def _attempt_diagnostics(
+    *,
+    status: str,
+    exc: BaseException | None,
+    metadata: dict[str, Any],
+) -> tuple[str | None, int | None, str | None, str | None]:
+    """exception_class, status_code, request_id, response_id (JSON-serializable)."""
+    if status == "success":
+        sc: int | None = None
+        if metadata.get("status_code") is not None:
+            try:
+                sc = int(metadata["status_code"])
+            except (TypeError, ValueError):
+                sc = None
+        return (
+            None,
+            sc,
+            str(metadata["request_id"]) if metadata.get("request_id") is not None else None,
+            str(metadata["response_id"]) if metadata.get("response_id") is not None else None,
+        )
+    assert exc is not None
+    exc_class = type(exc).__name__
+    sc_val: int | None = None
+    if metadata.get("status_code") is not None:
+        try:
+            sc_val = int(metadata["status_code"])
+        except (TypeError, ValueError):
+            sc_val = None
+    if sc_val is None and isinstance(exc, Exception) and getattr(exc, "status_code", None) is not None:
+        try:
+            sc_val = int(getattr(exc, "status_code"))
+        except (TypeError, ValueError):
+            sc_val = None
+    rid = metadata.get("request_id")
+    rsp = metadata.get("response_id")
+    return (
+        exc_class,
+        sc_val,
+        str(rid) if rid is not None else None,
+        str(rsp) if rsp is not None else None,
+    )
+
+
 def _load_task(task_id: str, task_json: Path):
     tasks = load_benchmark_tasks_json_path(task_json)
     for task in tasks:
@@ -204,6 +260,7 @@ def main(argv: list[str] | None = None) -> int:
     attempts: list[dict[str, Any]] = []
 
     for idx in range(1, int(args.repeats) + 1):
+        exc: BaseException | None = None
         started = time.perf_counter()
         status = "failure"
         failure_kind = "n/a"
@@ -216,7 +273,8 @@ def main(argv: list[str] | None = None) -> int:
             failure_kind = "n/a"
             success_count += 1
             grading = _grade_response(task, resp.ax_source)
-        except Exception as exc:  # pragma: no cover - live-only branch behavior varies by backend
+        except Exception as caught:  # pragma: no cover - live-only branch behavior varies by backend
+            exc = caught
             metadata = dict(getattr(exc, "metadata", {}) or {})
             failure_kind = str(metadata.get("failure_kind") or type(exc).__name__)
             if failure_kind == "timeout":
@@ -228,10 +286,19 @@ def main(argv: list[str] | None = None) -> int:
             elapsed_values.append(float(elapsed))
         except (TypeError, ValueError):
             pass
+        exc_class, status_code_val, request_id_val, response_id_val = _attempt_diagnostics(
+            status=status,
+            exc=exc,
+            metadata=metadata,
+        )
         attempt = {
             "index": idx,
             "status": status,
             "failure_kind": failure_kind,
+            "exception_class": exc_class,
+            "status_code": status_code_val,
+            "request_id": request_id_val,
+            "response_id": response_id_val,
             "elapsed_seconds": round(float(elapsed), 6) if elapsed is not None else None,
             "payload_sha256": str(metadata.get("payload_sha256") or ""),
             "request_capture_path": str(metadata.get("request_capture_path") or ""),
@@ -260,12 +327,19 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     mean_elapsed, median_elapsed = _summary_elapsed(elapsed_values)
+    failure_kind_counts: dict[str, int] = {}
+    status_code_counts: dict[str, int] = {}
+    for att in attempts:
+        _increment_count(failure_kind_counts, str(att.get("failure_kind") or "n/a"))
+        _increment_count(status_code_counts, _status_code_key(att.get("status_code")))
     summary = {
         "repeats": int(args.repeats),
         "success_count": success_count,
         "timeout_count": timeout_count,
         "mean_elapsed": _summary_elapsed_number(elapsed_values, "mean"),
         "median_elapsed": _summary_elapsed_number(elapsed_values, "median"),
+        "failure_kind_counts": failure_kind_counts,
+        "status_code_counts": status_code_counts,
     }
     print(
         "SUMMARY: repeats={0} success_count={1} timeout_count={2} mean_elapsed={3} median_elapsed={4}".format(
@@ -274,6 +348,12 @@ def main(argv: list[str] | None = None) -> int:
             summary["timeout_count"],
             mean_elapsed,
             median_elapsed,
+        )
+    )
+    print(
+        "AGGREGATES: failure_kind_counts={0} status_code_counts={1}".format(
+            json.dumps(failure_kind_counts, sort_keys=True),
+            json.dumps(status_code_counts, sort_keys=True),
         )
     )
     if args.json_out:

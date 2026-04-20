@@ -1,9 +1,24 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
-from profile_onyx_task_latency import REQUEST_CAPTURE_DIR_ENV_VAR, _resolve_setting
+from profile_onyx_task_latency import (  # noqa: E402 - loads src/ onto sys.path before axiom imports
+    REQUEST_CAPTURE_DIR_ENV_VAR,
+    _build_draft_request,
+    _resolve_live_config,
+    _resolve_setting,
+)
+
+from axiom.copilot.backend import build_copilot_expert  # noqa: E402
+from axiom.experts.onyx_qwen import (  # noqa: E402
+    OnyxQwenHTTPError,
+    OnyxQwenTimeoutError,
+    OnyxQwenTransportError,
+)
+
+_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _safe_url_display(url: str) -> str:
@@ -20,6 +35,87 @@ def _quoted(text: str) -> str:
 
 def _resolved_or_placeholder(value: str | None, placeholder: str) -> str:
     return value if value else placeholder
+
+
+def _print_probe_field(label: str, value: object | None) -> None:
+    if value is None or value == "":
+        print(f"{label}: n/a")
+    else:
+        print(f"{label}: {value}")
+
+
+def _run_auth_probe(args: argparse.Namespace) -> int:
+    """One draft call via the same stack as profile_onyx_task_latency. Exit 0 only on success."""
+    ns = argparse.Namespace(
+        expert_url=args.expert_url,
+        expert_model=args.expert_model,
+        expert_api_key=args.expert_api_key,
+        request_capture_dir=args.request_capture_dir,
+    )
+    url, model, api_key, capture_dir = _resolve_live_config(ns)
+    expert = build_copilot_expert(
+        "onyx-qwen",
+        expert_url=url,
+        expert_model=model,
+        expert_api_key=api_key,
+        timeout=45.0,
+    )
+    task_json = _ROOT / "benchmarks" / "copilot_symbolic_robustness_ambiguity_stress_tasks.json"
+    _task, draft_req = _build_draft_request(
+        expert=expert,
+        task_id="noisy_affine_thermometer",
+        task_json=task_json,
+        capture_dir=capture_dir,
+        max_tokens=16,
+    )
+    try:
+        resp = expert.draft_program(draft_req)
+        meta = dict(resp.metadata or {})
+        print("probe result: success")
+        sc = meta.get("status_code")
+        if sc is not None:
+            try:
+                print(f"status_code: {int(sc)}")
+            except (TypeError, ValueError):
+                print("status_code: n/a")
+        else:
+            print("status_code: n/a")
+        _print_probe_field("request_id", meta.get("request_id"))
+        _print_probe_field("request_capture_path", meta.get("request_capture_path"))
+        return 0
+    except Exception as exc:
+        meta = dict(getattr(exc, "metadata", {}) or {})
+        sc_val = meta.get("status_code")
+        if sc_val is None and isinstance(exc, OnyxQwenHTTPError):
+            sc_val = getattr(exc, "status_code", None)
+        if isinstance(exc, OnyxQwenTimeoutError):
+            label = "timeout"
+        elif isinstance(exc, OnyxQwenTransportError):
+            label = "transport"
+        elif isinstance(exc, OnyxQwenHTTPError):
+            try:
+                sc_int = int(sc_val) if sc_val is not None else None
+            except (TypeError, ValueError):
+                sc_int = None
+            if sc_int == 401:
+                label = "unauthorized"
+            elif sc_int == 403:
+                label = "forbidden"
+            else:
+                label = "http_error"
+        else:
+            label = "http_error"
+        print(f"probe result: {label}")
+        if sc_val is not None:
+            try:
+                print(f"status_code: {int(sc_val)}")
+            except (TypeError, ValueError):
+                print("status_code: n/a")
+        else:
+            print("status_code: n/a")
+        _print_probe_field("request_id", meta.get("request_id"))
+        _print_probe_field("request_capture_path", meta.get("request_capture_path"))
+        return 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -39,6 +135,11 @@ def main(argv: list[str] | None = None) -> int:
         "--request-capture-dir",
         default="",
         help=f"Optional request capture directory. Overrides {REQUEST_CAPTURE_DIR_ENV_VAR} when provided.",
+    )
+    parser.add_argument(
+        "--probe",
+        action="store_true",
+        help="After resolving config, run one minimal live draft (same path as profile_onyx_task_latency). Exit 0 only on success.",
     )
     args = parser.parse_args(argv)
 
@@ -108,6 +209,14 @@ def main(argv: list[str] | None = None) -> int:
     print("next command: summarizer")
     print("next script: scripts/summarize_onyx_latency_sweeps.py")
     print(summarize_cmd)
+
+    if args.probe:
+        print("")
+        if not expert_url or not expert_model:
+            print("probe result: skipped (missing expert_url or expert_model)")
+            return 1
+        return _run_auth_probe(args)
+
     return 0 if ready else 1
 
 
