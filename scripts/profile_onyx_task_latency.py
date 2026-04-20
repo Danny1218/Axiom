@@ -22,11 +22,23 @@ from axiom.copilot.search import CopilotSearchConfig, _build_copilot_draft_reque
 from axiom.experts.onyx_qwen import REQUEST_CAPTURE_DIR_CONTEXT_KEY, REQUEST_CAPTURE_DIR_ENV_VAR  # noqa: E402
 
 
-def _require_env(name: str) -> str:
-    value = os.environ.get(name, "").strip()
-    if not value:
-        raise SystemExit(f"Set {name}.")
-    return value
+def _resolve_setting(
+    explicit_value: str | None,
+    *,
+    env_name: str,
+    setting_name: str,
+    required: bool,
+) -> str | None:
+    if explicit_value is not None and str(explicit_value).strip():
+        return str(explicit_value).strip()
+    env_value = os.environ.get(env_name, "").strip()
+    if env_value:
+        return env_value
+    if required:
+        raise SystemExit(
+            f"Missing required setting: {setting_name}. Provide --{setting_name.replace('_', '-')} or set {env_name}."
+        )
+    return None
 
 
 def _format_elapsed(value: Any) -> str:
@@ -105,6 +117,37 @@ def _write_json_out(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
 
 
+def _resolve_live_config(args: argparse.Namespace) -> tuple[str, str, str | None, Path | None]:
+    expert_url = _resolve_setting(
+        args.expert_url,
+        env_name="AXIOM_EXPERT_URL",
+        setting_name="expert_url",
+        required=True,
+    )
+    expert_model = _resolve_setting(
+        args.expert_model,
+        env_name="AXIOM_EXPERT_MODEL",
+        setting_name="expert_model",
+        required=True,
+    )
+    expert_api_key = _resolve_setting(
+        args.expert_api_key,
+        env_name="AXIOM_EXPERT_API_KEY",
+        setting_name="expert_api_key",
+        required=False,
+    )
+    capture_dir_text = _resolve_setting(
+        args.request_capture_dir,
+        env_name=REQUEST_CAPTURE_DIR_ENV_VAR,
+        setting_name="request_capture_dir",
+        required=False,
+    )
+    capture_dir = Path(capture_dir_text) if capture_dir_text else None
+    assert expert_url is not None
+    assert expert_model is not None
+    return expert_url, expert_model, expert_api_key, capture_dir
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Profile repeated live Onyx draft latency for one benchmark task.")
     parser.add_argument("--task-id", required=True, help="Benchmark task id to profile.")
@@ -117,16 +160,28 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-tokens", type=int, required=True, help="max_tokens override for the live draft call.")
     parser.add_argument("--repeats", type=int, required=True, help="Number of repeated draft attempts to run.")
     parser.add_argument("--json-out", default="", help="Optional path to write structured JSON results.")
+    parser.add_argument("--expert-url", default="", help="Live expert URL. Overrides AXIOM_EXPERT_URL when provided.")
+    parser.add_argument(
+        "--expert-model",
+        default="",
+        help="Live expert model. Overrides AXIOM_EXPERT_MODEL when provided.",
+    )
+    parser.add_argument(
+        "--expert-api-key",
+        default="",
+        help="Optional live expert API key. Overrides AXIOM_EXPERT_API_KEY when provided.",
+    )
+    parser.add_argument(
+        "--request-capture-dir",
+        default="",
+        help=f"Optional request capture directory. Overrides {REQUEST_CAPTURE_DIR_ENV_VAR} when provided.",
+    )
     args = parser.parse_args(argv)
 
     if args.repeats < 1:
         raise SystemExit("--repeats must be >= 1.")
 
-    url = _require_env("AXIOM_EXPERT_URL")
-    model = _require_env("AXIOM_EXPERT_MODEL")
-    api_key = os.environ.get("AXIOM_EXPERT_API_KEY")
-    capture_dir_text = os.environ.get(REQUEST_CAPTURE_DIR_ENV_VAR, "").strip()
-    capture_dir = Path(capture_dir_text) if capture_dir_text else None
+    url, model, api_key, capture_dir = _resolve_live_config(args)
     task_json = Path(args.task_json)
     expert = build_copilot_expert(
         "onyx-qwen",

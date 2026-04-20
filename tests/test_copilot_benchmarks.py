@@ -605,6 +605,10 @@ def test_profile_onyx_task_latency_script_exposes_expected_args():
     assert 'parser.add_argument("--max-tokens", type=int, required=True' in script
     assert 'parser.add_argument("--repeats", type=int, required=True' in script
     assert 'parser.add_argument("--json-out", default=""' in script
+    assert 'parser.add_argument("--expert-url", default=""' in script
+    assert '"--expert-model"' in script
+    assert '"--expert-api-key"' in script
+    assert '"--request-capture-dir"' in script
     assert 'ATTEMPT {0}: task_id={1} status={2}' in script
     assert "SUMMARY: repeats={0} success_count={1} timeout_count={2}" in script
     assert '"config": {' in script
@@ -613,6 +617,21 @@ def test_profile_onyx_task_latency_script_exposes_expected_args():
     assert '"task_id": task.id' in script
     assert '"timeout": float(args.timeout)' in script
     assert '"max_tokens": int(args.max_tokens)' in script
+
+
+def test_check_onyx_live_preflight_script_exposes_expected_contract():
+    root = Path(__file__).resolve().parents[1]
+    script = (root / "scripts" / "check_onyx_live_preflight.py").read_text(encoding="utf-8")
+    assert 'parser.add_argument("--expert-url", default=""' in script
+    assert '"--expert-model"' in script
+    assert '"--expert-api-key"' in script
+    assert '"--request-capture-dir"' in script
+    assert "live execution is possible" in script
+    assert "missing required setting" in script
+    assert "scripts/sweep_robustness_task_latency.ps1" in script
+    assert "scripts/summarize_onyx_latency_sweeps.py" in script
+    assert "resolved expert_url:" in script
+    assert "resolved expert_model:" in script
 
 
 def test_profile_robustness_task_latency_wrapper_forwards_expected_args():
