@@ -648,9 +648,19 @@ def test_check_onyx_live_preflight_script_exposes_expected_contract():
     assert '"--expert-api-key-file"' in script
     assert "expert_api_key_fingerprint:" in script
     assert "_api_key_fingerprint" in script
-    assert "Authorization" not in script
+    assert "sk-morph" not in script
     assert '"--request-capture-dir"' in script
     assert '"--probe"' in script and "action=\"store_true\"" in script
+    assert '"--probe-mode"' in script
+    assert 'choices=["auth", "draft"]' in script
+    assert '"--probe-timeout"' in script
+    assert '"--probe-max-tokens"' in script
+    assert '"--probe-task-id"' in script
+    assert 'print("probe mode: auth")' in script
+    assert 'print("probe mode: draft")' in script
+    assert "v1/models" in script
+    assert "_run_probe_auth" in script
+    assert "_run_probe_draft" in script
     assert 'print("probe result: success")' in script
     assert 'print(f"probe result: {label}")' in script
     assert 'label = "unauthorized"' in script
@@ -658,7 +668,6 @@ def test_check_onyx_live_preflight_script_exposes_expected_contract():
     assert 'label = "timeout"' in script
     assert 'label = "transport"' in script
     assert 'label = "http_error"' in script
-    assert "_run_auth_probe" in script
     assert "live execution is possible" in script
     assert "missing required setting" in script
     assert "scripts/sweep_robustness_task_latency.ps1" in script

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from profile_onyx_task_latency import (  # noqa: E402 - loads src/ onto sys.path before axiom imports
     REQUEST_CAPTURE_DIR_ENV_VAR,
@@ -19,6 +19,11 @@ from axiom.experts.onyx_qwen import (  # noqa: E402
     OnyxQwenTimeoutError,
     OnyxQwenTransportError,
 )
+
+try:
+    import requests
+except ImportError:  # pragma: no cover
+    requests = None  # type: ignore[assignment]
 
 _ROOT = Path(__file__).resolve().parents[1]
 
@@ -46,8 +51,79 @@ def _print_probe_field(label: str, value: object | None) -> None:
         print(f"{label}: {value}")
 
 
-def _run_auth_probe(args: argparse.Namespace) -> int:
-    """One draft call via the same stack as profile_onyx_task_latency. Exit 0 only on success."""
+def _openai_api_root_base(expert_url: str) -> str:
+    """Normalize base so /v1/models resolves like chat/completions (strip trailing /v1)."""
+    u = expert_url.rstrip("/")
+    if u.endswith("/v1"):
+        u = u[:-3].rstrip("/")
+    return u.rstrip("/") + "/"
+
+
+def _models_list_url(expert_url: str) -> str:
+    return urljoin(_openai_api_root_base(expert_url), "v1/models")
+
+
+def _run_probe_auth(args: argparse.Namespace) -> int:
+    """GET /v1/models — cheap auth/route check. Exit 0 only on HTTP 200."""
+    print("probe mode: auth")
+    ns = argparse.Namespace(
+        expert_url=args.expert_url,
+        expert_model=args.expert_model,
+        expert_api_key=args.expert_api_key,
+        expert_api_key_file=args.expert_api_key_file,
+        request_capture_dir=args.request_capture_dir,
+    )
+    url, _model, api_key, _capture = _resolve_live_config(ns)
+    if requests is None:
+        print("probe result: transport")
+        print("status_code: n/a")
+        print("request_id: n/a")
+        return 1
+    models_url = _models_list_url(url)
+    headers: dict[str, str] = {"Accept": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    timeout = float(args.probe_timeout)
+    try:
+        r = requests.get(models_url, headers=headers, timeout=timeout)
+    except requests.exceptions.Timeout:
+        print("probe result: timeout")
+        print("status_code: n/a")
+        print("request_id: n/a")
+        return 1
+    except requests.exceptions.RequestException:
+        print("probe result: transport")
+        print("status_code: n/a")
+        print("request_id: n/a")
+        return 1
+    sc = int(r.status_code)
+    rid = r.headers.get("x-request-id") or r.headers.get("X-Request-ID")
+    if sc == 200:
+        print("probe result: success")
+        print(f"status_code: {sc}")
+        if rid:
+            print(f"request_id: {rid}")
+        else:
+            print("request_id: n/a")
+        return 0
+    if sc == 401:
+        label = "unauthorized"
+    elif sc == 403:
+        label = "forbidden"
+    else:
+        label = "http_error"
+    print(f"probe result: {label}")
+    print(f"status_code: {sc}")
+    if rid:
+        print(f"request_id: {rid}")
+    else:
+        print("request_id: n/a")
+    return 1
+
+
+def _run_probe_draft(args: argparse.Namespace) -> int:
+    """Same stack as profile_onyx_task_latency draft_program. Exit 0 only on success."""
+    print("probe mode: draft")
     ns = argparse.Namespace(
         expert_url=args.expert_url,
         expert_model=args.expert_model,
@@ -61,15 +137,15 @@ def _run_auth_probe(args: argparse.Namespace) -> int:
         expert_url=url,
         expert_model=model,
         expert_api_key=api_key,
-        timeout=45.0,
+        timeout=float(args.probe_timeout),
     )
     task_json = _ROOT / "benchmarks" / "copilot_symbolic_robustness_ambiguity_stress_tasks.json"
     _task, draft_req = _build_draft_request(
         expert=expert,
-        task_id="noisy_affine_thermometer",
+        task_id=str(args.probe_task_id),
         task_json=task_json,
         capture_dir=capture_dir,
-        max_tokens=16,
+        max_tokens=int(args.probe_max_tokens),
     )
     try:
         resp = expert.draft_program(draft_req)
@@ -147,7 +223,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--probe",
         action="store_true",
-        help="After resolving config, run one minimal live draft (same path as profile_onyx_task_latency). Exit 0 only on success.",
+        help="After resolving config, run a live probe (see --probe-mode). Exit 0 only on probe success.",
+    )
+    parser.add_argument(
+        "--probe-mode",
+        choices=["auth", "draft"],
+        default="draft",
+        help="auth: GET /v1/models (cheap). draft: one benchmark draft_program (end-to-end).",
+    )
+    parser.add_argument("--probe-timeout", type=float, default=45.0, help="Timeout in seconds for the active probe.")
+    parser.add_argument("--probe-max-tokens", type=int, default=16, help="max_tokens for draft probe only.")
+    parser.add_argument(
+        "--probe-task-id",
+        default="noisy_affine_thermometer",
+        help="Benchmark task id for draft probe only.",
     )
     args = parser.parse_args(argv)
 
@@ -220,7 +309,9 @@ def main(argv: list[str] | None = None) -> int:
         if not expert_url or not expert_model:
             print("probe result: skipped (missing expert_url or expert_model)")
             return 1
-        return _run_auth_probe(args)
+        if args.probe_mode == "auth":
+            return _run_probe_auth(args)
+        return _run_probe_draft(args)
 
     return 0 if ready else 1
 
