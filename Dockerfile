@@ -6,7 +6,8 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     HOST=0.0.0.0 \
-    PORT=8000
+    PORT=8000 \
+    AXIOM_REQUIRE_API_KEY=1
 
 COPY pyproject.toml readme.md ./
 COPY src ./src

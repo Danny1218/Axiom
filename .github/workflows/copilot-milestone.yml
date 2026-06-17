@@ -84,6 +84,22 @@ jobs:
             benchmark_symbolic_suite_generalization_stress_ci.json
             benchmark_symbolic_suite_robustness_ambiguity_stress_ci.json
 
+      - name: Collect release evidence
+        run: |
+          python scripts/collect_release_evidence.py `
+            benchmark_symbolic_suite_ci.json `
+            benchmark_symbolic_suite_next_milestone_ci.json `
+            benchmark_symbolic_suite_generalization_stress_ci.json `
+            benchmark_symbolic_suite_robustness_ambiguity_stress_ci.json `
+            --out release_evidence_ci.json
+
+      - name: Upload release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: copilot-release-evidence
+          path: release_evidence_ci.json
+
       - name: Copilot golden conformance (offline)
         run: python -m pytest tests/test_copilot_golden.py -q
 

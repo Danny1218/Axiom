@@ -8,7 +8,8 @@ services:
       - "8000:8000"
     environment:
       AXIOM_BUNDLE_PATH: /bundles/model.axb
-      AXIOM_API_KEY: ${AXIOM_API_KEY}
+      AXIOM_API_KEY: ${AXIOM_API_KEY:?Set AXIOM_API_KEY in .env before docker compose up}
+      AXIOM_REQUIRE_API_KEY: "1"
       AXIOM_BUNDLE_SECRET: ${AXIOM_BUNDLE_SECRET:-}
       HOST: "0.0.0.0"
       PORT: "8000"

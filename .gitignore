@@ -17,7 +17,8 @@ axiom_bundle_*_topology.json
 .axiom_inspector_upload/
 src/axiom/tools/.axiom_inspector_upload/
 
-# Copilot / benchmark generated artifacts
+artifacts/
+release_evidence*.json
 benchmark_symbolic_snapshot*.json
 benchmark_symbolic_suite*.json
 best_*.ax

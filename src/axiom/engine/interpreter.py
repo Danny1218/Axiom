@@ -10,7 +10,7 @@ import torch.nn.functional as F
 
 from axiom.engine.expert_call import ExpertHandler, ExpertRuntimeError
 from axiom.engine.expert_registry import ExpertRuntimeRegistry
-from axiom.engine.strict import StrictInferenceError, env_defined_set, mark_defined, strict_mode_enabled
+from axiom.engine.strict import StrictInferenceError, env_defined_set, mark_defined, strict_execution, strict_mode_enabled
 
 Stmt = Tuple
 ExprIR = List[Tuple]
@@ -70,6 +70,48 @@ def collect_load_names_from_stmts(stmts: List[Stmt]) -> List[str]:
     for st in stmts:
         walk_stmt(st)
     return sorted(found)
+
+
+def collect_assigned_names_from_stmts(stmts: List[Stmt]) -> Set[str]:
+    found: Set[str] = set()
+
+    def walk_stmt(stmt: Stmt) -> None:
+        op = stmt[0]
+        if op == "OP_ASSIGN":
+            found.add(str(stmt[1]))
+            walk_expr(stmt[2])
+        elif op == "OP_BLEND_ASSIGN":
+            found.add(str(stmt[1]))
+            walk_expr(list(stmt[2]))
+            walk_expr(list(stmt[3]))
+        elif op == "OP_EXPR_STMT":
+            walk_expr(stmt[1])
+        elif op == "OP_CONDITIONAL":
+            walk_expr(stmt[1])
+            for s in stmt[2]:
+                walk_stmt(s)
+            for s in stmt[3]:
+                walk_stmt(s)
+        elif op == "OP_LOOP":
+            walk_expr(stmt[1])
+            for s in stmt[2]:
+                walk_stmt(s)
+
+    def walk_expr(ir: ExprIR) -> None:
+        for tup in ir:
+            if not isinstance(tup, tuple) or not tup:
+                continue
+            if tup[0] == "OP_NEURAL" and len(tup) >= 3:
+                walk_expr(list(tup[2]))
+            elif tup[0] == "OP_EXPERT" and len(tup) >= 3:
+                walk_expr(list(tup[2]))
+            elif tup[0] == "OP_CALL":
+                for a in tup[2]:
+                    walk_expr(list(a))
+
+    for st in stmts:
+        walk_stmt(st)
+    return found
 
 
 def collect_load_names(cond_ir: ExprIR, body_ir: List[Stmt]) -> List[str]:
@@ -609,42 +651,47 @@ def exec_stmt(
             expert_audit=expert_audit,
         )
         base = {k: v.clone() for k, v in env.items()}
+        parent_defined = env_defined_set()
+        then_defined = set(parent_defined) if parent_defined is not None else None
+        else_defined = set(parent_defined) if parent_defined is not None else None
         then_env = {k: v.clone() for k, v in env.items()}
-        for s in stmt[2]:
-            exec_stmt(
-                then_env,
-                s,
-                B=B,
-                dim=dim,
-                max_unroll=max_unroll,
-                device=device,
-                dtype=dtype,
-                active_mask=active_mask,
-                abi_widths=aw,
-                neural_registry=neural_registry,
-                expert_handler=expert_handler,
-                expert_fallback=expert_fallback,
-                expert_registry=expert_registry,
-                expert_audit=expert_audit,
-            )
+        with strict_execution(strict_mode_enabled(), then_defined):
+            for s in stmt[2]:
+                exec_stmt(
+                    then_env,
+                    s,
+                    B=B,
+                    dim=dim,
+                    max_unroll=max_unroll,
+                    device=device,
+                    dtype=dtype,
+                    active_mask=active_mask,
+                    abi_widths=aw,
+                    neural_registry=neural_registry,
+                    expert_handler=expert_handler,
+                    expert_fallback=expert_fallback,
+                    expert_registry=expert_registry,
+                    expert_audit=expert_audit,
+                )
         else_env = {k: v.clone() for k, v in env.items()}
-        for s in stmt[3]:
-            exec_stmt(
-                else_env,
-                s,
-                B=B,
-                dim=dim,
-                max_unroll=max_unroll,
-                device=device,
-                dtype=dtype,
-                active_mask=active_mask,
-                abi_widths=aw,
-                neural_registry=neural_registry,
-                expert_handler=expert_handler,
-                expert_fallback=expert_fallback,
-                expert_registry=expert_registry,
-                expert_audit=expert_audit,
-            )
+        with strict_execution(strict_mode_enabled(), else_defined):
+            for s in stmt[3]:
+                exec_stmt(
+                    else_env,
+                    s,
+                    B=B,
+                    dim=dim,
+                    max_unroll=max_unroll,
+                    device=device,
+                    dtype=dtype,
+                    active_mask=active_mask,
+                    abi_widths=aw,
+                    neural_registry=neural_registry,
+                    expert_handler=expert_handler,
+                    expert_fallback=expert_fallback,
+                    expert_registry=expert_registry,
+                    expert_audit=expert_audit,
+                )
         sel = cond_vec != 0
         for k in env.keys():
             te, ee = then_env[k], else_env[k]
@@ -655,6 +702,9 @@ def exec_stmt(
                 picked = torch.where(sm, te, ee)
             m = _broadcast_mask(active_mask, picked)
             env[k] = torch.where(m, picked, base[k])
+        if parent_defined is not None and then_defined is not None and else_defined is not None:
+            for name in then_defined & else_defined:
+                mark_defined(parent_defined, name)
     elif op == "OP_LOOP":
         inner_order = build_var_order(stmt[1], stmt[2], dim, env_keys=set(env.keys()))
         _, _ = run_while_loop(

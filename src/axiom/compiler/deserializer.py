@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 
 from axiom.compiler.ir import extract_abi_widths, extract_global_abi
-from axiom.compiler.serializer import AXB_WEIGHTS_SUFFIX, load_state_dict
+from axiom.compiler.serializer import AXB_WEIGHTS_SUFFIX, bundle_weights_path, load_state_dict
 from axiom.security.bundle_trust import BundleTrustError, resolve_trusted
 from axiom.engine.block_executor import InterpretedBlock
 from axiom.engine.loop_executor import InterpretedLiquidLoop
@@ -130,10 +130,15 @@ def _block_from_payload(
         custom_neural_registry=custom_neural_registry,
     )
     nw = payload.get("neural_weights")
-    if not nw:
-        wpath = Path(str(path) + AXB_WEIGHTS_SUFFIX)
-        if wpath.is_file():
-            nw = load_state_dict(wpath)
+    wpath = bundle_weights_path(path)
+    if not nw and wpath.is_file():
+        nw = load_state_dict(wpath)
+    needs_weights = len(block.neural_registry) > 0
+    if needs_weights and not nw and not (payload.get("lock") or {}).get("encrypted"):
+        raise ValueError(
+            f"bundle requires neural weights but none were found in payload or sidecar {wpath.name!r}; "
+            "copy both .axb and .axb.weights.pt together"
+        )
     if nw:
         block.neural_registry.load_state_dict(nw, strict=True)
     return block

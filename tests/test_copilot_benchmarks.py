@@ -958,6 +958,7 @@ def test_copilot_milestone_workflow_runs_pytest_smoke_and_three_benchmarks():
     assert workflow.count("axiom copilot-benchmark") >= 4
     assert workflow.count("--gate") >= 4
     assert "upload-artifact" in workflow
+    assert "collect_release_evidence" in workflow
     assert "copilot_symbolic_and_generalization_tasks.json" in workflow
     assert "copilot_symbolic_next_milestone_tasks.json" in workflow
     assert "copilot_symbolic_generalization_stress_tasks.json" in workflow
@@ -982,6 +983,25 @@ def test_benchmark_gate_passes_on_dispatch_suite_doc():
     suite = run_benchmark_suite(BenchmarkDispatchExpert(), tasks=tasks, max_iterations=2)
     doc = benchmark_suite_to_dict(suite)
     assert benchmark_gate_violations(doc) == []
+
+
+def test_collect_release_evidence_gate_ok_on_dispatch_suite(tmp_path: Path):
+    root = Path(__file__).resolve().parents[1]
+    tasks = load_benchmark_tasks_json_path(root / "benchmarks" / "copilot_symbolic_next_milestone_tasks.json")
+    suite = run_benchmark_suite(BenchmarkDispatchExpert(), tasks=tasks, max_iterations=2)
+    doc = benchmark_suite_to_dict(suite)
+    path = tmp_path / "suite.json"
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    import sys
+
+    scripts = str(root / "scripts")
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    from collect_release_evidence import collect_release_evidence
+
+    evidence = collect_release_evidence([path])
+    assert evidence["gate_ok"] is True
+    assert evidence["suite_count"] == 1
 
 
 def test_benchmark_gate_reports_task_failures():

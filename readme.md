@@ -103,8 +103,8 @@ Compare JSON before/after changes; entries include p50/p95/mean timings and `tor
 ## From compile to production
 
 1. **Compile & train** — **`axiom train`** on an **`.ax`** file; you get a **`.axb`** bundle (serialized `InterpretedBlock` + weights).  
-2. **Bundle** — The **`.axb`** is the portable artifact; load it with **`axiom.load`** or **`axiom predict`**.  
-3. **Serve** — Optional **`pip install -e ".[serve]"`**, then **`axiom serve`** exposes **`/health`**, **`/predict`**, **`/explain`**, **`/report`** over HTTP.  
+2. **Bundle** — The **`.axb`** is the portable artifact. Unlocked neural bundles also write a **sidecar** **`model.axb.weights.pt`** — copy **both** files together when moving or deploying (locked bundles embed ciphertext in the JSON instead).  
+3. **Serve** — Optional **`pip install -e ".[serve]"`**, then **`axiom serve`** exposes **`/health`**, **`/predict`**, **`/explain`**, **`/report`** over HTTP. Production binds (**`0.0.0.0`**, Docker) require **`AXIOM_API_KEY`** unless **`AXIOM_ALLOW_INSECURE_SERVE=1`** (local dev only).  
 4. **Secure** — Optional **`pip install -e ".[lock]"`**, then **`axiom lock-bundle`** encrypts neural weights; **`AXIOM_BUNDLE_SECRET`** / device unlock at load time.  
 5. **Export** — Optional **`pip install -e ".[export]"`**, then **`axiom export-onnx`** for inference-only ONNX (no **`explain`** parity).  
 6. **Policy gateway** — Optional **`pip install -e ".[gateway]"`**, then **`axiom gateway-serve`** for **`POST /gateway/chat`** (scan + explain + allow/deny + optional downstream forward).
@@ -370,7 +370,7 @@ In Docker, set **`AXIOM_BUNDLE_SECRET`** if the mounted bundle is **`env-secret`
 
 ## Docker deployment
 
-Production-style image for **`axiom serve`**: one **`.axb`**, FastAPI on **`HOST`** / **`PORT`**. The **`Dockerfile`** installs **`pip install ".[serve,lock]"`**. Optional env: **`AXIOM_API_KEY`** (Bearer / **`X-API-Key`** on **`/predict`**, **`/explain`**, **`/report`**), **`AXIOM_BUNDLE_SECRET`** (unlock **`env-secret`** locked bundles). No bundle is baked in—set **`AXIOM_BUNDLE_PATH`** at runtime.
+Production-style image for **`axiom serve`**: one **`.axb`** (+ optional **`.axb.weights.pt`** sidecar for unlocked neural bundles), FastAPI on **`HOST`** / **`PORT`**. The **`Dockerfile`** installs **`pip install ".[serve,lock]"`** and sets **`AXIOM_REQUIRE_API_KEY=1`**. Required env: **`AXIOM_API_KEY`**. Optional: **`AXIOM_BUNDLE_SECRET`** (unlock **`env-secret`** locked bundles). No bundle is baked in—set **`AXIOM_BUNDLE_PATH`** at runtime.
 
 ### Build
 
@@ -621,7 +621,7 @@ Three honest forks after v1.0:
 | **B — Language** | Grow **`.ax`** toward **functions, arrays, classes** (Turing-complete, reusable modules). | Huge compiler/graph-design lift; long horizon. |
 | **C — Community** | **PyPI**, articles, tutorials, issues—grow users and contributors. | Recognition and help; maintainer time on support and docs. |
 
-**Pragmatic default:** drive **Path A** once—pick a dataset you care about, beat or match a baseline, *then* invest in B or C with evidence.
+**Pragmatic default:** drive **Path A** once—pick a dataset you care about, beat or match a baseline, *then* invest in B or C with evidence. Reproducible starter: **`python scripts/run_path_a_portfolio_vertical.py`** (finance portfolio; writes **`artifacts/path_a_portfolio/report.json`** and a portable **`.axb`** + **`.weights.pt`** pair).
 
 ---
 

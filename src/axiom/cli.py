@@ -326,6 +326,7 @@ def _cmd_serve(args: argparse.Namespace) -> None:
         raise SystemExit(
             "axiom serve requires optional deps: pip install -e \".[serve]\""
         ) from e
+    from axiom.security.serve_policy import InsecureServeError, verify_serve_startup
     from axiom.serve import create_app
 
     bundle = args.bundle or os.environ.get("AXIOM_BUNDLE_PATH")
@@ -340,11 +341,18 @@ def _cmd_serve(args: argparse.Namespace) -> None:
     port_env = os.environ.get("PORT")
     port = int(port_env) if port_env not in (None, "") else int(args.port)
 
+    allow_insecure = bool(getattr(args, "allow_insecure_serve", False))
+    try:
+        verify_serve_startup(host, allow_insecure=allow_insecure)
+    except InsecureServeError as e:
+        raise SystemExit(str(e)) from e
+
     app = create_app(
         bp,
         trusted=getattr(args, "trust_bundle", False),
         strict=True if getattr(args, "strict", False) else None,
         report_output_dir=getattr(args, "report_output_dir", None),
+        allow_insecure=allow_insecure,
     )
     uvicorn.run(app, host=host, port=port, log_level="info")
 
@@ -1536,6 +1544,11 @@ def main(argv: list[str] | None = None) -> None:
         type=str,
         default=None,
         help="Sandbox directory for HTTP /report file writes (or set AXIOM_REPORT_OUTPUT_DIR).",
+    )
+    p_serve.add_argument(
+        "--allow-insecure-serve",
+        action="store_true",
+        help="Dev only: allow binding without AXIOM_API_KEY (also AXIOM_ALLOW_INSECURE_SERVE=1).",
     )
     p_serve.set_defaults(_handler=_cmd_serve)
 

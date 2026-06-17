@@ -172,6 +172,18 @@ def save_bundle(
         weights_path.unlink()
 
 
+def bundle_weights_path(axb_path: str | Path) -> Path:
+    """Companion weights sidecar for unlocked v2 bundles (``model.axb.weights.pt``)."""
+    return Path(str(axb_path) + AXB_WEIGHTS_SUFFIX)
+
+
+def bundle_artifact_paths(axb_path: str | Path) -> tuple[Path, Optional[Path]]:
+    """Return ``(.axb, optional .weights.pt)`` paths that must travel together for neural bundles."""
+    p = Path(axb_path)
+    w = bundle_weights_path(p)
+    return p, w if w.is_file() else None
+
+
 def _is_v1_pickle_bundle(raw: bytes) -> bool:
     return len(raw) >= 2 and raw[0:2] == b"\x80\x04"
 

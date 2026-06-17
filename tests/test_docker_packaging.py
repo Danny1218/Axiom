@@ -22,11 +22,14 @@ def test_docker_compose_exposes_and_mounts_bundles():
     assert "bundles:/bundles" in yml or "./bundles:/bundles" in yml
     assert "AXIOM_BUNDLE_PATH" in yml
     assert "AXIOM_API_KEY" in yml
+    assert "AXIOM_REQUIRE_API_KEY" in yml
     assert "AXIOM_BUNDLE_SECRET" in yml
     assert "HOST" in yml and "PORT" in yml
 
 
-def test_dockerignore_excludes_heavy_or_local_artifacts():
+def test_dockerfile_requires_api_key_in_production():
+    df = (_root() / "Dockerfile").read_text(encoding="utf-8")
+    assert "AXIOM_REQUIRE_API_KEY" in df
     ign = (_root() / ".dockerignore").read_text(encoding="utf-8")
     assert ".venv" in ign or "venv" in ign
     assert ".pytest_cache" in ign or "**/.pytest_cache" in ign

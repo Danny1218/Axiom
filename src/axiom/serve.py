@@ -37,6 +37,7 @@ from axiom.security.bundle_trust import (
     report_output_dir_from_env,
     resolve_report_output_path,
 )
+from axiom.security.serve_policy import verify_serve_startup
 from axiom.tools.html_exporter import render_html_report
 
 
@@ -125,6 +126,7 @@ def create_app(
     trusted: Optional[bool] = None,
     strict: Optional[bool] = None,
     report_output_dir: Optional[str | Path] = None,
+    allow_insecure: bool = False,
 ) -> FastAPI:
     """Load ``bundle_path`` once and return a FastAPI app serving ``/health``, ``/predict``, ``/explain``, ``/report``.
 
@@ -144,6 +146,8 @@ def create_app(
     if strict is None:
         strict = _strict_from_env()
     model.strict = bool(strict)
+    if os.environ.get("AXIOM_REQUIRE_API_KEY", "").strip().lower() in ("1", "true", "yes", "on") and not _expected_api_key():
+        raise RuntimeError("AXIOM_REQUIRE_API_KEY is set but AXIOM_API_KEY is empty")
     sandbox = (
         Path(report_output_dir).expanduser().resolve()
         if report_output_dir

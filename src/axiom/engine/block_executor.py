@@ -8,8 +8,8 @@ import torch.nn as nn
 from axiom.compiler.ir import extract_neural_node_specs
 from axiom.engine.expert_call import ExpertHandler
 from axiom.engine.expert_registry import ExpertRuntimeRegistry
-from axiom.engine.interpreter import collect_load_names_from_stmts, exec_stmt
-from axiom.engine.strict import mark_defined, strict_execution
+from axiom.engine.interpreter import collect_assigned_names_from_stmts, collect_load_names_from_stmts, exec_stmt
+from axiom.engine.strict import StrictInferenceError, mark_defined, strict_execution
 from axiom.engine.ssm import LiquidKANNode
 from axiom.primitives.liquid_tensor import LiquidFeatureReadout
 
@@ -115,7 +115,11 @@ class InterpretedBlock(nn.Module):
             else:
                 env[name] = z.clone()
         audit: List[Dict[str, Any]] = []
-        env_defined: Set[str] = set(self.abi.keys())
+        assigned = collect_assigned_names_from_stmts(self.ir_stmts)
+        if self.strict:
+            env_defined = {n for n in self.abi if n not in assigned}
+        else:
+            env_defined = set(self.abi.keys())
         with strict_execution(self.strict, env_defined):
             for stmt in self.ir_stmts:
                 exec_stmt(
@@ -142,10 +146,18 @@ class InterpretedBlock(nn.Module):
             t = env[name]
             if col + w > D:
                 continue
+            wrote = False
             if w == 1 and t.dim() == 1:
                 out[:, col] = t
+                wrote = True
             elif t.dim() == 2 and t.shape[1] == w:
                 out[:, col : col + w] = t
+                wrote = True
             elif t.dim() == 1 and w == 1:
                 out[:, col] = t
+                wrote = True
+            if self.strict and not wrote:
+                raise StrictInferenceError(
+                    f"ABI output {name!r} shape mismatch: got dim={t.dim()} width={w}, trunk width={D}"
+                )
         return (out, env) if return_env else out

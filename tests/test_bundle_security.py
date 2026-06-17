@@ -136,6 +136,80 @@ def test_strict_blend_assign_marks_branch_local_defined():
     assert torch.allclose(out[:, abi["o"]], torch.tensor([1.0, 2.0, 1.0, 2.0]))
 
 
+def test_strict_conditional_requires_both_branches_to_define():
+    reset_parser()
+    ir = ast_to_ir(parse_ax("if (c > 0.0) { y = 1.0; } z = y;"))
+    abi = extract_global_abi(ir, max_vars=16)
+    aw = extract_abi_widths(ir, max_vars=16)
+    block = InterpretedBlock(ir, abi, abi_widths=aw, strict=True)
+    h = torch.zeros(2, 16)
+    h[:, abi["c"]] = torch.tensor([1.0, -1.0])
+    with pytest.raises(StrictInferenceError, match="unset variable 'y'"):
+        block(h)
+
+
+def test_lenient_conditional_allows_single_branch_assign():
+    reset_parser()
+    ir = ast_to_ir(parse_ax("if (c > 0.0) { y = 1.0; } z = y;"))
+    abi = extract_global_abi(ir, max_vars=16)
+    aw = extract_abi_widths(ir, max_vars=16)
+    block = InterpretedBlock(ir, abi, abi_widths=aw, strict=False)
+    h = torch.zeros(2, 16)
+    h[:, abi["c"]] = torch.tensor([1.0, -1.0])
+    out = block(h)
+    assert out.shape == h.shape
+
+
+def test_neural_bundle_portable_with_weights_sidecar(tmp_path: Path):
+    reset_parser()
+    ir = ast_to_ir(parse_ax("y = neural([x, 1.0]);"))
+    abi = extract_global_abi(ir, max_vars=16)
+    aw = extract_abi_widths(ir, max_vars=16)
+    block = InterpretedBlock(ir, abi, abi_widths=aw)
+    src = tmp_path / "model.axb"
+    save_bundle(block, src)
+    dest_dir = tmp_path / "moved"
+    dest_dir.mkdir()
+    dest = dest_dir / "model.axb"
+    dest.write_bytes(src.read_bytes())
+    weights_src = tmp_path / "model.axb.weights.pt"
+    assert weights_src.is_file()
+    (dest_dir / "model.axb.weights.pt").write_bytes(weights_src.read_bytes())
+    loaded = load_bundle(dest)
+    h = torch.zeros(1, 16)
+    h[0, abi["x"]] = 2.0
+    with torch.no_grad():
+        assert torch.allclose(block(h), loaded(h))
+
+
+def test_neural_bundle_missing_sidecar_raises(tmp_path: Path):
+    reset_parser()
+    ir = ast_to_ir(parse_ax("y = neural([x, 1.0]);"))
+    abi = extract_global_abi(ir, max_vars=16)
+    aw = extract_abi_widths(ir, max_vars=16)
+    block = InterpretedBlock(ir, abi, abi_widths=aw)
+    p = tmp_path / "orphan.axb"
+    save_bundle(block, p)
+    (tmp_path / "orphan.axb.weights.pt").unlink()
+    with pytest.raises(ValueError, match="weights"):
+        load_bundle(p)
+
+
+def test_locked_bundle_missing_lock_mode_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    pytest.importorskip("cryptography")
+    monkeypatch.setenv("AXIOM_BUNDLE_SECRET", "lock-test")
+    b = _simple_block()
+    p = tmp_path / "m.axb"
+    save_bundle(b, p)
+    from axiom.compiler.deserializer import _read_bundle_payload
+
+    payload = _read_bundle_payload(p, trusted=True)
+    apply_lock_to_payload(payload, "env-secret")
+    del payload["lock"]["lock_mode"]
+    with pytest.raises(BundleUnlockError, match="lock_mode"):
+        unlock_payload(payload)
+
+
 def test_lenient_default_unchanged():
     row = {"x": 2.0}
     h = _inputs_to_tensor(row, {"x": 0, "y": 1}, 16, device=torch.device("cpu"), dtype=torch.float32)

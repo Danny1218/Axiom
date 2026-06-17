@@ -312,6 +312,7 @@ def test_cli_serve_uses_host_port_env(sample_axb: Path, monkeypatch: pytest.Monk
     """Container / compose set HOST and PORT; must override CLI defaults."""
     pytest.importorskip("uvicorn")
     monkeypatch.setenv("AXIOM_BUNDLE_PATH", str(sample_axb))
+    monkeypatch.setenv("AXIOM_API_KEY", "test-key")
     monkeypatch.setenv("HOST", "0.0.0.0")
     monkeypatch.setenv("PORT", "9123")
     ran: list[tuple[str, int]] = []
@@ -331,6 +332,7 @@ def test_cli_serve_falls_back_to_args_when_env_unset(sample_axb: Path, monkeypat
     monkeypatch.setenv("AXIOM_BUNDLE_PATH", str(sample_axb))
     monkeypatch.delenv("HOST", raising=False)
     monkeypatch.delenv("PORT", raising=False)
+    monkeypatch.delenv("AXIOM_REQUIRE_API_KEY", raising=False)
     ran: list[tuple[str, int]] = []
 
     def fake_run(app, host, port, log_level="info"):
@@ -341,3 +343,30 @@ def test_cli_serve_falls_back_to_args_when_env_unset(sample_axb: Path, monkeypat
 
     main(["serve", "--host", "127.0.0.1", "--port", "8000"])
     assert ran == [("127.0.0.1", 8000)]
+
+
+def test_cli_serve_rejects_public_bind_without_api_key(sample_axb: Path, monkeypatch: pytest.MonkeyPatch):
+    pytest.importorskip("uvicorn")
+    monkeypatch.setenv("AXIOM_BUNDLE_PATH", str(sample_axb))
+    monkeypatch.delenv("AXIOM_API_KEY", raising=False)
+    monkeypatch.delenv("AXIOM_ALLOW_INSECURE_SERVE", raising=False)
+    from axiom.cli import main
+
+    with pytest.raises(SystemExit):
+        main(["serve", "--host", "0.0.0.0", "--port", "8000"])
+
+
+def test_cli_serve_allows_insecure_public_bind_flag(sample_axb: Path, monkeypatch: pytest.MonkeyPatch):
+    pytest.importorskip("uvicorn")
+    monkeypatch.setenv("AXIOM_BUNDLE_PATH", str(sample_axb))
+    monkeypatch.delenv("AXIOM_API_KEY", raising=False)
+    ran: list[tuple[str, int]] = []
+
+    def fake_run(app, host, port, log_level="info"):
+        ran.append((host, int(port)))
+
+    monkeypatch.setattr("uvicorn.run", fake_run)
+    from axiom.cli import main
+
+    main(["serve", "--host", "0.0.0.0", "--port", "8000", "--allow-insecure-serve"])
+    assert ran == [("0.0.0.0", 8000)]
