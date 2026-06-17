@@ -10,7 +10,7 @@ import pytest
 import axiom.cli as cli_mod
 from axiom.cli import main
 from axiom.compiler.parser import reset_parser
-from axiom.copilot.benchmarks import BenchmarkDispatchExpert
+from axiom.copilot.benchmarks import BenchmarkDispatchExpert, default_benchmark_tasks_json_path, load_benchmark_tasks_json_path
 from axiom.experts.base import ExpertDraftRequest, ExpertDraftResponse, ExpertRepairRequest, ExpertTraceSummaryRequest
 from axiom.experts.onyx_qwen import COMPLETION_OVERRIDES_CONTEXT_KEY
 
@@ -135,6 +135,8 @@ def test_copilot_benchmark_benchmark_dispatch_backend_runs_current_symbolic_suit
 
 def test_copilot_benchmark_benchmark_dispatch_backend_runs_next_milestone_suite(tmp_path: Path, capsys):
     root = Path(__file__).resolve().parents[1]
+    task_path = root / "benchmarks" / "copilot_symbolic_next_milestone_tasks.json"
+    tasks = load_benchmark_tasks_json_path(task_path)
     out_json = tmp_path / "symbolic_next_suite.json"
     main(
         [
@@ -142,7 +144,7 @@ def test_copilot_benchmark_benchmark_dispatch_backend_runs_next_milestone_suite(
             "--backend",
             "benchmark-dispatch",
             "--task-json",
-            str(root / "benchmarks" / "copilot_symbolic_next_milestone_tasks.json"),
+            str(task_path),
             "--out",
             str(out_json),
         ]
@@ -152,12 +154,13 @@ def test_copilot_benchmark_benchmark_dispatch_backend_runs_next_milestone_suite(
     data = json.loads(out_json.read_text(encoding="utf-8"))
     assert data["kind"] == "axiom.copilot.benchmark_suite"
     assert data["run_options"] == {"draft": True, "search": True}
-    assert data["draft_summary"]["task_count"] == 8
-    assert data["draft_summary"]["compile_ok_count"] == 8
-    assert data["draft_summary"]["metric_ok_count"] == 8
-    assert data["search_summary"]["task_count"] == 8
-    assert data["search_summary"]["compile_ok_count"] == 8
-    assert data["search_summary"]["metric_ok_count"] == 8
+    n = len(tasks)
+    assert data["draft_summary"]["task_count"] == n
+    assert data["draft_summary"]["compile_ok_count"] == n
+    assert data["draft_summary"]["metric_ok_count"] == n
+    assert data["search_summary"]["task_count"] == n
+    assert data["search_summary"]["compile_ok_count"] == n
+    assert data["search_summary"]["metric_ok_count"] == n
 
 
 def test_copilot_benchmark_benchmark_dispatch_backend_runs_generalization_stress_suite(tmp_path: Path, capsys):
@@ -316,3 +319,29 @@ def test_copilot_benchmark_bad_task_json(tmp_path: Path, monkeypatch):
             ]
         )
     assert "task-json" in str(e.value).lower() or "tasks" in str(e.value).lower()
+
+
+def test_copilot_benchmark_gate_exits_on_failure(tmp_path: Path, monkeypatch, capsys):
+    class _BrokenExpert(BenchmarkDispatchExpert):
+        def draft_program(self, request: ExpertDraftRequest) -> ExpertDraftResponse:
+            return ExpertDraftResponse(ax_source="this is not valid .ax", backend_name="broken")
+
+    monkeypatch.setattr(cli_mod, "_make_copilot_expert", lambda _a: _BrokenExpert())
+    out_json = tmp_path / "gate_fail.json"
+    with pytest.raises(SystemExit) as e:
+        main(
+            [
+                "copilot-benchmark",
+                "--backend",
+                "benchmark-dispatch",
+                "--draft-only",
+                "--task-json",
+                str(default_benchmark_tasks_json_path()),
+                "--out",
+                str(out_json),
+                "--gate",
+            ]
+        )
+    assert e.value.code == 1
+    err = capsys.readouterr().err
+    assert "GATE FAILED" in err

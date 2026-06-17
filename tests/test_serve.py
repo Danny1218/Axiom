@@ -208,12 +208,13 @@ def test_report_html_inline(sample_axb: Path):
 def test_report_writes_file(sample_axb: Path, tmp_path: Path):
     from fastapi.testclient import TestClient
 
-    out = tmp_path / "r.html"
-    app = create_app(sample_axb)
+    sandbox = tmp_path / "reports"
+    out = sandbox / "r.html"
+    app = create_app(sample_axb, report_output_dir=sandbox)
     c = TestClient(app)
     r = c.post(
         "/report",
-        json={"inputs": {}, "output_path": str(out)},
+        json={"inputs": {}, "output_path": "r.html"},
     )
     assert r.status_code == 200
     body = r.json()
@@ -221,6 +222,55 @@ def test_report_writes_file(sample_axb: Path, tmp_path: Path):
     assert body["output_path"] == str(out.resolve())
     assert out.is_file()
     assert "<!DOCTYPE html>" in out.read_text(encoding="utf-8")
+
+
+def test_report_output_path_requires_sandbox(sample_axb: Path):
+    from fastapi.testclient import TestClient
+
+    app = create_app(sample_axb)
+    c = TestClient(app)
+    r = c.post("/report", json={"inputs": {}, "output_path": "escape.html"})
+    assert r.status_code == 400
+    assert "sandbox" in r.json()["detail"].lower() or "output_path" in r.json()["detail"].lower()
+
+
+def test_report_output_path_rejects_escape(sample_axb: Path, tmp_path: Path):
+    from fastapi.testclient import TestClient
+
+    sandbox = tmp_path / "reports"
+    app = create_app(sample_axb, report_output_dir=sandbox)
+    c = TestClient(app)
+    r = c.post("/report", json={"inputs": {}, "output_path": "../outside.html"})
+    assert r.status_code == 400
+    assert "escapes" in r.json()["detail"].lower()
+
+
+def test_auth_rejects_wrong_bearer_token(sample_axb: Path, monkeypatch: pytest.MonkeyPatch):
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setenv("AXIOM_API_KEY", "secret-token")
+    app = create_app(sample_axb)
+    c = TestClient(app)
+    r = c.post(
+        "/predict",
+        json={"inputs": {}},
+        headers={"Authorization": "Bearer wrong-token"},
+    )
+    assert r.status_code == 401
+
+
+def test_auth_rejects_wrong_x_api_key(sample_axb: Path, monkeypatch: pytest.MonkeyPatch):
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setenv("AXIOM_API_KEY", "secret-token")
+    app = create_app(sample_axb)
+    c = TestClient(app)
+    r = c.post(
+        "/predict",
+        json={"inputs": {}},
+        headers={"X-API-Key": "wrong-token"},
+    )
+    assert r.status_code == 401
 
 
 def test_auth_required_when_env_set(sample_axb: Path, monkeypatch: pytest.MonkeyPatch):

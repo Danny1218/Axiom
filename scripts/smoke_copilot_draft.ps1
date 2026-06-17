@@ -2,7 +2,8 @@ param(
     [string]$Backend = "onyx-qwen",
     [string]$ExpertUrl = "http://127.0.0.1:8000",
     [string]$ExpertModel = "onyx-qwen-production-v1",
-    [string]$ExpertApiKey = "sk-morph-b2b-test",
+    [string]$ExpertApiKey = "",
+    [string]$ExpertApiKeyFile = "",
     [double]$Temperature = 0,
     [string]$TaskJson = "benchmarks/copilot_symbolic_and_generalization_tasks.json",
     [string]$OutJson = "benchmark_symbolic_snapshot.json",
@@ -11,6 +12,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+
+. (Join-Path $PSScriptRoot "_smoke_common.ps1")
+
+$ExpertApiKey = Resolve-ExpertApiKey -Explicit $ExpertApiKey -KeyFile $ExpertApiKeyFile
 
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
@@ -138,7 +143,8 @@ $baselinePath = if ([string]::IsNullOrWhiteSpace($CompareJson)) { $OutJson } els
 $baselineDoc = _Read-JsonDoc -Path $baselinePath
 $baselineTasks = _Index-Tasks -Doc $baselineDoc
 
-$cmd = @(
+$cmd = [System.Collections.Generic.List[string]]::new()
+$cmd.AddRange(@(
     "axiom", "copilot-benchmark",
     "--backend", $Backend,
     "--expert-url", $ExpertUrl,
@@ -147,13 +153,14 @@ $cmd = @(
     "--draft-only",
     "--task-json", $TaskJson,
     "--out", $OutJson
-)
-if (-not [string]::IsNullOrWhiteSpace($ExpertApiKey)) {
-    $cmd += @("--expert-api-key", $ExpertApiKey)
+))
+if ($Backend -eq "benchmark-dispatch") {
+    $cmd.Add("--gate") | Out-Null
 }
+Append-ExpertApiKeyArgs -Command $cmd -ExpertApiKey $ExpertApiKey
 
-Write-Host ("==> Running: {0}" -f ($cmd -join " ")) -ForegroundColor Cyan
-& $cmd[0] $cmd[1..($cmd.Length - 1)]
+Write-Host ("==> Running: {0}" -f (Format-RedactedCommand -Command $cmd.ToArray())) -ForegroundColor Cyan
+& $cmd[0] $cmd[1..($cmd.Count - 1)]
 if ($LASTEXITCODE -ne 0) {
     throw "copilot-benchmark draft-only run failed with exit code $LASTEXITCODE."
 }

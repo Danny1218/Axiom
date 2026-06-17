@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "kind": "axiom.ci_baseline",
+  "recorded_at": "2026-06-17",
+  "environment": {
+    "os": "windows",
+    "python": "3.12",
+    "note": "Local dev venv; mirrors .github/workflows/ci.yml install path"
+  },
+  "pytest": {
+    "command": "python -m pip install -e \".[dev,copilot,serve]\" && python -m pip install -r constraints-dev.txt && python -m pytest tests -q",
+    "result": "803 passed, 6 skipped, 8 failed",
+    "artifact": "ci_pytest_output.txt",
+    "known_failures": [
+      "tests/test_hybrid_execution.py::test_hybrid_graph_compiles_aot_eager",
+      "tests/test_jit_compile.py::test_compile_aot_eager_matches_eager_on_mixed_ir_graph",
+      "tests/test_jit_compile.py::test_compile_aot_eager_fullgraph_conditional_only_matches_eager",
+      "tests/test_meta_compiler.py::test_compile_interpreted_block_vector_literal_aot_eager",
+      "tests/test_phase12_fullgraph_loops.py::test_compile_fullgraph_while_loop_matches_eager",
+      "tests/test_phase12_fullgraph_loops.py::test_compile_fullgraph_mixed_cond_and_loop_matches_eager"
+    ],
+    "known_failure_reason": "torch.compile fullgraph/aot_eager probes are environment-sensitive on Windows/PyTorch builds; not CI blockers per readme operator note"
+  },
+  "copilot_milestone": {
+    "command": "axiom copilot-benchmark --backend benchmark-dispatch --task-json benchmarks/copilot_symbolic_and_generalization_tasks.json --out benchmark_symbolic_suite_ci_local.json --gate --draft-only",
+    "draft_summary": {
+      "task_count": 10,
+      "compile_ok_count": 10,
+      "metric_ok_count": 10
+    },
+    "gate": "pass",
+    "workflow_artifacts": [
+      "benchmark_symbolic_snapshot_ci.json",
+      "benchmark_symbolic_suite_ci.json",
+      "benchmark_symbolic_suite_next_milestone_ci.json",
+      "benchmark_symbolic_suite_generalization_stress_ci.json",
+      "benchmark_symbolic_suite_robustness_ambiguity_stress_ci.json"
+    ]
+  }
+}

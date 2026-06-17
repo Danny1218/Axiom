@@ -1,10 +1,12 @@
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
+. (Join-Path $PSScriptRoot "_smoke_common.ps1")
+
 $Backend = "onyx-qwen"
 $ExpertUrl = "http://127.0.0.1:8000"
 $ExpertModel = "onyx-qwen-production-v1"
-$ExpertApiKey = "sk-morph-b2b-test"
+$ExpertApiKey = Resolve-ExpertApiKey
 
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
@@ -20,7 +22,6 @@ $steps = @(
             "--iterations", "6",
             "--expert-url", $ExpertUrl,
             "--expert-model", $ExpertModel,
-            "--expert-api-key", $ExpertApiKey,
             "--artifact-dir", "debug_double_x",
             "--report-out", "debug_double_x/search_report_cli.json",
             "--out", "debug_double_x/best.ax"
@@ -36,7 +37,6 @@ $steps = @(
             "--iterations", "6",
             "--expert-url", $ExpertUrl,
             "--expert-model", $ExpertModel,
-            "--expert-api-key", $ExpertApiKey,
             "--artifact-dir", "showcase_double_x",
             "--summary-out", "showcase_double_x/pipeline_summary.json",
             "--out", "showcase_double_x.ax"
@@ -52,7 +52,6 @@ $steps = @(
             "--iterations", "8",
             "--expert-url", $ExpertUrl,
             "--expert-model", $ExpertModel,
-            "--expert-api-key", $ExpertApiKey,
             "--artifact-dir", "debug_risk_score",
             "--report-out", "debug_risk_score/search_report_cli.json",
             "--out", "debug_risk_score/best.ax"
@@ -68,7 +67,6 @@ $steps = @(
             "--iterations", "8",
             "--expert-url", $ExpertUrl,
             "--expert-model", $ExpertModel,
-            "--expert-api-key", $ExpertApiKey,
             "--artifact-dir", "showcase_risk_score",
             "--summary-out", "showcase_risk_score/pipeline_summary.json",
             "--out", "showcase_risk_score.ax"
@@ -81,8 +79,11 @@ $failedStep = $null
 
 try {
     foreach ($step in $steps) {
-        Write-Host "==> Running: $($step.Name)" -ForegroundColor Cyan
-        & $step.Command[0] $step.Command[1..($step.Command.Length - 1)]
+        $cmd = [System.Collections.Generic.List[string]]::new()
+        $cmd.AddRange([string[]]$step.Command)
+        Append-ExpertApiKeyArgs -Command $cmd -ExpertApiKey $ExpertApiKey
+        Write-Host ("==> Running: {0} ({1})" -f $step.Name, (Format-RedactedCommand -Command $cmd.ToArray())) -ForegroundColor Cyan
+        & $cmd[0] $cmd[1..($cmd.Count - 1)]
         if ($LASTEXITCODE -ne 0) {
             throw "Command failed with exit code ${LASTEXITCODE}: $($step.Name)"
         }

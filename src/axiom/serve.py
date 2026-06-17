@@ -7,6 +7,7 @@ uvicorn. External copilots may treat this as a headless ``AxiomModel`` over HTTP
 
 from __future__ import annotations
 
+import hmac
 import os
 from pathlib import Path
 from typing import Dict, Mapping, Optional, Union
@@ -44,6 +45,12 @@ def _expected_api_key() -> Optional[str]:
     return k or None
 
 
+def _api_key_matches(provided: str, expected: str) -> bool:
+    if not provided or not expected:
+        return False
+    return hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8"))
+
+
 def verify_api_key(request: Request) -> None:
     """Require Authorization: Bearer <key> or X-API-Key when ``AXIOM_API_KEY`` is set."""
     expected = _expected_api_key()
@@ -54,9 +61,9 @@ def verify_api_key(request: Request) -> None:
     ok = False
     if auth.lower().startswith("bearer "):
         token = auth[7:].strip()
-        ok = token == expected
-    if x_key == expected:
-        ok = True
+        ok = _api_key_matches(token, expected)
+    if x_key:
+        ok = ok or _api_key_matches(x_key, expected)
     if not ok:
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
 

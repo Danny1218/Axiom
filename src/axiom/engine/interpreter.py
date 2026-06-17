@@ -579,6 +579,9 @@ def exec_stmt(
         parent_m = _broadcast_mask(active_mask, nv)
         aa = path_a * parent_m
         env[k] = aa * nv + (1.0 - aa) * old
+        defined = env_defined_set()
+        if defined is not None:
+            mark_defined(defined, k)
     elif op == "OP_EXPR_STMT":
         eval_expr(
             env,

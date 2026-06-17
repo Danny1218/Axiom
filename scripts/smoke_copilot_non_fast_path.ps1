@@ -1,10 +1,12 @@
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
+. (Join-Path $PSScriptRoot "_smoke_common.ps1")
+
 $Backend = "onyx-qwen"
 $ExpertUrl = "http://127.0.0.1:8000"
 $ExpertModel = "onyx-qwen-production-v1"
-$ExpertApiKey = "sk-morph-b2b-test"
+$ExpertApiKey = Resolve-ExpertApiKey
 
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
@@ -76,7 +78,6 @@ $steps = @(
             "--iterations", "8",
             "--expert-url", $ExpertUrl,
             "--expert-model", $ExpertModel,
-            "--expert-api-key", $ExpertApiKey,
             "--artifact-dir", "debug_piecewise_threshold",
             "--report-out", "debug_piecewise_threshold/search_report_cli.json",
             "--out", "debug_piecewise_threshold/best.ax"
@@ -95,7 +96,6 @@ $steps = @(
             "--iterations", "8",
             "--expert-url", $ExpertUrl,
             "--expert-model", $ExpertModel,
-            "--expert-api-key", $ExpertApiKey,
             "--artifact-dir", "showcase_piecewise_threshold",
             "--summary-out", "showcase_piecewise_threshold/pipeline_summary.json",
             "--out", "showcase_piecewise_threshold.ax"
@@ -114,7 +114,6 @@ $steps = @(
             "--iterations", "8",
             "--expert-url", $ExpertUrl,
             "--expert-model", $ExpertModel,
-            "--expert-api-key", $ExpertApiKey,
             "--artifact-dir", "debug_three_input_affine",
             "--report-out", "debug_three_input_affine/search_report_cli.json",
             "--out", "debug_three_input_affine/best.ax"
@@ -133,7 +132,6 @@ $steps = @(
             "--iterations", "8",
             "--expert-url", $ExpertUrl,
             "--expert-model", $ExpertModel,
-            "--expert-api-key", $ExpertApiKey,
             "--artifact-dir", "showcase_three_input_affine",
             "--summary-out", "showcase_three_input_affine/pipeline_summary.json",
             "--out", "showcase_three_input_affine.ax"
@@ -147,8 +145,11 @@ $failedStep = $null
 
 try {
     foreach ($step in $steps) {
-        Write-Host "==> Running: $($step.Name)" -ForegroundColor Cyan
-        & $step.Command[0] $step.Command[1..($step.Command.Length - 1)]
+        $cmd = [System.Collections.Generic.List[string]]::new()
+        $cmd.AddRange([string[]]$step.Command)
+        Append-ExpertApiKeyArgs -Command $cmd -ExpertApiKey $ExpertApiKey
+        Write-Host ("==> Running: {0} ({1})" -f $step.Name, (Format-RedactedCommand -Command $cmd.ToArray())) -ForegroundColor Cyan
+        & $cmd[0] $cmd[1..($cmd.Count - 1)]
         if ($LASTEXITCODE -ne 0) {
             throw "Command failed with exit code ${LASTEXITCODE}: $($step.Name)"
         }

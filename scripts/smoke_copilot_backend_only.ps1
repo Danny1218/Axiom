@@ -1,10 +1,12 @@
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
+. (Join-Path $PSScriptRoot "_smoke_common.ps1")
+
 $Backend = "onyx-qwen"
 $ExpertUrl = "http://127.0.0.1:8000"
 $ExpertModel = "onyx-qwen-production-v1"
-$ExpertApiKey = "sk-morph-b2b-test"
+$ExpertApiKey = Resolve-ExpertApiKey
 
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
@@ -95,7 +97,6 @@ $steps = @(
             "--iterations", "10",
             "--expert-url", $ExpertUrl,
             "--expert-model", $ExpertModel,
-            "--expert-api-key", $ExpertApiKey,
             "--artifact-dir", "debug_backend_only_quadratic",
             "--report-out", "debug_backend_only_quadratic/search_report_cli.json",
             "--out", "debug_backend_only_quadratic/best.ax"
@@ -115,7 +116,6 @@ $steps = @(
             "--iterations", "10",
             "--expert-url", $ExpertUrl,
             "--expert-model", $ExpertModel,
-            "--expert-api-key", $ExpertApiKey,
             "--artifact-dir", "showcase_backend_only_quadratic",
             "--summary-out", "showcase_backend_only_quadratic/pipeline_summary.json",
             "--out", "showcase_backend_only_quadratic.ax"
@@ -135,7 +135,6 @@ $steps = @(
             "--iterations", "10",
             "--expert-url", $ExpertUrl,
             "--expert-model", $ExpertModel,
-            "--expert-api-key", $ExpertApiKey,
             "--artifact-dir", "debug_backend_only_max_of_two",
             "--report-out", "debug_backend_only_max_of_two/search_report_cli.json",
             "--out", "debug_backend_only_max_of_two/best.ax"
@@ -155,7 +154,6 @@ $steps = @(
             "--iterations", "10",
             "--expert-url", $ExpertUrl,
             "--expert-model", $ExpertModel,
-            "--expert-api-key", $ExpertApiKey,
             "--artifact-dir", "showcase_backend_only_max_of_two",
             "--summary-out", "showcase_backend_only_max_of_two/pipeline_summary.json",
             "--out", "showcase_backend_only_max_of_two.ax"
@@ -175,7 +173,6 @@ $steps = @(
             "--iterations", "10",
             "--expert-url", $ExpertUrl,
             "--expert-model", $ExpertModel,
-            "--expert-api-key", $ExpertApiKey,
             "--artifact-dir", "debug_backend_only_minmax_blend",
             "--report-out", "debug_backend_only_minmax_blend/search_report_cli.json",
             "--out", "debug_backend_only_minmax_blend/best.ax"
@@ -195,7 +192,6 @@ $steps = @(
             "--iterations", "10",
             "--expert-url", $ExpertUrl,
             "--expert-model", $ExpertModel,
-            "--expert-api-key", $ExpertApiKey,
             "--artifact-dir", "showcase_backend_only_minmax_blend",
             "--summary-out", "showcase_backend_only_minmax_blend/pipeline_summary.json",
             "--out", "showcase_backend_only_minmax_blend.ax"
@@ -215,7 +211,6 @@ $steps = @(
             "--iterations", "10",
             "--expert-url", $ExpertUrl,
             "--expert-model", $ExpertModel,
-            "--expert-api-key", $ExpertApiKey,
             "--artifact-dir", "debug_backend_only_quadratic_with_cross_term",
             "--report-out", "debug_backend_only_quadratic_with_cross_term/search_report_cli.json",
             "--out", "debug_backend_only_quadratic_with_cross_term/best.ax"
@@ -235,7 +230,6 @@ $steps = @(
             "--iterations", "10",
             "--expert-url", $ExpertUrl,
             "--expert-model", $ExpertModel,
-            "--expert-api-key", $ExpertApiKey,
             "--artifact-dir", "showcase_backend_only_quadratic_with_cross_term",
             "--summary-out", "showcase_backend_only_quadratic_with_cross_term/pipeline_summary.json",
             "--out", "showcase_backend_only_quadratic_with_cross_term.ax"
@@ -255,7 +249,6 @@ $steps = @(
             "--iterations", "10",
             "--expert-url", $ExpertUrl,
             "--expert-model", $ExpertModel,
-            "--expert-api-key", $ExpertApiKey,
             "--artifact-dir", "debug_backend_only_nested_piecewise",
             "--report-out", "debug_backend_only_nested_piecewise/search_report_cli.json",
             "--out", "debug_backend_only_nested_piecewise/best.ax"
@@ -275,7 +268,6 @@ $steps = @(
             "--iterations", "10",
             "--expert-url", $ExpertUrl,
             "--expert-model", $ExpertModel,
-            "--expert-api-key", $ExpertApiKey,
             "--artifact-dir", "showcase_backend_only_nested_piecewise",
             "--summary-out", "showcase_backend_only_nested_piecewise/pipeline_summary.json",
             "--out", "showcase_backend_only_nested_piecewise.ax"
@@ -295,7 +287,6 @@ $steps = @(
             "--iterations", "10",
             "--expert-url", $ExpertUrl,
             "--expert-model", $ExpertModel,
-            "--expert-api-key", $ExpertApiKey,
             "--artifact-dir", "debug_backend_only_three_way_maxmin",
             "--report-out", "debug_backend_only_three_way_maxmin/search_report_cli.json",
             "--out", "debug_backend_only_three_way_maxmin/best.ax"
@@ -315,7 +306,6 @@ $steps = @(
             "--iterations", "10",
             "--expert-url", $ExpertUrl,
             "--expert-model", $ExpertModel,
-            "--expert-api-key", $ExpertApiKey,
             "--artifact-dir", "showcase_backend_only_three_way_maxmin",
             "--summary-out", "showcase_backend_only_three_way_maxmin/pipeline_summary.json",
             "--out", "showcase_backend_only_three_way_maxmin.ax"
@@ -329,8 +319,11 @@ $failedStep = $null
 
 try {
     foreach ($step in $steps) {
-        Write-Host "==> Running: $($step.Name)" -ForegroundColor Cyan
-        & $step.Command[0] $step.Command[1..($step.Command.Length - 1)]
+        $cmd = [System.Collections.Generic.List[string]]::new()
+        $cmd.AddRange([string[]]$step.Command)
+        Append-ExpertApiKeyArgs -Command $cmd -ExpertApiKey $ExpertApiKey
+        Write-Host ("==> Running: {0} ({1})" -f $step.Name, (Format-RedactedCommand -Command $cmd.ToArray())) -ForegroundColor Cyan
+        & $cmd[0] $cmd[1..($cmd.Count - 1)]
         if ($LASTEXITCODE -ne 0) {
             throw "Command failed with exit code ${LASTEXITCODE}: $($step.Name)"
         }

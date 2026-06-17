@@ -1087,7 +1087,12 @@ def _print_copilot_benchmark_summary(doc: dict) -> None:
 
 
 def _cmd_copilot_benchmark(args: argparse.Namespace) -> None:
-    from axiom.copilot.benchmarks import benchmark_suite_to_dict, load_benchmark_tasks_json_path, run_benchmark_suite
+    from axiom.copilot.benchmarks import (
+        benchmark_gate_violations,
+        benchmark_suite_to_dict,
+        load_benchmark_tasks_json_path,
+        run_benchmark_suite,
+    )
 
     expert = _make_copilot_expert(args)
     if args.draft_only and args.search_only:
@@ -1114,6 +1119,18 @@ def _cmd_copilot_benchmark(args: argparse.Namespace) -> None:
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(json.dumps(doc, indent=2, ensure_ascii=False), encoding="utf-8")
         print(f"Wrote benchmark JSON to {args.out}", file=sys.stderr)
+    if getattr(args, "gate", False):
+        violations = benchmark_gate_violations(
+            doc,
+            require_draft=run_draft,
+            require_search=run_search,
+        )
+        if violations:
+            prefix = "[copilot-benchmark]"
+            print(f"{prefix} GATE FAILED ({len(violations)} violation(s)):", file=sys.stderr)
+            for v in violations:
+                print(f"{prefix}   {v}", file=sys.stderr)
+            raise SystemExit(1)
 
 
 def _add_copilot_benchmark_backend_args(p: argparse.ArgumentParser) -> None:
@@ -1735,6 +1752,11 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         dest="search_only",
         help="Run only the search arm (skip draft-only baseline).",
+    )
+    p_cb.add_argument(
+        "--gate",
+        action="store_true",
+        help="Exit non-zero when any task fails compile_ok or metric_ok for enabled arms.",
     )
     _add_copilot_completion_args(p_cb)
     p_cb.set_defaults(_handler=_cmd_copilot_benchmark)

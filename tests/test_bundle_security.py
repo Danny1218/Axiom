@@ -118,6 +118,24 @@ def test_strict_index_out_of_range():
         block(h)
 
 
+def test_strict_blend_assign_marks_branch_local_defined():
+    """OP_BLEND_ASSIGN inside inlined early-return must mark variables defined for later loads."""
+    reset_parser()
+    ir = ast_to_ir(
+        parse_ax(
+            "def h(a, b) { if (a > 0) { t = 2.0; } else { t = 1.0; } return t; } o = h(a, b);"
+        )
+    )
+    abi = extract_global_abi(ir, max_vars=24)
+    aw = extract_abi_widths(ir, max_vars=24)
+    block = InterpretedBlock(ir, abi, abi_widths=aw, strict=True)
+    h = torch.zeros(4, 24)
+    h[:, abi["a"]] = torch.tensor([-1.0, 1.0, 0.0, 2.0])
+    h[:, abi["b"]] = torch.tensor([0.0, 0.0, 0.0, 0.0])
+    out = block(h)
+    assert torch.allclose(out[:, abi["o"]], torch.tensor([1.0, 2.0, 1.0, 2.0]))
+
+
 def test_lenient_default_unchanged():
     row = {"x": 2.0}
     h = _inputs_to_tensor(row, {"x": 0, "y": 1}, 16, device=torch.device("cpu"), dtype=torch.float32)

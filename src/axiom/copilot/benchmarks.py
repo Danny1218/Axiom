@@ -692,6 +692,76 @@ def default_benchmark_tasks_json_path() -> Path:
     return Path(__file__).resolve().parent / "fixtures" / "benchmark_tasks.json"
 
 
+def benchmark_gate_violations(
+    doc: Dict[str, Any],
+    *,
+    require_draft: bool = True,
+    require_search: bool = True,
+) -> List[str]:
+    """Return human-readable gate violations for a :func:`benchmark_suite_to_dict` document."""
+    violations: List[str] = []
+    run_opts = doc.get("run_options") or {}
+    if require_draft and not bool(run_opts.get("draft", True)):
+        violations.append("gate requires draft arm but run_options.draft is false")
+    if require_search and not bool(run_opts.get("search", True)):
+        violations.append("gate requires search arm but run_options.search is false")
+
+    def _check_arm(arm: str, summary_key: str) -> None:
+        summary = doc.get(summary_key)
+        tasks = doc.get("tasks")
+        if not isinstance(tasks, list):
+            violations.append(f"{arm}: missing tasks array")
+            return
+        if not isinstance(summary, dict):
+            violations.append(f"{arm}: missing {summary_key}")
+            return
+        task_count = int(summary.get("task_count") or 0)
+        compile_ok = int(summary.get("compile_ok_count") or 0)
+        metric_ok = int(summary.get("metric_ok_count") or 0)
+        if compile_ok < task_count:
+            violations.append(f"{arm}: compile_ok_count {compile_ok} < task_count {task_count}")
+        if metric_ok < task_count:
+            violations.append(f"{arm}: metric_ok_count {metric_ok} < task_count {task_count}")
+        for row in tasks:
+            if not isinstance(row, dict):
+                continue
+            rec = row.get(arm)
+            if not isinstance(rec, dict):
+                violations.append(f"{arm}: task {row.get('task_id', '?')!r} missing {arm} record")
+                continue
+            tid = str(row.get("task_id") or rec.get("task_id") or "?")
+            if not bool(rec.get("compile_ok")):
+                detail = _first_failure_detail(rec)
+                violations.append(f"{arm}: task {tid!r} compile_ok=false {detail}")
+            elif not bool(rec.get("metric_ok")):
+                detail = _first_failure_detail(rec)
+                violations.append(f"{arm}: task {tid!r} metric_ok=false {detail}")
+
+    if require_draft:
+        _check_arm("draft_only", "draft_summary")
+    if require_search:
+        _check_arm("search", "search_summary")
+    return violations
+
+
+def _first_failure_detail(rec: Dict[str, Any]) -> str:
+    ev = rec.get("evaluation")
+    if not isinstance(ev, dict):
+        return ""
+    failures = ev.get("failure_summaries")
+    if not isinstance(failures, list) or not failures:
+        return ""
+    first = failures[0]
+    if not isinstance(first, dict):
+        return ""
+    kind = str(first.get("kind") or first.get("stage") or "")
+    msg = str(first.get("detail") or first.get("message") or "")
+    text = " ".join(p for p in (kind, msg) if p).strip()
+    if len(text) > 160:
+        return f"({text[:160]}...)"
+    return f"({text})" if text else ""
+
+
 __all__ = [
     "BENCHMARK_SUITE_SCHEMA_VERSION",
     "DEFAULT_BENCHMARK_TASKS",
@@ -701,6 +771,7 @@ __all__ = [
     "BenchmarkSuiteResult",
     "BenchmarkTask",
     "BenchmarkTaskComparison",
+    "benchmark_gate_violations",
     "benchmark_suite_to_dict",
     "benchmark_tasks_from_json_dict",
     "compile_success",

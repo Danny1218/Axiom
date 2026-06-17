@@ -17,6 +17,8 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
+. (Join-Path $PSScriptRoot "_smoke_common.ps1")
+
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
@@ -161,14 +163,19 @@ $cmd = @(
     "--max-tokens", ("{0}" -f $MaxTokens),
     "--out", $OutJson
 )
+if ($Backend -eq "benchmark-dispatch") {
+    $cmd += "--gate"
+}
 if ($Backend -ne "benchmark-dispatch") {
+    $ExpertApiKey = Resolve-ExpertApiKey -Explicit $ExpertApiKey
     $cmd += @("--expert-url", $ExpertUrl, "--expert-model", $ExpertModel)
-    if (-not [string]::IsNullOrWhiteSpace($ExpertApiKey)) {
-        $cmd += @("--expert-api-key", $ExpertApiKey)
-    }
+    $cmdList = [System.Collections.Generic.List[string]]::new()
+    $cmdList.AddRange([string[]]$cmd)
+    Append-ExpertApiKeyArgs -Command $cmdList -ExpertApiKey $ExpertApiKey
+    $cmd = $cmdList.ToArray()
 }
 
-Write-Host ("==> Running: {0}" -f ($cmd -join " ")) -ForegroundColor Cyan
+Write-Host ("==> Running: {0}" -f (Format-RedactedCommand -Command $cmd)) -ForegroundColor Cyan
 try {
     & $cmd[0] $cmd[1..($cmd.Length - 1)]
     if ($LASTEXITCODE -ne 0) {

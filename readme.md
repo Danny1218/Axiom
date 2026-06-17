@@ -216,55 +216,55 @@ Row file format (JSON array): each element is `{"inputs": {...}, "expected": {..
 
 # double_x — copilot-search
 axiom copilot-search --backend onyx-qwen --goal "Compute y as double of x." `
-  --expert-url "http://127.0.0.1:8000" --expert-model "onyx-qwen-production-v1" --expert-api-key "sk-morph-b2b-test" `
+  --expert-url "http://127.0.0.1:8000" --expert-model "onyx-qwen-production-v1" `
   --examples-json ./examples/double_x.json --iterations 6 `
   --artifact-dir ./debug_double_x --out ./debug_double_x/best.ax --report-out ./debug_double_x/search_report.json
 
 # double_x — copilot-run
 axiom copilot-run --backend onyx-qwen --goal "Compute y as double of x." `
-  --expert-url "http://127.0.0.1:8000" --expert-model "onyx-qwen-production-v1" --expert-api-key "sk-morph-b2b-test" `
+  --expert-url "http://127.0.0.1:8000" --expert-model "onyx-qwen-production-v1" `
   --examples-json ./examples/double_x.json --iterations 6 `
   --artifact-dir ./showcase_double_x --out ./showcase_double_x.ax --summary-out ./showcase_double_x/pipeline_summary.json
 
 # risk_score — copilot-search
 axiom copilot-search --backend onyx-qwen `
   --goal "Compute risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));" `
-  --expert-url "http://127.0.0.1:8000" --expert-model "onyx-qwen-production-v1" --expert-api-key "sk-morph-b2b-test" `
+  --expert-url "http://127.0.0.1:8000" --expert-model "onyx-qwen-production-v1" `
   --examples-json ./examples/risk_score_v3.json --iterations 8 `
   --artifact-dir ./debug_risk_score --out ./debug_risk_score/best.ax --report-out ./debug_risk_score/search_report.json
 
 # risk_score — copilot-run
 axiom copilot-run --backend onyx-qwen `
   --goal "Compute risk_score = max(0.0, min(1.0, 0.7 * risk_a + 0.3 * risk_b));" `
-  --expert-url "http://127.0.0.1:8000" --expert-model "onyx-qwen-production-v1" --expert-api-key "sk-morph-b2b-test" `
+  --expert-url "http://127.0.0.1:8000" --expert-model "onyx-qwen-production-v1" `
   --examples-json ./examples/risk_score_v3.json --iterations 8 `
   --artifact-dir ./showcase_risk_score --out ./showcase_risk_score.ax --summary-out ./showcase_risk_score/pipeline_summary.json
 
 # piecewise_threshold — copilot-search
 axiom copilot-search --backend onyx-qwen `
   --goal "Write a valid Axiom .ax program in this repo's DSL that computes y = x when x > 0, otherwise y = 0.0." `
-  --expert-url "http://127.0.0.1:8000" --expert-model "onyx-qwen-production-v1" --expert-api-key "sk-morph-b2b-test" `
+  --expert-url "http://127.0.0.1:8000" --expert-model "onyx-qwen-production-v1" `
   --examples-json ./examples/piecewise_threshold.json --iterations 8 `
   --artifact-dir ./debug_piecewise_threshold --out ./debug_piecewise_threshold/best.ax --report-out ./debug_piecewise_threshold/search_report_cli.json
 
 # piecewise_threshold — copilot-run
 axiom copilot-run --backend onyx-qwen `
   --goal "Write a valid Axiom .ax program in this repo's DSL that computes y = x when x > 0, otherwise y = 0.0." `
-  --expert-url "http://127.0.0.1:8000" --expert-model "onyx-qwen-production-v1" --expert-api-key "sk-morph-b2b-test" `
+  --expert-url "http://127.0.0.1:8000" --expert-model "onyx-qwen-production-v1" `
   --examples-json ./examples/piecewise_threshold.json --iterations 8 `
   --artifact-dir ./showcase_piecewise_threshold --out ./showcase_piecewise_threshold.ax --summary-out ./showcase_piecewise_threshold/pipeline_summary.json
 
 # three_input_affine — copilot-search
 axiom copilot-search --backend onyx-qwen `
   --goal "Write a valid Axiom .ax program in this repo's DSL that computes score = 0.5 * a + 0.3 * b + 0.2 * c." `
-  --expert-url "http://127.0.0.1:8000" --expert-model "onyx-qwen-production-v1" --expert-api-key "sk-morph-b2b-test" `
+  --expert-url "http://127.0.0.1:8000" --expert-model "onyx-qwen-production-v1" `
   --examples-json ./examples/three_input_affine.json --iterations 8 `
   --artifact-dir ./debug_three_input_affine --out ./debug_three_input_affine/best.ax --report-out ./debug_three_input_affine/search_report_cli.json
 
 # three_input_affine — copilot-run
 axiom copilot-run --backend onyx-qwen `
   --goal "Write a valid Axiom .ax program in this repo's DSL that computes score = 0.5 * a + 0.3 * b + 0.2 * c." `
-  --expert-url "http://127.0.0.1:8000" --expert-model "onyx-qwen-production-v1" --expert-api-key "sk-morph-b2b-test" `
+  --expert-url "http://127.0.0.1:8000" --expert-model "onyx-qwen-production-v1" `
   --examples-json ./examples/three_input_affine.json --iterations 8 `
   --artifact-dir ./showcase_three_input_affine --out ./showcase_three_input_affine.ax --summary-out ./showcase_three_input_affine/pipeline_summary.json
 ```
@@ -315,7 +315,6 @@ For local Onyx evaluation of symbolic + generalization tasks, use **`benchmarks/
 ```powershell
 axiom copilot-benchmark --backend onyx-qwen `
   --expert-url "http://127.0.0.1:8000" --expert-model "onyx-qwen-production-v1" `
-  --expert-api-key "sk-morph-b2b-test" `
   --task-json "./benchmarks/copilot_symbolic_and_generalization_tasks.json" `
   --max-iterations 6 --out "./benchmarks/copilot_symbolic_and_generalization_results.json"
 ```
@@ -415,7 +414,7 @@ Create **`bundles/`**, copy or symlink your **`model.axb`** there (compose expec
 docker compose up --build
 ```
 
-**Note:** the default **`docker-compose.yml`** sets **`AXIOM_API_KEY=change-me-in-production`**, so **`POST /predict`** requires **`Authorization: Bearer …`** (see below). **`GET /health`** stays unauthenticated.
+**Note:** set **`AXIOM_API_KEY`** in **`.env`** (see **`.env.example`**) before **`docker compose up`**, so **`POST /predict`** requires **`Authorization: Bearer …`** (see below). **`GET /health`** stays unauthenticated.
 
 ### Example `curl`
 
@@ -428,11 +427,11 @@ curl -s -X POST http://localhost:8000/predict \
   -d '{"inputs": {}}'
 ```
 
-When **`AXIOM_API_KEY`** is set (e.g. **`change-me-in-production`** in **`docker-compose.yml`**):
+When **`AXIOM_API_KEY`** is set (via **`.env`** or compose):
 
 ```bash
 curl -s -X POST http://localhost:8000/predict \
-  -H "Authorization: Bearer change-me-in-production" \
+  -H "Authorization: Bearer $AXIOM_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"inputs": {}}'
 ```

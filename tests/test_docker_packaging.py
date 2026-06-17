@@ -41,5 +41,5 @@ def test_readme_documents_docker_build_run_compose_curl():
     assert "docker compose" in text
     assert "curl" in text.lower()
     assert "AXIOM_BUNDLE_PATH" in text
-    assert "change-me-in-production" in text
+    assert "change-me-in-production" not in text or "AXIOM_API_KEY" in text
     assert "Building only" in text or "start the server" in text.lower()

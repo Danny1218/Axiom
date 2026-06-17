@@ -15,6 +15,7 @@ from axiom.copilot.benchmarks import (
     DEFAULT_BENCHMARK_TASKS,
     BenchmarkDispatchExpert,
     BenchmarkTask,
+    benchmark_gate_violations,
     benchmark_suite_to_dict,
     benchmark_tasks_from_json_dict,
     compile_success,
@@ -525,7 +526,9 @@ def test_smoke_copilot_draft_script_uses_benchmark_suite_and_reports_fields():
     assert '[string]$Backend = "onyx-qwen"' in script
     assert '[string]$ExpertUrl = "http://127.0.0.1:8000"' in script
     assert '[string]$ExpertModel = "onyx-qwen-production-v1"' in script
-    assert '[string]$ExpertApiKey = "sk-morph-b2b-test"' in script
+    assert '[string]$ExpertApiKey = ""' in script
+    assert "Resolve-ExpertApiKey" in script
+    assert "Format-RedactedCommand" in script
     assert "[double]$Temperature = 0" in script
     assert '[string]$TaskJson = "benchmarks/copilot_symbolic_and_generalization_tasks.json"' in script
     assert '[string]$OutJson = "benchmark_symbolic_snapshot.json"' in script
@@ -953,6 +956,8 @@ def test_copilot_milestone_workflow_runs_pytest_smoke_and_three_benchmarks():
     assert "smoke_copilot_draft.ps1" in workflow
     assert "copilot-benchmark" in workflow
     assert workflow.count("axiom copilot-benchmark") >= 4
+    assert workflow.count("--gate") >= 4
+    assert "upload-artifact" in workflow
     assert "copilot_symbolic_and_generalization_tasks.json" in workflow
     assert "copilot_symbolic_next_milestone_tasks.json" in workflow
     assert "copilot_symbolic_generalization_stress_tasks.json" in workflow
@@ -966,8 +971,42 @@ def test_ci_workflow_runs_readme_test_command():
     root = Path(__file__).resolve().parents[1]
     workflow = (root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     assert "python -m pytest tests -q" in workflow
+    assert "upload-artifact" in workflow
     assert "3.10" in workflow
     assert "constraints-dev.txt" in workflow
+
+
+def test_benchmark_gate_passes_on_dispatch_suite_doc():
+    root = Path(__file__).resolve().parents[1]
+    tasks = load_benchmark_tasks_json_path(root / "benchmarks" / "copilot_symbolic_next_milestone_tasks.json")
+    suite = run_benchmark_suite(BenchmarkDispatchExpert(), tasks=tasks, max_iterations=2)
+    doc = benchmark_suite_to_dict(suite)
+    assert benchmark_gate_violations(doc) == []
+
+
+def test_benchmark_gate_reports_task_failures():
+    doc = {
+        "run_options": {"draft": True, "search": False},
+        "draft_summary": {"task_count": 1, "compile_ok_count": 0, "metric_ok_count": 0},
+        "tasks": [
+            {
+                "task_id": "demo_task",
+                "draft_only": {
+                    "task_id": "demo_task",
+                    "compile_ok": False,
+                    "metric_ok": False,
+                    "evaluation": {
+                        "failure_summaries": [
+                            {"kind": "parse", "message": "bad syntax", "detail": "unexpected token"}
+                        ]
+                    },
+                },
+            }
+        ],
+    }
+    violations = benchmark_gate_violations(doc, require_search=False)
+    assert any("demo_task" in v for v in violations)
+    assert any("compile_ok=false" in v for v in violations)
 
 
 def test_run_warmup_drafts_records_failures_and_successes(capsys):
