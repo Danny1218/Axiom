@@ -1419,6 +1419,14 @@ def _write_request_capture(
         out["response_id"] = str(response_id)
     if timing_metadata:
         out.update({str(k): v for k, v in timing_metadata.items() if v is not None})
+    from axiom.copilot.redaction import capture_mode_from_env, redact_mapping
+
+    mode = capture_mode_from_env()
+    if mode != "full":
+        out = redact_mapping(out, redact_prompts=True)
+        out["capture_mode"] = "redacted"
+    else:
+        out["capture_mode"] = "full"
     path = capture_dir / _request_capture_filename(request_kind, benchmark_task_id, payload_sha256, status_code)
     path.write_text(json.dumps(out, indent=2, sort_keys=True), encoding="utf-8")
     return path

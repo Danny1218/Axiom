@@ -113,8 +113,9 @@ def _neural_weights_to_bytes(nw: Optional[Dict[str, Any]]) -> bytes:
 def _bytes_to_neural_weights(raw: bytes) -> Optional[Dict[str, Any]]:
     buf = io.BytesIO(raw)
     try:
-        obj = torch.load(buf, map_location="cpu", weights_only=False)
+        obj = torch.load(buf, map_location="cpu", weights_only=True)
     except TypeError:
+        buf.seek(0)
         obj = torch.load(buf, map_location="cpu")
     if obj is None:
         return None
@@ -162,6 +163,8 @@ def apply_lock_to_payload(payload: Dict[str, Any], mode: str | LockMode) -> Dict
         "lock_mode": m,
         "nonce_hex": nonce.hex(),
         "payload_len": len(raw),
+        "payload_sha256": hashlib.sha256(raw).hexdigest(),
+        "ciphertext_sha256": hashlib.sha256(ct).hexdigest(),
         "key_fingerprint": fp,
         "ciphertext_hex": ct.hex(),
     }
@@ -185,9 +188,15 @@ def unlock_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         )
     nonce = bytes.fromhex(lock["nonce_hex"])
     ct = bytes.fromhex(lock["ciphertext_hex"])
+    expected_ct = lock.get("ciphertext_sha256")
+    if expected_ct and hashlib.sha256(ct).hexdigest() != str(expected_ct):
+        raise BundleUnlockError("locked bundle ciphertext tampered (hash mismatch)")
     raw = _aes_ctr_decrypt(key, nonce, ct)
     if len(raw) != int(lock.get("payload_len", -1)):
         raise BundleUnlockError("decrypted length mismatch (corrupt bundle)")
+    expected_raw = lock.get("payload_sha256")
+    if expected_raw and hashlib.sha256(raw).hexdigest() != str(expected_raw):
+        raise BundleUnlockError("locked bundle plaintext tampered (hash mismatch)")
     payload["neural_weights"] = _bytes_to_neural_weights(raw)
     return payload
 
@@ -207,12 +216,9 @@ def lock_bundle_file(src: Path, dst: Path, mode: str | LockMode) -> None:
     _require_crypto()
     if not src.is_file():
         raise FileNotFoundError(_missing_bundle_msg(src))
-    try:
-        payload = torch.load(src, map_location="cpu", weights_only=False)
-    except TypeError:
-        payload = torch.load(src, map_location="cpu")
-    if not isinstance(payload, dict):
-        raise ValueError("invalid .axb payload")
+    from axiom.compiler.deserializer import _read_bundle_payload
+
+    payload = _read_bundle_payload(src, trusted=True)
     if payload.get("lock", {}).get("encrypted"):
         raise ValueError("bundle is already locked")
     m = mode.value if isinstance(mode, LockMode) else str(mode).lower().strip()
@@ -222,4 +228,10 @@ def lock_bundle_file(src: Path, dst: Path, mode: str | LockMode) -> None:
     dst = Path(dst)
     if str(dst.parent) not in ("", "."):
         dst.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(payload, str(dst))
+    dst.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    wsrc = Path(str(src) + ".weights.pt")
+    wdst = Path(str(dst) + ".weights.pt")
+    if wsrc.is_file():
+        wdst.write_bytes(wsrc.read_bytes())
+    elif wdst.is_file():
+        wdst.unlink()

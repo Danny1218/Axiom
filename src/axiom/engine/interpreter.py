@@ -10,6 +10,7 @@ import torch.nn.functional as F
 
 from axiom.engine.expert_call import ExpertHandler, ExpertRuntimeError
 from axiom.engine.expert_registry import ExpertRuntimeRegistry
+from axiom.engine.strict import StrictInferenceError, env_defined_set, mark_defined, strict_mode_enabled
 
 Stmt = Tuple
 ExprIR = List[Tuple]
@@ -194,7 +195,11 @@ def eval_expr(
         if op == "OP_CONST":
             stack.append(torch.full((B,), float(tup[1]), device=device, dtype=dtype, requires_grad=False))
         elif op == "OP_LOAD":
-            stack.append(env.get(str(tup[1]), z))
+            name = str(tup[1])
+            defined = env_defined_set()
+            if strict_mode_enabled() and defined is not None and name not in defined:
+                raise StrictInferenceError(f"load of unset variable {name!r}")
+            stack.append(env.get(name, z))
         elif op == "OP_NEG":
             stack.append(-stack.pop())
         elif op == "OP_VEC_PACK":
@@ -213,7 +218,12 @@ def eval_expr(
             else:
                 arr2 = arr
                 k = int(arr2.shape[1])
-            idx = idx_t.to(dtype=torch.int64).clamp(0, max(k - 1, 0))
+            idx_raw = idx_t.to(dtype=torch.int64)
+            if strict_mode_enabled():
+                bad = (idx_raw < 0) | (idx_raw >= k)
+                if bool(bad.any()):
+                    raise StrictInferenceError(f"index out of range (width={k})")
+            idx = idx_raw.clamp(0, max(k - 1, 0))
             gathered = torch.gather(arr2, 1, idx.unsqueeze(1)).squeeze(1)
             stack.append(gathered)
         elif op == "OP_ADD":
@@ -232,6 +242,8 @@ def eval_expr(
             b, a = stack.pop(), stack.pop()
             a, b = _promote_batch_binop(a, b)
             mask = b.abs() > 1e-12
+            if strict_mode_enabled() and not bool(mask.all()):
+                raise StrictInferenceError("division by zero")
             safe_b = torch.where(mask, b, o)
             safe_div = a / safe_b
             stack.append(torch.where(mask, safe_div, z))
@@ -530,6 +542,9 @@ def exec_stmt(
             nv = nv.squeeze(-1)
         m = _broadcast_mask(active_mask, nv)
         env[k] = torch.where(m, nv, old)
+        defined = env_defined_set()
+        if defined is not None:
+            mark_defined(defined, k)
     elif op == "OP_BLEND_ASSIGN":
         k = str(stmt[1])
         path_a = eval_expr(

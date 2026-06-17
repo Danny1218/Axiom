@@ -11,7 +11,8 @@ import torch
 import torch.nn as nn
 
 from axiom.compiler.ir import extract_abi_widths, extract_global_abi
-from axiom.compiler.serializer import load_state_dict
+from axiom.compiler.serializer import AXB_WEIGHTS_SUFFIX, load_state_dict
+from axiom.security.bundle_trust import BundleTrustError, resolve_trusted
 from axiom.engine.block_executor import InterpretedBlock
 from axiom.engine.loop_executor import InterpretedLiquidLoop
 from axiom.engine.supernet import LatentSupernet
@@ -64,27 +65,52 @@ def _resolve_abi_widths(data: Dict[str, Any], dim: int) -> Dict[str, int]:
     return {}
 
 
-def load_bundle(
-    path: str | Path,
-    custom_neural_registry: Optional[Dict[str, nn.Module]] = None,
-) -> InterpretedBlock:
-    """Load ``.axb`` written by ``save_bundle`` (``InterpretedBlock`` + optional neural weights).
+def _payload_from_v2_json(path: Path) -> Dict[str, Any]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("invalid .axb JSON payload")
+    return payload
 
-    If the bundle was trained with ``custom_neural_registry``, pass the same mapping here so
-    ``load_state_dict`` matches module shapes.
-    """
-    p = Path(path)
-    if not p.is_file():
-        raise FileNotFoundError(p)
+
+def _payload_from_v1_pickle(path: Path, *, trusted: bool) -> Dict[str, Any]:
+    if not trusted:
+        raise BundleTrustError(
+            "Refusing to load legacy pickle .axb without explicit trust. "
+            "Pass trusted=True, set AXIOM_TRUST_BUNDLE=1, or re-save with save_bundle (v2 JSON)."
+        )
     try:
-        payload = torch.load(p, map_location="cpu", weights_only=False)
+        payload = torch.load(path, map_location="cpu", weights_only=False)
     except TypeError:
-        payload = torch.load(p, map_location="cpu")
+        payload = torch.load(path, map_location="cpu")
     if not isinstance(payload, dict):
         raise ValueError("invalid .axb payload")
-    from axiom.security.genetic_lock import unlock_payload
+    return payload
 
-    payload = unlock_payload(payload)
+
+def _read_bundle_payload(path: Path, *, trusted: bool) -> Dict[str, Any]:
+    raw = path.read_bytes()
+    if not raw:
+        raise ValueError("empty .axb file")
+    if raw[:1] == b"{" or raw[:1] == b"[":
+        return _payload_from_v2_json(path)
+    if _is_legacy_torch_archive(raw):
+        return _payload_from_v1_pickle(path, trusted=trusted)
+    raise ValueError("unrecognized .axb format")
+
+
+def _is_legacy_torch_archive(raw: bytes) -> bool:
+    if not raw:
+        return False
+    if raw[:1] == b"\x80":
+        return True
+    return raw[:2] == b"PK"
+
+
+def _block_from_payload(
+    payload: Dict[str, Any],
+    path: Path,
+    custom_neural_registry: Optional[Dict[str, nn.Module]],
+) -> InterpretedBlock:
     topo = payload.get("topology") or {}
     if topo.get("kind") != "interpreted_block":
         raise ValueError("bundle topology is not an interpreted_block")
@@ -104,9 +130,38 @@ def load_bundle(
         custom_neural_registry=custom_neural_registry,
     )
     nw = payload.get("neural_weights")
+    if not nw:
+        wpath = Path(str(path) + AXB_WEIGHTS_SUFFIX)
+        if wpath.is_file():
+            nw = load_state_dict(wpath)
     if nw:
         block.neural_registry.load_state_dict(nw, strict=True)
     return block
+
+
+def load_bundle(
+    path: str | Path,
+    custom_neural_registry: Optional[Dict[str, nn.Module]] = None,
+    *,
+    trusted: Optional[bool] = None,
+) -> InterpretedBlock:
+    """Load ``.axb`` written by ``save_bundle`` (``InterpretedBlock`` + optional neural weights).
+
+    v2 bundles are JSON + optional ``.weights.pt`` (no pickle). Legacy v1 pickle bundles require
+    ``trusted=True`` or ``AXIOM_TRUST_BUNDLE=1``.
+
+    If the bundle was trained with ``custom_neural_registry``, pass the same mapping here so
+    ``load_state_dict`` matches module shapes.
+    """
+    p = Path(path)
+    if not p.is_file():
+        raise FileNotFoundError(p)
+    trust = resolve_trusted(trusted)
+    payload = _read_bundle_payload(p, trusted=trust)
+    from axiom.security.genetic_lock import unlock_payload
+
+    payload = unlock_payload(payload)
+    return _block_from_payload(payload, p, custom_neural_registry)
 
 
 def load_execution_bundle(path_prefix: str | Path) -> ExecutionGraph:

@@ -12,7 +12,7 @@ from axiom.engine.meta_compiler import MetaCompiler
 from axiom.engine.topology import ExecutionGraph
 
 
-def _compile_step_fn(graph: ExecutionGraph) -> nn.Module:
+def _compile_step_fn(graph: ExecutionGraph) -> tuple[nn.Module, str]:
     """Prefer inductor when available; fall back to aot_eager if codegen fails (e.g. no MSVC on Windows)."""
     import torch._dynamo.config as dynamo_config
 
@@ -26,16 +26,18 @@ def _compile_step_fn(graph: ExecutionGraph) -> nn.Module:
     if importlib.util.find_spec("torch._inductor") is not None:
         order.append("inductor")
     order.append("aot_eager")
+    errors: Dict[str, str] = {}
     for backend in order:
         try:
             fn = torch.compile(graph, backend=backend, fullgraph=True)
             out, _, _ = fn(trial)
             out.sum().backward()
             trial.grad = None
-            return fn
-        except Exception:
+            return fn, backend
+        except Exception as exc:
+            errors[backend] = type(exc).__name__
             continue
-    return graph
+    return graph, "eager_fallback"
 
 
 class EvolutionaryTrainer:
@@ -68,9 +70,10 @@ class EvolutionaryTrainer:
         self.shadow_evaluators: Dict[str, ShadowFitnessEvaluator] = {}
         self.optimizer = torch.optim.Adam(self.graph.parameters(), lr=self.lr)
         if compile_graph:
-            self.step_fn = _compile_step_fn(graph)
+            self.step_fn, self.compile_backend = _compile_step_fn(graph)
         else:
             self.step_fn = graph
+            self.compile_backend = "none"
 
     def train_epoch(
         self,

@@ -30,6 +30,12 @@ from axiom.api_models import (
     ReportRequest,
     ReportResponse,
 )
+from axiom.engine.strict import StrictInferenceError
+from axiom.security.bundle_trust import (
+    bundle_trust_from_env,
+    report_output_dir_from_env,
+    resolve_report_output_path,
+)
 from axiom.tools.html_exporter import render_html_report
 
 
@@ -74,6 +80,11 @@ def _require_op_expert_wiring(model: AxiomModel) -> None:
         )
 
 
+def _strict_from_env() -> bool:
+    v = os.environ.get("AXIOM_STRICT", "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
 def create_app(
     bundle_path: str | Path,
     *,
@@ -81,6 +92,9 @@ def create_app(
     expert_registry: Optional[Union[ExpertRuntimeRegistry, Mapping[str, ExpertHandler]]] = None,
     expert_handler: Optional[ExpertHandler] = None,
     expert_fallback: Optional[float] = None,
+    trusted: Optional[bool] = None,
+    strict: Optional[bool] = None,
+    report_output_dir: Optional[str | Path] = None,
 ) -> FastAPI:
     """Load ``bundle_path`` once and return a FastAPI app serving ``/health``, ``/predict``, ``/explain``, ``/report``.
 
@@ -95,6 +109,15 @@ def create_app(
         path,
         custom_neural_registry=custom_neural_registry,
         expert_registry=expert_registry,
+        trusted=trusted if trusted is not None else bundle_trust_from_env(),
+    )
+    if strict is None:
+        strict = _strict_from_env()
+    model.strict = bool(strict)
+    sandbox = (
+        Path(report_output_dir).expanduser().resolve()
+        if report_output_dir
+        else report_output_dir_from_env()
     )
     if expert_handler is not None:
         model.set_expert_handler(expert_handler)
@@ -103,6 +126,7 @@ def create_app(
     app = FastAPI(title="Axiom Bundle Server", version="1.0")
     app.state.model = model
     app.state.bundle_path = str(path)
+    app.state.report_output_dir = str(sandbox) if sandbox is not None else None
 
     @app.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:
@@ -116,6 +140,8 @@ def create_app(
         _require_op_expert_wiring(model_)
         try:
             out = model_.predict(body.inputs)
+        except StrictInferenceError as e:
+            raise HTTPException(status_code=422, detail=str(e)) from e
         except ExpertRuntimeError as e:
             raise HTTPException(status_code=503, detail=str(e)) from e
         return PredictResponse(outputs=out)
@@ -135,6 +161,7 @@ def create_app(
     @app.post("/report", response_model=ReportResponse, dependencies=[Depends(verify_api_key)])
     def report(
         body: ReportRequest,
+        request: Request,
         model_: AxiomModel = Depends(get_model),
     ) -> ReportResponse:
         _require_op_expert_wiring(model_)
@@ -143,7 +170,16 @@ def create_app(
         except ExpertRuntimeError as e:
             raise HTTPException(status_code=503, detail=str(e)) from e
         if body.output_path:
-            out = Path(body.output_path)
+            sandbox_raw = getattr(request.app.state, "report_output_dir", None)
+            if not sandbox_raw:
+                raise HTTPException(
+                    status_code=400,
+                    detail="output_path requires AXIOM_REPORT_OUTPUT_DIR or report_output_dir on create_app",
+                )
+            try:
+                out = resolve_report_output_path(body.output_path, Path(sandbox_raw))
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e)) from e
             out.parent.mkdir(parents=True, exist_ok=True)
             out.write_text(html, encoding="utf-8")
             return ReportResponse(html=None, output_path=str(out.resolve()))

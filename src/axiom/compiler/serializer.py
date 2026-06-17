@@ -10,7 +10,8 @@ from axiom.engine.block_executor import InterpretedBlock
 from axiom.engine.loop_executor import InterpretedLiquidLoop
 from axiom.engine.topology import ConditionalSinkhornBlock, ExecutionGraph
 
-AXB_BUNDLE_VERSION = 1
+AXB_BUNDLE_VERSION = 2
+AXB_WEIGHTS_SUFFIX = ".weights.pt"
 
 
 def _supernet_rank(graph: ExecutionGraph) -> int:
@@ -153,14 +154,26 @@ def save_bundle(
         "version": AXB_BUNDLE_VERSION,
         "topology": topology,
         "abi_widths": abi_widths,
-        "neural_weights": neural_weights,
+        "neural_weights": None,
     }
+    weights_to_save = neural_weights
     lm = lock_mode
     if lm is not None and str(lm).lower().strip() not in ("none", ""):
         from axiom.security.genetic_lock import apply_lock_to_payload
 
+        payload["neural_weights"] = weights_to_save
         apply_lock_to_payload(payload, lm)
-    torch.save(payload, str(p))
+        weights_to_save = None
+    p.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    weights_path = Path(str(p) + AXB_WEIGHTS_SUFFIX)
+    if weights_to_save:
+        torch.save(weights_to_save, str(weights_path))
+    elif weights_path.is_file():
+        weights_path.unlink()
+
+
+def _is_v1_pickle_bundle(raw: bytes) -> bool:
+    return len(raw) >= 2 and raw[0:2] == b"\x80\x04"
 
 
 def load_state_dict(path: str | Path) -> Dict[str, torch.Tensor]:

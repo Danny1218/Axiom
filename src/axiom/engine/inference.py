@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, Tuple, Union, cast
 
 import torch
 
-from axiom.engine.topology import ExecutionGraph
+from axiom.engine.strict import StrictInferenceError, validate_predict_inputs_strict
 
 
 def _legacy_rows_to_tensor(
@@ -63,9 +63,13 @@ def _abi_rows_to_tensor(
     device: torch.device,
     dtype: torch.dtype,
     abi_widths: Optional[Dict[str, int]] = None,
+    strict: bool = False,
 ) -> torch.Tensor:
     aw = dict(abi_widths or {})
     B = len(rows)
+    if strict:
+        for row in rows:
+            validate_predict_inputs_strict(row, abi, abi_widths=aw)
     t = torch.zeros(B, dim, device=device, dtype=dtype)
     for b, row in enumerate(rows):
         for name, col in abi.items():
@@ -111,10 +115,15 @@ def _inputs_to_tensor(
     device: torch.device,
     dtype: torch.dtype,
     abi_widths: Optional[Dict[str, int]] = None,
+    strict: bool = False,
 ) -> torch.Tensor:
     if dim < 1:
         raise ValueError("supernet dim must be positive")
     if not abi:
+        if strict and inputs:
+            unknown = list(inputs.keys())
+            if unknown:
+                raise StrictInferenceError(f"unknown input key(s): {', '.join(sorted(map(str, unknown)))}")
         if not inputs:
             return torch.zeros(1, dim, device=device, dtype=dtype)
         keys = sorted(inputs.keys())
@@ -128,7 +137,7 @@ def _inputs_to_tensor(
             row[0, i] = float(inputs[k])
         return row
     return _abi_rows_to_tensor(
-        [inputs], abi, dim, device=device, dtype=dtype, abi_widths=abi_widths
+        [inputs], abi, dim, device=device, dtype=dtype, abi_widths=abi_widths, strict=strict
     )
 
 

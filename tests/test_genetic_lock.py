@@ -1,5 +1,6 @@
 """Genetic lock for ``.axb`` bundles (AES-256-CTR on neural weights)."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -57,7 +58,7 @@ def test_env_secret_roundtrip(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     b0 = _make_block()
     p = tmp_path / "e.axb"
     save_bundle(b0, p, lock_mode="env-secret")
-    raw = torch.load(p, map_location="cpu", weights_only=False)
+    raw = json.loads(p.read_text(encoding="utf-8"))
     assert raw["lock"]["encrypted"] is True
     assert raw["lock"]["lock_mode"] == "env-secret"
     assert raw["neural_weights"] is None
@@ -115,7 +116,7 @@ def test_apply_lock_topology_still_readable(tmp_path: Path, monkeypatch: pytest.
     b0 = _make_block()
     p = tmp_path / "t.axb"
     save_bundle(b0, p, lock_mode="env-secret")
-    obj = torch.load(p, map_location="cpu", weights_only=False)
+    obj = json.loads(p.read_text(encoding="utf-8"))
     assert obj["topology"]["kind"] == "interpreted_block"
     assert "ir" in obj["topology"]
 

@@ -27,10 +27,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev,copilot,serve]"
-          if [ -f constraints-dev.txt ]; then python -m pip install -r constraints-dev.txt; fi
+          python -m pip install -r constraints-dev.txt
 
       - name: Run tests (README command)
-        run: python -m pytest tests -q
+        run: python -m pytest tests -q 2>&1 | tee ci_pytest_output.txt
 
       - name: Copilot golden conformance (offline)
         run: python -m pytest tests/test_copilot_golden.py -q

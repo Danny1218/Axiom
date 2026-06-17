@@ -43,12 +43,15 @@ def load(
     bundle_path: str | Path,
     custom_neural_registry: Optional[Dict[str, nn.Module]] = None,
     expert_registry: Optional[Union[ExpertRuntimeRegistry, Mapping[str, ExpertHandler]]] = None,
+    *,
+    trusted: Optional[bool] = None,
 ) -> AxiomModel:
     """Load a ``.axb`` bundle. Pass ``custom_neural_registry`` if training used non-default ``neural()`` nets.
 
     ``expert_registry`` wires in-process ``expert("name", …)`` handlers (not serialized in ``.axb``).
+    Legacy pickle bundles require ``trusted=True`` or ``AXIOM_TRUST_BUNDLE=1``.
     """
-    model = AxiomModel(load_bundle(bundle_path, custom_neural_registry=custom_neural_registry))
+    model = AxiomModel(load_bundle(bundle_path, custom_neural_registry=custom_neural_registry, trusted=trusted))
     if expert_registry is not None:
         model.set_expert_registry(expert_registry)
     return model
@@ -57,8 +60,9 @@ def load(
 class AxiomModel:
     """Scikit-learn-style wrapper around ``InterpretedBlock`` (dict in → dict out)."""
 
-    def __init__(self, block: InterpretedBlock) -> None:
+    def __init__(self, block: InterpretedBlock, *, strict: bool = False) -> None:
         self.block = block
+        self.strict = bool(strict)
 
     def set_expert_handler(self, handler: Optional[ExpertHandler]) -> None:
         """Single callable ``(name, features) -> float`` for all ``expert()`` backends (optional)."""
@@ -86,6 +90,7 @@ class AxiomModel:
 
     def predict(self, data: Any) -> Any:
         block = self.block
+        block.strict = self.strict
         block.eval()
         dim = _trunk_dim_from_block_abi(block)
         dev = torch.device("cpu")
@@ -104,7 +109,9 @@ class AxiomModel:
                 if not isinstance(row, dict):
                     raise TypeError("batch rows must be dicts")
                 rows.append(
-                    _inputs_to_tensor(row, abi, dim, device=dev, dtype=dt, abi_widths=aw)
+                    _inputs_to_tensor(
+                        row, abi, dim, device=dev, dtype=dt, abi_widths=aw, strict=self.strict
+                    )
                 )
             batched_h = torch.cat(rows, dim=0)
             with torch.no_grad():
@@ -116,7 +123,7 @@ class AxiomModel:
 
         if not isinstance(data, dict):
             raise TypeError("data must be a dict, list of dicts, or pandas.DataFrame")
-        h = _inputs_to_tensor(data, abi, dim, device=dev, dtype=dt, abi_widths=aw)
+        h = _inputs_to_tensor(data, abi, dim, device=dev, dtype=dt, abi_widths=aw, strict=self.strict)
         with torch.no_grad():
             out_trunk = block(h)
         return _abi_outputs_from_trunk_row(out_trunk[0], abi, aw)
@@ -126,13 +133,14 @@ class AxiomModel:
         if not isinstance(data, dict):
             raise TypeError("explain expects a single dict (one row of features)")
         block = self.block
+        block.strict = self.strict
         block.eval()
         dim = _trunk_dim_from_block_abi(block)
         dev = torch.device("cpu")
         dt = torch.float32
         abi = block.abi
         aw = dict(getattr(block, "abi_widths", {}) or {})
-        h = _inputs_to_tensor(data, abi, dim, device=dev, dtype=dt, abi_widths=aw)
+        h = _inputs_to_tensor(data, abi, dim, device=dev, dtype=dt, abi_widths=aw, strict=self.strict)
         with torch.no_grad():
             _out, env = block(h, return_env=True)
         trace: Dict[str, Any] = {}

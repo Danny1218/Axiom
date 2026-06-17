@@ -297,7 +297,8 @@ def _cmd_export_onnx(args: argparse.Namespace) -> None:
 
 
 def _cmd_predict(args: argparse.Namespace) -> None:
-    block = load_bundle(args.bundle)
+    block = load_bundle(args.bundle, trusted=getattr(args, "trust_bundle", False))
+    block.strict = bool(getattr(args, "strict", False))
     try:
         feats = json.loads(args.input)
     except json.JSONDecodeError as e:
@@ -309,7 +310,9 @@ def _cmd_predict(args: argparse.Namespace) -> None:
     dev = torch.device("cpu")
     dt = torch.float32
     aw = getattr(block, "abi_widths", {}) or {}
-    h = _inputs_to_tensor(feats, block.abi, dim, device=dev, dtype=dt, abi_widths=aw)
+    h = _inputs_to_tensor(
+        feats, block.abi, dim, device=dev, dtype=dt, abi_widths=aw, strict=block.strict
+    )
     with torch.no_grad():
         out = block(h)
     decoded = _abi_outputs_from_trunk_row(out[0], block.abi, dict(aw))
@@ -337,7 +340,12 @@ def _cmd_serve(args: argparse.Namespace) -> None:
     port_env = os.environ.get("PORT")
     port = int(port_env) if port_env not in (None, "") else int(args.port)
 
-    app = create_app(bp)
+    app = create_app(
+        bp,
+        trusted=getattr(args, "trust_bundle", False),
+        strict=getattr(args, "strict", False),
+        report_output_dir=getattr(args, "report_output_dir", None),
+    )
     uvicorn.run(app, host=host, port=port, log_level="info")
 
 
@@ -1275,6 +1283,16 @@ def main(argv: list[str] | None = None) -> None:
         required=True,
         help='JSON object of ABI feature names, e.g. \'{"volatility":0.6,"drawdown":0.1}\'',
     )
+    p_predict.add_argument(
+        "--strict",
+        action="store_true",
+        help="Fail on missing ABI inputs, unknown keys, divide-by-zero, and unset loads.",
+    )
+    p_predict.add_argument(
+        "--trust-bundle",
+        action="store_true",
+        help="Allow loading legacy pickle .axb (unsafe for untrusted files).",
+    )
     p_predict.set_defaults(_handler=_cmd_predict)
 
     p_lock = sub.add_parser(
@@ -1374,6 +1392,22 @@ def main(argv: list[str] | None = None) -> None:
         type=int,
         default=8000,
         help="TCP port when PORT env is unset.",
+    )
+    p_serve.add_argument(
+        "--strict",
+        action="store_true",
+        help="Reject missing ABI inputs and other lenient coercions on /predict.",
+    )
+    p_serve.add_argument(
+        "--trust-bundle",
+        action="store_true",
+        help="Allow loading legacy pickle .axb (unsafe for untrusted files).",
+    )
+    p_serve.add_argument(
+        "--report-output-dir",
+        type=str,
+        default=None,
+        help="Sandbox directory for HTTP /report file writes (or set AXIOM_REPORT_OUTPUT_DIR).",
     )
     p_serve.set_defaults(_handler=_cmd_serve)
 

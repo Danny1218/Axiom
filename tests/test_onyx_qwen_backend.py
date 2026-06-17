@@ -40,6 +40,12 @@ from axiom.experts.onyx_qwen import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _onyx_capture_full_for_contract_tests(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Existing capture contract tests expect full prompts; redaction is tested separately."""
+    monkeypatch.setenv("AXIOM_ONYX_CAPTURE_MODE", "full")
+
+
 def _ok_response(
     content: str,
     *,
