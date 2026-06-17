@@ -19,7 +19,7 @@ for _p in (str(_SRC), str(_ROOT)):
 from axiom.compiler.ir import ast_to_ir, extract_abi_widths, extract_global_abi  # noqa: E402
 from axiom.compiler.parser import parse_ax, reset_parser  # noqa: E402
 from axiom.engine.block_executor import InterpretedBlock  # noqa: E402
-from axiom.engine.trainer import _compile_step_fn  # noqa: E402
+from axiom.engine.trainer import probe_compile_diagnostics  # noqa: E402
 from axiom.compiler.flow import wire_execution_graph  # noqa: E402
 from axiom.engine.supernet import LatentSupernet  # noqa: E402
 
@@ -124,10 +124,20 @@ if (x > 0) {
                 warmup=args.warmup,
             )
         )
-    _, compile_backend = _compile_step_fn(cond_graph)
-    results.append({"name": "torch_compile_backend", "backend": compile_backend})
+    compile_diag = probe_compile_diagnostics(cond_graph)
+    results.append(
+        {
+            "name": "torch_compile_backend",
+            "backend": str(compile_diag["backend"]),
+            "errors": dict(compile_diag["errors"]),
+        }
+    )
 
-    payload = {"benchmarks": results, "config": {"repeats": args.repeats, "warmup": args.warmup}}
+    payload = {
+        "schema_version": 1,
+        "benchmarks": results,
+        "config": {"repeats": args.repeats, "warmup": args.warmup},
+    }
     text = json.dumps(payload, indent=2, sort_keys=True)
     print(text)
     if args.json_out:

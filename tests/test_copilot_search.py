@@ -41,6 +41,7 @@ from axiom.copilot.search import (
     _try_single_input_affine_fast_path,
     _try_three_way_maxmin_fast_path,
     _try_two_input_interaction_fast_path,
+    _try_unit_step_fast_path,
     is_exact_symbolic_examples_task,
     merge_completion_overrides_into_context,
 )
@@ -732,6 +733,57 @@ def test_piecewise_threshold_identity_fast_path_falls_back_noisy():
     assert _try_piecewise_threshold_identity_fast_path(cfg) is None
     run_copilot_search(cfg)
     assert len(ex.draft_calls) == 1
+
+
+def test_unit_step_fast_path_exact_success():
+    ex = ScriptedExpert("SHOULD_NOT_DRAFT", [])
+    cfg = CopilotSearchConfig(
+        expert=ex,
+        goal="Write .ax so y = 1.0 when x > 0, otherwise y = 0.0.",
+        domain_context="Single-input threshold indicator distinct from identity ramp.",
+        max_iterations=2,
+        mode="predict_rows",
+        example_input_rows=[{"x": -2.0}, {"x": 0.0}, {"x": 0.5}, {"x": 3.0}],
+        expected_rows=[{"y": 0.0}, {"y": 0.0}, {"y": 1.0}, {"y": 1.0}],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+        repair_valid_with_metrics=False,
+    )
+    out = run_copilot_search(cfg)
+    assert len(ex.draft_calls) == 0
+    assert out.iterations[0].producing_expert["backend_name"] == "unit_step_fast_path"
+    assert "y = 1.0" in out.best_source
+    assert out.converged and out.best_evaluation.success
+
+
+def test_unit_step_fast_path_ambiguous_returns_none():
+    cfg = CopilotSearchConfig(
+        expert=ScriptedExpert(GOOD_DOUBLE_AX, []),
+        goal="Write .ax so y = 1.0 when x > 0, otherwise y = 0.0.",
+        max_iterations=1,
+        mode="predict_rows",
+        example_input_rows=[{"x": 0.0}, {"x": 2.0}],
+        expected_rows=[{"y": 0.0}, {"y": 1.0}],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+        repair_valid_with_metrics=False,
+    )
+    assert _try_unit_step_fast_path(cfg) is None
+
+
+def test_unit_step_fast_path_falls_back_noisy():
+    cfg = CopilotSearchConfig(
+        expert=ScriptedExpert(GOOD_DOUBLE_AX, []),
+        goal="y = 1.0 when x > 0 else 0.0",
+        max_iterations=1,
+        mode="predict_rows",
+        example_input_rows=[{"x": -2.0}, {"x": 0.0}, {"x": 0.5}, {"x": 3.0}],
+        expected_rows=[{"y": 0.0}, {"y": 0.0}, {"y": 1.01}, {"y": 1.0}],
+        score_fn=default_neg_mse_score_fn(),
+        score_sort_key="neg_mse",
+        repair_valid_with_metrics=False,
+    )
+    assert _try_unit_step_fast_path(cfg) is None
 
 
 def test_absolute_value_piecewise_fast_path_success():

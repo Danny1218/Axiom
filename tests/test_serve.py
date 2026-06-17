@@ -80,7 +80,78 @@ def test_health_ok(sample_axb: Path):
     assert r.status_code == 200
     data = r.json()
     assert data["status"] == "ok"
-    assert Path(data["bundle_path"]).resolve() == sample_axb.resolve()
+    assert data["bundle_path"] == sample_axb.name
+
+
+def test_health_discloses_full_path_when_env_set(sample_axb: Path, monkeypatch: pytest.MonkeyPatch):
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setenv("AXIOM_HEALTH_DISCLOSE_PATH", "1")
+    app = create_app(sample_axb)
+    c = TestClient(app)
+    r = c.get("/health")
+    assert r.status_code == 200
+    assert Path(r.json()["bundle_path"]).resolve() == sample_axb.resolve()
+
+
+@pytest.fixture
+def strict_axb(tmp_path: Path) -> Path:
+    reset_parser()
+    ir = ast_to_ir(parse_ax("y = x * 2.0;"))
+    abi = extract_global_abi(ir, max_vars=16)
+    aw = extract_abi_widths(ir, max_vars=16)
+    block = InterpretedBlock(ir, abi, abi_widths=aw)
+    p = tmp_path / "strict.axb"
+    save_bundle(block, p)
+    return p
+
+
+def test_predict_strict_missing_abi_input_422(strict_axb: Path):
+    from fastapi.testclient import TestClient
+
+    app = create_app(strict_axb, strict=True)
+    c = TestClient(app)
+    r = c.post("/predict", json={"inputs": {}})
+    assert r.status_code == 422
+    assert "missing" in r.json()["detail"].lower()
+
+
+def test_explain_strict_missing_abi_input_422(strict_axb: Path):
+    from fastapi.testclient import TestClient
+
+    app = create_app(strict_axb, strict=True)
+    c = TestClient(app)
+    r = c.post("/explain", json={"inputs": {}})
+    assert r.status_code == 422
+
+
+def test_report_strict_missing_abi_input_422(strict_axb: Path):
+    from fastapi.testclient import TestClient
+
+    app = create_app(strict_axb, strict=True)
+    c = TestClient(app)
+    r = c.post("/report", json={"inputs": {}})
+    assert r.status_code == 422
+
+
+def test_explain_expert_bundle_503_without_runtime_wiring(expert_axb: Path):
+    from fastapi.testclient import TestClient
+
+    app = create_app(expert_axb)
+    c = TestClient(app)
+    r = c.post("/explain", json={"inputs": {"x": 1.0}})
+    assert r.status_code == 503
+    assert "expert()" in r.json()["detail"]
+
+
+def test_report_expert_bundle_503_without_runtime_wiring(expert_axb: Path):
+    from fastapi.testclient import TestClient
+
+    app = create_app(expert_axb)
+    c = TestClient(app)
+    r = c.post("/report", json={"inputs": {"x": 1.0}})
+    assert r.status_code == 503
+    assert "expert()" in r.json()["detail"]
 
 
 def test_predict_single_row(sample_axb: Path):

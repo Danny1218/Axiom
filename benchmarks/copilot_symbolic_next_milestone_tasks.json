@@ -186,6 +186,21 @@
       "fast_path_expected": true,
       "backend_expected": "max_of_three_nested_fast_path",
       "category": "symbolic_minmax_harder"
+    },
+    {
+      "id": "unit_step",
+      "title": "unit_step (next milestone)",
+      "goal": "Write .ax so y = 1.0 when x > 0, otherwise y = 0.0.",
+      "domain_context": "Single-input threshold indicator distinct from identity ramp (y = x when x > 0).",
+      "evaluation_mode": "predict_rows",
+      "max_unroll": 8,
+      "example_input_rows": [{ "x": -2.0 }, { "x": 0.0 }, { "x": 0.5 }, { "x": 3.0 }],
+      "expected_rows": [{ "y": 0.0 }, { "y": 0.0 }, { "y": 1.0 }, { "y": 1.0 }],
+      "score_sort_key": "neg_mse",
+      "metric_pass_min": ["neg_mse", -0.000000000001],
+      "fast_path_expected": true,
+      "backend_expected": "unit_step_fast_path",
+      "category": "control_flow_harder"
     }
   ]
 }

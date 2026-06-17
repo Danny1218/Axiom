@@ -12,8 +12,8 @@ from axiom.engine.meta_compiler import MetaCompiler
 from axiom.engine.topology import ExecutionGraph
 
 
-def _compile_step_fn(graph: ExecutionGraph) -> tuple[nn.Module, str]:
-    """Prefer inductor when available; fall back to aot_eager if codegen fails (e.g. no MSVC on Windows)."""
+def probe_compile_diagnostics(graph: ExecutionGraph) -> Dict[str, object]:
+    """Try ``torch.compile`` backends; return backend, error map, and resolved step module."""
     import torch._dynamo.config as dynamo_config
 
     dynamo_config.capture_dynamic_output_shape_ops = True
@@ -33,11 +33,20 @@ def _compile_step_fn(graph: ExecutionGraph) -> tuple[nn.Module, str]:
             out, _, _ = fn(trial)
             out.sum().backward()
             trial.grad = None
-            return fn, backend
+            return {"backend": backend, "errors": errors, "step_fn": fn}
         except Exception as exc:
             errors[backend] = type(exc).__name__
             continue
-    return graph, "eager_fallback"
+    return {"backend": "eager_fallback", "errors": errors, "step_fn": graph}
+
+
+def _compile_step_fn(graph: ExecutionGraph) -> tuple[nn.Module, str]:
+    """Prefer inductor when available; fall back to aot_eager if codegen fails (e.g. no MSVC on Windows)."""
+    diag = probe_compile_diagnostics(graph)
+    backend = str(diag["backend"])
+    step_fn = diag["step_fn"]
+    assert isinstance(step_fn, nn.Module)
+    return step_fn, backend
 
 
 class EvolutionaryTrainer:

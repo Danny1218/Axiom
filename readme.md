@@ -73,12 +73,30 @@ Optional extras:
 | **`[copilot]`** | Semantic copilot CLI (`axiom copilot-draft`, `axiom copilot-search`, `axiom copilot-run`) — `requests` for Onyx/Qwen-style chat APIs |
 | **`[dev]`** | Run the test suite (`pytest` + Glass Box deps for `inspect` / `glass_box` tests) |
 
-Run tests locally:
+Run tests locally (CI-parity install):
 
 ```powershell
-pip install -e ".[dev]"
+pip install -e ".[dev,copilot,serve]"
+pip install -r constraints-dev.txt
 python -m pytest tests -q
 ```
+
+For a minimal dev-only install, `pip install -e ".[dev]"` still works but skips serve/copilot integration tests.
+
+### Continuous integration
+
+| Workflow | Platform | What it runs |
+|----------|----------|--------------|
+| [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | Ubuntu, Python 3.10–3.12 | `python -m pytest tests -q`, plus targeted `test_copilot_golden.py` and `test_smoke_happy_path.py` |
+| [`.github/workflows/copilot-milestone.yml`](.github/workflows/copilot-milestone.yml) | Windows, Python 3.12 | `pytest -q`, `scripts/smoke_copilot_draft.ps1`, four offline `axiom copilot-benchmark --backend benchmark-dispatch` suites |
+
+**Execution overhead baseline (local diagnostic, not CI-gated):**
+
+```powershell
+python scripts/profile_execution_overhead.py --json-out debug_execution_overhead.json
+```
+
+Compare JSON before/after changes; entries include p50/p95/mean timings and `torch_compile_backend` with per-backend `errors`.
 
 ---
 
@@ -104,7 +122,7 @@ Install **`[copilot]`** so `requests` is available. Pass **`--expert-url`** (API
 
 **Live preflight probes (`scripts/check_onyx_live_preflight.py --probe`):** **`--probe-mode auth`** issues a cheap **`GET /v1/models`** (same Bearer auth as the expert) to verify the key and route only — it does **not** measure draft latency. **`--probe-mode draft`** (default) runs one measured **`draft_program`** for a single benchmark task; on slow local GPUs, **draft** probes and **`scripts/sweep_robustness_task_latency.ps1`** runs may still need **180s+** (or more) per call. **`--probe-warmup-runs`** (draft only) and **`--warmup-runs`** on **`scripts/profile_onyx_task_latency.py`** add optional throwaway draft calls to reduce cold-start noise — **diagnostic-only**; they do not change **`axiom copilot-benchmark`** defaults. Use **`--probe-timeout`** / **`--probe-max-tokens`** / **`--probe-task-id`** to tune the draft probe without changing global benchmark defaults.
 
-**Smoke check (Phase 81 / 82b / 85b):** **`axiom copilot-doctor`** requests deterministic-style sampling via **`temperature: 0`** in the internal completion-overrides context (default goal: **`y = x * 2.0`**; override with **`--goal`**). On **Onyx**, that is translated to **`do_sample: false`** with **`temperature` omitted** from the HTTP body (Onyx rejects **`temperature: 0`**). It prints connection status, raw response size, an **`ax_source`** preview, **`parse` / `ir` / `block`** from **`validate_program`**, **`anti_pattern`** lines when **`forbidden_tokens_detected`** (**`assign_colon_eq`**, **`print_call`**) or **`indexed_variable_warning`** / **`output_call_warning`** / **`suspicious_numeric_literal_warning`** appear in expert metadata, and **`neural: yes/no`** from the extracted program. Optional **`--examples-json`** (same row schema as **`copilot-search`**) runs one **`predict_rows`** evaluation after a successful compile and prints **`evaluation`**, **`metrics`**, and **`exact` / `near_threshold`** when **`neg_mse`** is available. **Exit 0** only when the chat call succeeds, compile passes, and (if examples were requested) evaluation succeeds. Optional **`--timeout`** sets the HTTP timeout (default **120** seconds).
+**Smoke check (Phase 81 / 82b / 85b / 123):** **`axiom copilot-doctor`** requests deterministic-style sampling via **`temperature: 0`** in the internal completion-overrides context (default goal: **`y = x * 2.0`**; override with **`--goal`**). On **Onyx**, that is translated to **`do_sample: false`** with **`temperature` omitted** from the HTTP body (Onyx rejects **`temperature: 0`**). It prints connection status, raw response size, an **`ax_source`** preview, **`parse` / `ir` / `block`** from **`validate_program`**, structured **`failures:`** lines on compile errors, **`row_mismatches:`** / **`repair_cues:`** when **`--examples-json`** evaluation fails, **`anti_pattern`** lines when **`forbidden_tokens_detected`** (**`assign_colon_eq`**, **`print_call`**) or **`indexed_variable_warning`** / **`output_call_warning`** / **`suspicious_numeric_literal_warning`** appear in expert metadata, and **`neural: yes/no`** from the extracted program. Use **`--validate-source path.ax`** to diagnose local **`.ax`** without calling the expert (still supports **`--examples-json`**). **Exit 0** only when the chat call succeeds (or validate-only path), compile passes, and (if examples were requested) evaluation succeeds. Optional **`--timeout`** sets the HTTP timeout (default **120** seconds).
 
 ```powershell
 axiom copilot-doctor --backend onyx-qwen --expert-url "https://your-host/v1/" --expert-model "qwen-7b"
@@ -182,13 +200,14 @@ Row file format (JSON array): each element is `{"inputs": {...}, "expected": {..
 
 **Non-blocking follow-up:** remaining ONNX tracer warnings are follow-up cleanup work, not a blocker for the completed symbolic copilot milestone.
 
-**Current milestone snapshot:**
-- `pytest`: `695 passed`, `2 skipped`
-- benchmark: draft `5/10` compile, `2/10` metric; search `10/10` compile, `10/10` metric
-- backend-only smoke: `12/12` quality checks passed
-- ONNX tracer warnings: non-blocking follow-up work
+**Current milestone snapshot (2026-06-17, local venv with CI-parity extras):**
+- `pytest`: see [GitHub Actions](https://github.com/Danny1218/Axiom/actions) for authoritative green CI; local full suite may show environment-specific `torch.compile` / gateway gaps
+- offline benchmark-dispatch (CI): symbolic **10/10**, next symbolic **9/9**, generalization stress **8/8**, robustness/ambiguity **8/8**
+- live Onyx operator snapshot (not CI): draft quality varies by task; search symbolic suites are green offline
 
-**Recommended next milestone:** `draft quality, UX polish, and ONNX warning cleanup`
+**Known local-only failures (not CI blockers):** some `torch.compile` fullgraph probes and `httpx` TestClient gateway tests fail on certain Windows/PyTorch builds — track via `plan.md` and open issues rather than treating as regressions.
+
+**Recommended next milestone:** `HTTP serve polish, profiler baselines, copilot onboarding diagnostics`
 
 ```powershell
 # Local smoke bundles (Windows PowerShell)
@@ -610,5 +629,5 @@ Three honest forks after v1.0:
 ## Links
 
 - **Repository:** [github.com/Danny1218/Axiom](https://github.com/Danny1218/Axiom)  
-- **Tests:** `pip install -e ".[dev]"` then `python -m pytest tests -q`  
+- **Tests:** CI-parity: `pip install -e ".[dev,copilot,serve]"` + `pip install -r constraints-dev.txt` then `python -m pytest tests -q`  
 - **Project state (maintainers):** see `plan.md` in this repo.

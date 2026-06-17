@@ -557,6 +557,7 @@ _REFERENCE_AX_BY_TASK: Dict[str, str] = {
         "}\n"
     ),
     "max_of_three_nested": "score = max(max(a, b), c);\n",
+    "unit_step": "if (x > 0.0) {\n    y = 1.0;\n} else {\n    y = 0.0;\n}\n",
     # Third symbolic generalization stress suite.
     "reading_scale_and_shift": "target = 1.5 * reading - 0.25;\n",
     "sensor_mix_reordered": "mix = -0.2 * alpha + 0.6 * beta + 0.4 * gamma + 0.15;\n",

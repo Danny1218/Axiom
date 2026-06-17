@@ -332,3 +332,73 @@ def test_copilot_doctor_passes_expert_timeout_to_builder(monkeypatch):
         ]
     )
     assert seen["timeout"] == 77.0
+
+
+@pytest.mark.parametrize(
+    ("source", "pattern_id"),
+    [
+        ("this is not ax ;;;", "syntax_garbage"),
+        ("y = x * 2.0", "missing_semicolon"),
+        ("y = neural([x]);\n", "neural_on_exact_task"),
+        ("if (x > 0) { y = x; }\n", "incomplete_if_else"),
+        ("y = x / 0.0;\n", "divide_by_zero"),
+    ],
+)
+def test_copilot_doctor_validate_source_wrong_patterns(
+    tmp_path: Path,
+    capsys,
+    source: str,
+    pattern_id: str,
+):
+    ax_path = tmp_path / f"{pattern_id}.ax"
+    ax_path.write_text(source, encoding="utf-8")
+    ex = tmp_path / "ex.json"
+    ex.write_text(
+        '[{"inputs": {"x": 1.0}, "expected": {"y": 2.0}}, {"inputs": {"x": 0.0}, "expected": {"y": 0.0}}]',
+        encoding="utf-8",
+    )
+    with pytest.raises(SystemExit) as exc:
+        main(
+            [
+                "copilot-doctor",
+                "--validate-source",
+                str(ax_path),
+                "--examples-json",
+                str(ex),
+                "--goal",
+                "Compute y as double of x.",
+            ]
+        )
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "parse:" in out and "block:" in out
+    if pattern_id == "syntax_garbage":
+        assert "parse: fail" in out
+    else:
+        assert "evaluation: fail" in out or "failures:" in out or "row_mismatches:" in out
+
+
+def test_copilot_doctor_validate_source_row_mismatch_cues(tmp_path: Path, capsys):
+    ax_path = tmp_path / "wrong_coeff.ax"
+    ax_path.write_text("y = x * 3.0;\n", encoding="utf-8")
+    ex = tmp_path / "ex.json"
+    ex.write_text(
+        '[{"inputs": {"x": 1.0}, "expected": {"y": 2.0}}, {"inputs": {"x": 0.0}, "expected": {"y": 0.0}}]',
+        encoding="utf-8",
+    )
+    with pytest.raises(SystemExit) as exc:
+        main(
+            [
+                "copilot-doctor",
+                "--validate-source",
+                str(ax_path),
+                "--examples-json",
+                str(ex),
+                "--goal",
+                "Compute y as double of x.",
+            ]
+        )
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "evaluation: fail" in out
+    assert "row_mismatches:" in out

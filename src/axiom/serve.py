@@ -85,6 +85,29 @@ def _strict_from_env() -> bool:
     return v in ("1", "true", "yes", "on")
 
 
+def _health_disclose_path() -> bool:
+    v = os.environ.get("AXIOM_HEALTH_DISCLOSE_PATH", "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
+def _health_bundle_path(resolved_path: str) -> str:
+    """Return basename by default; full resolved path only when ``AXIOM_HEALTH_DISCLOSE_PATH=1``."""
+    if _health_disclose_path():
+        return resolved_path
+    return Path(resolved_path).name
+
+
+def _raise_inference_http(exc: BaseException) -> None:
+    """Map predictable user/input/runtime errors to stable HTTP status codes."""
+    if isinstance(exc, StrictInferenceError):
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if isinstance(exc, ExpertRuntimeError):
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if isinstance(exc, (TypeError, ValueError)):
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    raise exc
+
+
 def create_app(
     bundle_path: str | Path,
     *,
@@ -130,7 +153,10 @@ def create_app(
 
     @app.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:
-        return HealthResponse(status="ok", bundle_path=app.state.bundle_path)
+        return HealthResponse(
+            status="ok",
+            bundle_path=_health_bundle_path(app.state.bundle_path),
+        )
 
     @app.post("/predict", response_model=PredictResponse, dependencies=[Depends(verify_api_key)])
     def predict(
@@ -140,10 +166,8 @@ def create_app(
         _require_op_expert_wiring(model_)
         try:
             out = model_.predict(body.inputs)
-        except StrictInferenceError as e:
-            raise HTTPException(status_code=422, detail=str(e)) from e
-        except ExpertRuntimeError as e:
-            raise HTTPException(status_code=503, detail=str(e)) from e
+        except (StrictInferenceError, ExpertRuntimeError, TypeError, ValueError) as e:
+            _raise_inference_http(e)
         return PredictResponse(outputs=out)
 
     @app.post("/explain", response_model=ExplainResponse, dependencies=[Depends(verify_api_key)])
@@ -154,8 +178,8 @@ def create_app(
         _require_op_expert_wiring(model_)
         try:
             trace = model_.explain(body.inputs)
-        except ExpertRuntimeError as e:
-            raise HTTPException(status_code=503, detail=str(e)) from e
+        except (StrictInferenceError, ExpertRuntimeError, TypeError, ValueError) as e:
+            _raise_inference_http(e)
         return ExplainResponse(trace=trace)
 
     @app.post("/report", response_model=ReportResponse, dependencies=[Depends(verify_api_key)])
@@ -167,8 +191,8 @@ def create_app(
         _require_op_expert_wiring(model_)
         try:
             html = render_html_report(model_, body.inputs, body.source_code)
-        except ExpertRuntimeError as e:
-            raise HTTPException(status_code=503, detail=str(e)) from e
+        except (StrictInferenceError, ExpertRuntimeError, TypeError, ValueError) as e:
+            _raise_inference_http(e)
         if body.output_path:
             sandbox_raw = getattr(request.app.state, "report_output_dir", None)
             if not sandbox_raw:

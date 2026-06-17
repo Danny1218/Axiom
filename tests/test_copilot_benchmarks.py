@@ -824,8 +824,9 @@ def test_next_milestone_benchmark_tasks_json_loads():
         "cross_term_signed_bias",
         "shifted_nested_piecewise",
         "max_of_three_nested",
+        "unit_step",
     }.issubset(ids)
-    assert len(tasks) >= 8
+    assert len(tasks) >= 9
     by_id = {t["id"]: t for t in raw["tasks"]}
     assert by_id["absolute_value_piecewise"]["fast_path_expected"] is True
     assert by_id["absolute_value_piecewise"]["backend_expected"] == "absolute_value_piecewise_fast_path"

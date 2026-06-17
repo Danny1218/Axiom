@@ -47,6 +47,7 @@ _GOAL_CLAMP_HINT = re.compile(
 )
 _GOAL_QUADRATIC_HINT = re.compile(r"(quadratic|square|x\s*\*\s*x)", re.I)
 _GOAL_EXACT_PIECEWISE_CONTROL = re.compile(r"\bif\b.+(?:<|>).+\bthen\b.+\belse\b", re.I)
+_GOAL_WHEN_OTHERWISE_CONTROL = re.compile(r"\bwhen\b.+(?:>|<|>=|<=).+\botherwise\b", re.I)
 
 # Penalties subtracted from raw sort metric (higher-is-better, e.g. ``neg_mse``).
 _PENALTY_NEURAL_EXACT = 2.0
@@ -71,7 +72,7 @@ def _goal_suggests_piecewise_control(goal: str) -> bool:
     g = (goal or "").strip()
     if not g or len(g) > 500:
         return False
-    return bool(_GOAL_EXACT_PIECEWISE_CONTROL.search(g))
+    return bool(_GOAL_EXACT_PIECEWISE_CONTROL.search(g)) or bool(_GOAL_WHEN_OTHERWISE_CONTROL.search(g))
 
 
 def _exact_symbolic_hint_text(config: CopilotSearchConfig) -> str:
@@ -175,6 +176,16 @@ def _piecewise_threshold_identity_source(in_key: str, out_key: str) -> str:
         f"    {out_key} = 0.0;\n"
         "} else {\n"
         f"    {out_key} = {in_key};\n"
+        "}\n"
+    )
+
+
+def _unit_step_source(in_key: str, out_key: str, on_value: float = 1.0) -> str:
+    return (
+        f"if ({in_key} > 0.0) {{\n"
+        f"    {out_key} = {_linear_xy_coeff_str(on_value)};\n"
+        "} else {\n"
+        f"    {out_key} = 0.0;\n"
         "}\n"
     )
 
@@ -603,6 +614,73 @@ def _try_piecewise_threshold_identity_fast_path(config: CopilotSearchConfig) -> 
         ax_source=_piecewise_threshold_identity_source(in_key, out_key),
         backend_name="piecewise_threshold_identity_fast_path",
         metadata={"fast_path": "piecewise_threshold_identity", "in_key": in_key, "out_key": out_key},
+    )
+
+
+def _try_unit_step_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
+    """Exact one-input unit step: ``y = 1.0`` when ``x > 0``, else ``0.0``."""
+    if not is_exact_symbolic_examples_task(config):
+        return None
+    if config.mode != "predict_rows":
+        return None
+    inp = config.example_input_rows
+    exp = config.expected_rows
+    if not inp or not exp or len(inp) != len(exp):
+        return None
+
+    in_key: Optional[str] = None
+    out_key: Optional[str] = None
+    on_value: Optional[float] = None
+    saw_nonpositive = False
+    saw_positive = False
+    positive_count = 0
+
+    for row_in, row_ex in zip(inp, exp):
+        if not isinstance(row_in, Mapping) or not isinstance(row_ex, Mapping):
+            return None
+        if len(row_in) != 1 or len(row_ex) != 1:
+            return None
+        ik = str(next(iter(row_in.keys())))
+        ok = str(next(iter(row_ex.keys())))
+        if in_key is None:
+            in_key = ik
+        elif ik != in_key:
+            return None
+        if out_key is None:
+            out_key = ok
+        elif ok != out_key:
+            return None
+        try:
+            x = float(row_in[in_key])
+            y = float(row_ex[out_key])
+        except (TypeError, ValueError, KeyError):
+            return None
+        if not math.isfinite(x) or not math.isfinite(y):
+            return None
+        if x > 0.0:
+            saw_positive = True
+            positive_count += 1
+            if on_value is None:
+                on_value = y
+            elif not math.isclose(y, on_value, rel_tol=1e-12, abs_tol=1e-9):
+                return None
+        else:
+            saw_nonpositive = True
+            if not math.isclose(y, 0.0, rel_tol=0.0, abs_tol=1e-9):
+                return None
+
+    if not saw_nonpositive or not saw_positive or on_value is None or positive_count < 2:
+        return None
+    assert in_key is not None and out_key is not None
+    return ExpertDraftResponse(
+        ax_source=_unit_step_source(in_key, out_key, on_value),
+        backend_name="unit_step_fast_path",
+        metadata={
+            "fast_path": "unit_step",
+            "in_key": in_key,
+            "out_key": out_key,
+            "on_value": on_value,
+        },
     )
 
 
@@ -2200,9 +2278,11 @@ def _build_copilot_draft_request(config: CopilotSearchConfig) -> ExpertDraftRequ
 
 
 def _try_exact_symbolic_fast_path(config: CopilotSearchConfig) -> Optional[ExpertDraftResponse]:
-    fast = _try_nested_piecewise_identity_cap_fast_path(config)
+    fast = _try_piecewise_threshold_identity_fast_path(config)
     if fast is None:
-        fast = _try_piecewise_threshold_identity_fast_path(config)
+        fast = _try_unit_step_fast_path(config)
+    if fast is None:
+        fast = _try_nested_piecewise_identity_cap_fast_path(config)
     if fast is None:
         fast = _try_absolute_value_piecewise_fast_path(config)
     if fast is None:

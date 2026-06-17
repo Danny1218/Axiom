@@ -343,7 +343,7 @@ def _cmd_serve(args: argparse.Namespace) -> None:
     app = create_app(
         bp,
         trusted=getattr(args, "trust_bundle", False),
-        strict=getattr(args, "strict", False),
+        strict=True if getattr(args, "strict", False) else None,
         report_output_dir=getattr(args, "report_output_dir", None),
     )
     uvicorn.run(app, host=host, port=port, log_level="info")
@@ -676,7 +676,113 @@ _COPILOT_DOCTOR_DEFAULT_GOAL = (
 )
 
 
+def _copilot_doctor_examples_metric_ok(ev: object) -> bool:
+    from axiom.copilot.stability_report import DEFAULT_NEAR_NEG_MSE
+
+    if not getattr(ev, "success", False):
+        return False
+    metrics = getattr(ev, "metrics", None) or {}
+    if "neg_mse" not in metrics:
+        return True
+    neg = float(metrics["neg_mse"])
+    return abs(neg) <= 1e-15 or neg >= DEFAULT_NEAR_NEG_MSE
+
+
+def _copilot_doctor_print_compile_failures(rep: object) -> None:
+    from axiom.copilot.models import ProgramFailure
+
+    failures = getattr(rep, "failures", None) or []
+    if not failures:
+        return
+    print("failures:")
+    for f in failures:
+        if not isinstance(f, ProgramFailure):
+            continue
+        print(f"  - stage={f.stage} kind={f.kind} detail={f.detail}")
+        print(f"    message: {f.message}")
+
+
+def _copilot_doctor_print_row_mismatch_cues(ev: object, goal: str) -> None:
+    from axiom.copilot.search import _symbolic_row_error_hints, format_row_mismatches_for_repair
+
+    rows = getattr(ev, "row_comparisons", None) or []
+    if not rows:
+        return
+    print("row_mismatches:")
+    print(format_row_mismatches_for_repair(rows))
+    hints = _symbolic_row_error_hints(goal, rows)
+    if hints:
+        print("repair_cues:")
+        for h in hints:
+            print(f"  - {h}")
+
+
+def _copilot_doctor_validate_source(ax: str, args: argparse.Namespace) -> int:
+    from axiom.copilot.evaluator import evaluate_program, validate_program
+    from axiom.copilot.models import ProgramCandidate
+    from axiom.copilot.stability_report import DEFAULT_NEAR_NEG_MSE
+    from axiom.experts.onyx_qwen import ax_source_metadata_flags
+
+    preview = ax.replace("\n", "\\n")
+    if len(preview) > 100:
+        preview = preview[:97] + "..."
+    print(f"ax_source: {len(ax)} chars, preview: {preview}")
+
+    rep = validate_program(ProgramCandidate(source=ax))
+    parse_ok = not any(f.stage == "parse" for f in rep.failures)
+    ir_ok = not any(f.stage == "ir" for f in rep.failures)
+    block_ok = rep.success
+    print(f"parse: {'ok' if parse_ok else 'fail'}")
+    print(f"ir: {'ok' if ir_ok else 'fail'}")
+    print(f"block: {'ok' if block_ok else 'fail'}")
+    if not rep.success:
+        _copilot_doctor_print_compile_failures(rep)
+
+    flags = ax_source_metadata_flags(ax)
+    print(f"neural: {'yes' if flags.get('uses_neural') else 'no'}")
+
+    if not rep.success:
+        return 1
+
+    ex_path = getattr(args, "examples_json", None)
+    if ex_path is None:
+        return 0
+
+    inp, exp = _load_examples_json(Path(ex_path))
+    ev = evaluate_program(
+        ProgramCandidate(source=ax),
+        mode="predict_rows",
+        input_rows=inp,
+        expected_rows=exp,
+        score_fn=_default_predict_score_fn(),
+        row_comparison_limit=8,
+        include_trace_snippet=False,
+    )
+    print(f"evaluation: {'ok' if _copilot_doctor_examples_metric_ok(ev) else 'fail'}")
+    print(f"metrics: {json.dumps(dict(ev.metrics), sort_keys=True)}")
+    if ev.success and "neg_mse" in ev.metrics:
+        neg = float(ev.metrics["neg_mse"])
+        exact = abs(neg) <= 1e-15
+        near = neg >= DEFAULT_NEAR_NEG_MSE
+        print(f"examples: exact={'yes' if exact else 'no'} near_threshold={'yes' if near else 'no'}")
+    if not _copilot_doctor_examples_metric_ok(ev):
+        _copilot_doctor_print_row_mismatch_cues(ev, getattr(args, "goal", ""))
+        _copilot_doctor_print_compile_failures(ev)
+        return 1
+    return 0
+
+
 def _cmd_copilot_doctor(args: argparse.Namespace) -> None:
+    validate_path = getattr(args, "validate_source", None)
+    if validate_path is not None:
+        ax = Path(validate_path).read_text(encoding="utf-8")
+        raise SystemExit(_copilot_doctor_validate_source(ax, args))
+
+    if not args.backend or not args.expert_url or not args.expert_model:
+        raise SystemExit(
+            "--backend, --expert-url, and --expert-model are required unless --validate-source is set."
+        )
+
     from axiom.copilot.evaluator import evaluate_program, validate_program
     from axiom.copilot.models import ProgramCandidate
     from axiom.copilot.search import build_draft_context
@@ -725,6 +831,8 @@ def _cmd_copilot_doctor(args: argparse.Namespace) -> None:
     print(f"parse: {'ok' if parse_ok else 'fail'}")
     print(f"ir: {'ok' if ir_ok else 'fail'}")
     print(f"block: {'ok' if block_ok else 'fail'}")
+    if not rep.success:
+        _copilot_doctor_print_compile_failures(rep)
 
     warn_keys = (
         "assign_colon_eq",
@@ -762,17 +870,19 @@ def _cmd_copilot_doctor(args: argparse.Namespace) -> None:
             input_rows=inp,
             expected_rows=exp,
             score_fn=_default_predict_score_fn(),
-            row_comparison_limit=0,
+            row_comparison_limit=8,
             include_trace_snippet=False,
         )
-        print(f"evaluation: {'ok' if ev.success else 'fail'}")
+        print(f"evaluation: {'ok' if _copilot_doctor_examples_metric_ok(ev) else 'fail'}")
         print(f"metrics: {json.dumps(dict(ev.metrics), sort_keys=True)}")
         if ev.success and "neg_mse" in ev.metrics:
             neg = float(ev.metrics["neg_mse"])
             exact = abs(neg) <= 1e-15
             near = neg >= DEFAULT_NEAR_NEG_MSE
             print(f"examples: exact={'yes' if exact else 'no'} near_threshold={'yes' if near else 'no'}")
-        if not ev.success:
+        if not _copilot_doctor_examples_metric_ok(ev):
+            _copilot_doctor_print_row_mismatch_cues(ev, args.goal)
+            _copilot_doctor_print_compile_failures(ev)
             raise SystemExit(1)
 
 
@@ -1396,7 +1506,8 @@ def main(argv: list[str] | None = None) -> None:
     p_serve.add_argument(
         "--strict",
         action="store_true",
-        help="Reject missing ABI inputs and other lenient coercions on /predict.",
+        help="Reject missing ABI inputs and other lenient coercions on /predict, /explain, and /report "
+        "(else honor AXIOM_STRICT=1).",
     )
     p_serve.add_argument(
         "--trust-bundle",
@@ -1426,12 +1537,20 @@ def main(argv: list[str] | None = None) -> None:
 
     p_cdoc = sub.add_parser(
         "copilot-doctor",
-        help="Smoke-test expert HTTP + one deterministic draft + parse/IR/block; optional --examples-json eval (Phase 85b).",
+        help="Smoke-test expert HTTP + one deterministic draft + parse/IR/block; "
+        "optional --validate-source or --examples-json eval (Phase 85b).",
+    )
+    p_cdoc.add_argument(
+        "--validate-source",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="Validate local .ax without calling the expert (optional --examples-json for row cues).",
     )
     p_cdoc.add_argument(
         "--backend",
         choices=["onyx-qwen"],
-        required=True,
+        required=False,
         help="Semantic expert implementation (requires [copilot] / requests).",
     )
     p_cdoc.add_argument(
@@ -1443,13 +1562,13 @@ def main(argv: list[str] | None = None) -> None:
     p_cdoc.add_argument(
         "--expert-url",
         type=str,
-        required=True,
+        required=False,
         help="Base URL for chat/completions (e.g. https://api.example.com/v1/).",
     )
     p_cdoc.add_argument(
         "--expert-model",
         type=str,
-        required=True,
+        required=False,
         help="Remote model id (passed through to the chat API).",
     )
     p_cdoc.add_argument(
