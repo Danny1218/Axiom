@@ -1,6 +1,7 @@
 import networkx as nx
 import pytest
 import torch
+import torch.nn as nn
 
 from axiom.engine.supernet import LatentSupernet
 from axiom.engine.topology import (
@@ -70,3 +71,52 @@ def test_linear_dag_matches_ir_order():
     ]
     g = build_execution_graph_from_ir(ir, sn, [("a", "b")])
     assert len(g.topo_names) == 2
+
+
+def _piecewise_ir():
+    """if (a > 0) { b = 10; } else { b = -10; } — ``a`` read from trunk ABI column."""
+    return [
+        (
+            "OP_CONDITIONAL",
+            [("OP_LOAD", "a"), ("OP_CONST", 0.0), ("OP_CMP_GT",)],
+            [("OP_ASSIGN", "b", [("OP_CONST", 10.0)])],
+            [("OP_ASSIGN", "b", [("OP_CONST", -10.0)])],
+        ),
+    ]
+
+
+def test_conditional_block_stores_cond_ir():
+    sn = LatentSupernet(4, ("t", "e"), rank=2)
+    g = build_execution_graph_from_ir(_piecewise_ir(), sn, [("t", "e")])
+    blk = g.conditional_blocks()[0]
+    assert blk.cond_ir
+    assert g.dag.nodes[g.topo_names[-1]].get("cond_ir") == blk.cond_ir
+
+
+def test_execution_graph_symbolic_conditional_with_neutral_adapters():
+    """Top-level if/else follows compiled predicate when router/adapters are neutral."""
+    torch.manual_seed(7)
+    dim = 4
+    trunk = nn.Linear(dim, dim, bias=False)
+    nn.init.eye_(trunk.weight)
+    sn = LatentSupernet(dim, ("then_0", "else_0"), rank=2, trunk=trunk)
+    sn.set_masks({"then_0": 1.0, "else_0": 1.0})
+    for p in sn.adapters.values():
+        nn.init.zeros_(p.U)
+        nn.init.zeros_(p.V)
+        nn.init.zeros_(p.W)
+    ir = _piecewise_ir()
+    g = build_execution_graph_from_ir(ir, sn, [("then_0", "else_0")], router_iters=8)
+    blk = g.conditional_blocks()[0]
+    nn.init.zeros_(blk.router.proj.weight)
+    nn.init.zeros_(blk.router.proj.bias)
+    ac, bc = g.abi["a"], g.abi["b"]
+    x_pos = torch.zeros(1, dim)
+    x_pos[0, ac] = 2.0
+    x_neg = torch.zeros(1, dim)
+    x_neg[0, ac] = -3.0
+    with torch.no_grad():
+        out_pos, _, _ = g(x_pos)
+        out_neg, _, _ = g(x_neg)
+    assert out_pos[0, bc].item() == pytest.approx(10.0, abs=1e-4)
+    assert out_neg[0, bc].item() == pytest.approx(-10.0, abs=1e-4)

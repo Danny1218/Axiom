@@ -8,6 +8,7 @@ import torch.nn as nn
 
 from axiom.compiler.ir import extract_abi_widths, extract_global_abi
 from axiom.engine.block_executor import InterpretedBlock
+from axiom.engine.interpreter import eval_expr
 from axiom.engine.loop_executor import InterpretedLiquidLoop
 from axiom.engine.router import SinkhornRouter
 from axiom.engine.supernet import LatentSupernet
@@ -39,6 +40,56 @@ def _prelude_stmts_before_loop(ir: IRList, k: int) -> List[tuple]:
     return stmts
 
 
+def _seed_env_from_trunk(
+    h: torch.Tensor,
+    abi: Dict[str, int],
+    abi_widths: Dict[str, int],
+    *,
+    extra_names: Optional[Set[str]] = None,
+) -> Dict[str, torch.Tensor]:
+    """Map trunk columns into the symbolic env (same layout as ``InterpretedBlock.forward``)."""
+    if h.dim() != 2:
+        raise ValueError("trunk tensor must be (B, D)")
+    B, D = h.shape
+    device, dtype = h.device, h.dtype
+    names: Set[str] = set(abi.keys()) | set(extra_names or ())
+    env: Dict[str, torch.Tensor] = {}
+    z = torch.zeros(B, device=device, dtype=dtype)
+    for name in names:
+        if name in abi:
+            col = abi[name]
+            w = max(1, int(abi_widths.get(name, 1)))
+            if col + w <= D:
+                if w == 1:
+                    env[name] = h[:, col].clone()
+                else:
+                    env[name] = h[:, col : col + w].clone()
+            else:
+                env[name] = z.clone() if w == 1 else torch.zeros(B, w, device=device, dtype=dtype)
+        else:
+            env[name] = z.clone()
+    return env
+
+
+def _symbolic_branch_prior(
+    h: torch.Tensor,
+    cond_ir: List[tuple],
+    abi: Dict[str, int],
+    abi_widths: Dict[str, int],
+) -> torch.Tensor:
+    """Per-row then-branch weight in [0, 1] from compiled ``cond_ir`` (matches ``exec_stmt``)."""
+    env = _seed_env_from_trunk(h, abi, abi_widths)
+    B = h.shape[0]
+    cond_vec = eval_expr(
+        env,
+        list(cond_ir),
+        B=B,
+        device=h.device,
+        dtype=h.dtype,
+    )
+    return (cond_vec != 0).to(dtype=h.dtype)
+
+
 class ConditionalSinkhornBlock(nn.Module):
     """Sinkhorn-balanced mix: symbolic IR on each branch + TT-LoRA residual, then weight blend."""
 
@@ -54,6 +105,7 @@ class ConditionalSinkhornBlock(nn.Module):
         mutation_entropy_norm_threshold: float = 0.92,
         then_ir: Optional[List[tuple]] = None,
         else_ir: Optional[List[tuple]] = None,
+        cond_ir: Optional[List[tuple]] = None,
         abi: Optional[Dict[str, int]] = None,
         block_max_unroll: int = 8,
         abi_widths: Optional[Dict[str, int]] = None,
@@ -65,6 +117,9 @@ class ConditionalSinkhornBlock(nn.Module):
         self.expert_then = expert_then
         self.expert_else = expert_else
         self.block_name = block_name
+        self.cond_ir: List[tuple] = list(cond_ir) if cond_ir else []
+        self.abi: Dict[str, int] = dict(abi or {})
+        self.abi_widths: Dict[str, int] = dict(abi_widths or {})
         self.router = SinkhornRouter(
             supernet.dim,
             2,
@@ -100,7 +155,14 @@ class ConditionalSinkhornBlock(nn.Module):
         h_else = self.else_block(h) if self.else_block is not None else h
         w, entropy_tensor = self.router(h, expert_mask=mask)
         *lead, _ = w.shape
-        w2 = w.reshape(-1, 2)
+        w_flat = w.reshape(-1, 2)
+        if self.cond_ir:
+            s = _symbolic_branch_prior(h, self.cond_ir, self.abi, self.abi_widths).reshape(-1, 1)
+            prior = torch.cat([s, 1.0 - s], dim=1).clamp(min=1e-8)
+            w2 = prior * w_flat
+            w2 = w2 / w2.sum(dim=1, keepdim=True).clamp(min=1e-8)
+        else:
+            w2 = w_flat
         sig: Dict[str, torch.Tensor] = {
             self.block_name: entropy_tensor,
             f"{self.block_name}_weights": w.detach(),
@@ -240,9 +302,10 @@ def build_execution_graph_from_ir(
         if op == "OP_CONDITIONAL":
             name = f"cond_{cidx}"
             then_e, else_e = conditional_experts[cidx]
-            _, _cond_ir, then_ir_list, else_ir_list = instr
+            _, cond_ir, then_ir_list, else_ir_list = instr
             then_ir = list(then_ir_list)
             else_ir = list(else_ir_list)
+            cond_ir_l = list(cond_ir)
             modules[name] = ConditionalSinkhornBlock(
                 supernet,
                 then_e,
@@ -253,6 +316,7 @@ def build_execution_graph_from_ir(
                 mutation_entropy_norm_threshold=mutation_entropy_norm_threshold,
                 then_ir=then_ir,
                 else_ir=else_ir,
+                cond_ir=cond_ir_l,
                 abi=global_abi,
                 block_max_unroll=loop_max_unroll,
                 abi_widths=global_abi_widths,
@@ -261,6 +325,7 @@ def build_execution_graph_from_ir(
                 name,
                 kind="conditional",
                 op="OP_CONDITIONAL",
+                cond_ir=cond_ir_l,
                 then_ir=then_ir,
                 else_ir=else_ir,
             )

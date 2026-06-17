@@ -162,6 +162,8 @@ def load_execution_bundle(path_prefix: str | Path) -> ExecutionGraph:
             else_e = attr["expert_else"]
             then_ir = _ir_stmt_list(attr.get("then_ir"))
             else_ir = _ir_stmt_list(attr.get("else_ir"))
+            cond_raw = attr.get("cond_ir")
+            cond_ir_l = list(_ir_from_json(cond_raw)) if cond_raw else []
             then_ir_l = list(then_ir) if then_ir else []
             else_ir_l = list(else_ir) if else_ir else []
             modules[name] = ConditionalSinkhornBlock(
@@ -174,6 +176,7 @@ def load_execution_bundle(path_prefix: str | Path) -> ExecutionGraph:
                 mutation_entropy_norm_threshold=mut_thr,
                 then_ir=then_ir_l or None,
                 else_ir=else_ir_l or None,
+                cond_ir=cond_ir_l or None,
                 abi=global_abi,
                 block_max_unroll=default_max_unroll,
                 abi_widths=global_abi_widths,

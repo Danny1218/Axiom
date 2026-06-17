@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -622,8 +624,10 @@ def test_profile_onyx_task_latency_script_exposes_expected_args():
     assert "def _api_key_fingerprint" in script
     assert "expert-api-key-file not found" in script
     assert '"--request-capture-dir"' in script
-    assert '"--warmup-runs"' in script
+    assert '"warmup_runs"' in script
     assert "WARMUP:" in script
+    assert "def _run_warmup_drafts" in script
+    assert '"warmup": warmup_results' in script
     assert 'ATTEMPT {0}: task_id={1} status={2}' in script
     assert "SUMMARY: repeats={0} success_count={1} timeout_count={2}" in script
     assert "AGGREGATES: failure_kind_counts=" in script
@@ -659,7 +663,8 @@ def test_check_onyx_live_preflight_script_exposes_expected_contract():
     assert '"--probe-max-tokens"' in script
     assert '"--probe-task-id"' in script
     assert '"--probe-warmup-runs"' in script
-    assert "warmup runs:" in script
+    assert "_run_warmup_drafts" in script
+    assert "warmup_auth_failure" in script
     assert 'print("probe mode: auth")' in script
     assert 'print("probe mode: draft")' in script
     assert "v1/models" in script
@@ -742,6 +747,66 @@ def test_summarize_onyx_latency_sweeps_script_exposes_expected_contract():
     assert '_print_best("highest_metric_ratio"' in script
     assert "_ratio_key(row, \"success_count\")" in script
     assert "_ratio_key(row, \"metric_ok_count\")" in script
+    assert '"--best-json-out"' in script
+    assert "_write_best_json(" in script
+
+
+def test_summarize_onyx_latency_sweeps_best_json_out_writes(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[1]
+
+    def _doc(mean_elapsed: float, timeout: int, max_tokens: int) -> dict:
+        return {
+            "config": {
+                "task_id": "t",
+                "task_json": "benchmarks/x.json",
+                "timeout": timeout,
+                "max_tokens": max_tokens,
+                "repeats": 2,
+            },
+            "attempts": [
+                {
+                    "index": i,
+                    "status": "success",
+                    "failure_kind": "n/a",
+                    "elapsed_seconds": mean_elapsed,
+                    "payload_sha256": "a",
+                    "request_capture_path": "c.json",
+                    "compile_ok": True,
+                    "metric_ok": False,
+                }
+                for i in range(2)
+            ],
+            "summary": {
+                "repeats": 2,
+                "success_count": 2,
+                "timeout_count": 0,
+                "mean_elapsed": mean_elapsed,
+                "median_elapsed": mean_elapsed,
+            },
+        }
+
+    (tmp_path / "slow.json").write_text(json.dumps(_doc(50.0, 240, 64)), encoding="utf-8")
+    (tmp_path / "fast.json").write_text(json.dumps(_doc(40.0, 120, 32)), encoding="utf-8")
+    out = tmp_path / "best.json"
+    proc = subprocess.run(
+        [
+            sys.executable,
+            str(root / "scripts/summarize_onyx_latency_sweeps.py"),
+            str(tmp_path),
+            "--best-json-out",
+            str(out),
+        ],
+        cwd=str(root),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr + proc.stdout
+    data = json.loads(out.read_text(encoding="utf-8"))
+    assert data["fastest_compile_ok"] == str((tmp_path / "fast.json").resolve())
+    assert data["fastest_metric_ok"] is None
+    assert data["highest_success_ratio"] == str((tmp_path / "fast.json").resolve())
+    assert data["highest_metric_ratio"] == str((tmp_path / "fast.json").resolve())
 
 
 def test_next_milestone_benchmark_tasks_json_loads():
@@ -886,8 +951,67 @@ def test_copilot_milestone_workflow_runs_pytest_smoke_and_three_benchmarks():
     assert "pytest -q" in workflow
     assert "smoke_copilot_draft.ps1" in workflow
     assert "copilot-benchmark" in workflow
-    assert workflow.count("axiom copilot-benchmark") >= 3
+    assert workflow.count("axiom copilot-benchmark") >= 4
     assert "copilot_symbolic_and_generalization_tasks.json" in workflow
     assert "copilot_symbolic_next_milestone_tasks.json" in workflow
     assert "copilot_symbolic_generalization_stress_tasks.json" in workflow
+    assert "copilot_symbolic_robustness_ambiguity_stress_tasks.json" in workflow
+    assert "test_copilot_golden.py" in workflow
+    assert "test_smoke_happy_path.py" in workflow
     assert "benchmark-dispatch" in workflow
+
+
+def test_ci_workflow_runs_readme_test_command():
+    root = Path(__file__).resolve().parents[1]
+    workflow = (root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert "python -m pytest tests -q" in workflow
+    assert "3.10" in workflow
+    assert "constraints-dev.txt" in workflow
+
+
+def test_run_warmup_drafts_records_failures_and_successes(capsys):
+    import sys
+
+    root = Path(__file__).resolve().parents[1]
+    scripts = str(root / "scripts")
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    from profile_onyx_task_latency import _run_warmup_drafts
+
+    class _AuthErr(Exception):
+        def __init__(self) -> None:
+            super().__init__("unauthorized")
+            self.metadata = {"status_code": 401, "failure_kind": "unauthorized"}
+
+    class FakeExpert:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def draft_program(self, _req: object) -> object:
+            self.calls += 1
+            if self.calls == 1:
+                raise _AuthErr()
+            return object()
+
+    expert = FakeExpert()
+    results = _run_warmup_drafts(expert, object(), 2)
+    out = capsys.readouterr().out
+    assert len(results) == 2
+    assert results[0]["status"] == "failure"
+    assert results[0]["status_code"] == 401
+    assert results[1]["status"] == "success"
+    assert "WARMUP 1: status=failure" in out
+    assert "failure_kind=unauthorized" in out
+    assert "WARMUP 2: status=success" in out
+
+
+def test_run_warmup_drafts_empty_when_zero():
+    import sys
+
+    root = Path(__file__).resolve().parents[1]
+    scripts = str(root / "scripts")
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    from profile_onyx_task_latency import _run_warmup_drafts
+
+    assert _run_warmup_drafts(object(), object(), 0) == []

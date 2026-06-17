@@ -52,3 +52,16 @@ jobs:
             --backend benchmark-dispatch `
             --task-json benchmarks/copilot_symbolic_generalization_stress_tasks.json `
             --out benchmark_symbolic_suite_generalization_stress_ci.json
+
+      - name: Run Robustness Ambiguity Stress Benchmark
+        run: |
+          axiom copilot-benchmark `
+            --backend benchmark-dispatch `
+            --task-json benchmarks/copilot_symbolic_robustness_ambiguity_stress_tasks.json `
+            --out benchmark_symbolic_suite_robustness_ambiguity_stress_ci.json
+
+      - name: Copilot golden conformance (offline)
+        run: python -m pytest tests/test_copilot_golden.py -q
+
+      - name: Engine smoke happy path
+        run: python -m pytest tests/test_smoke_happy_path.py -q

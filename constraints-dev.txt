@@ -1,0 +1,5 @@
+# Reproducible dev/CI pins (optional; install after pip install -e ".[dev,...]")
+pytest>=7.0.0,<9
+torch>=2.0.0,<3
+lark>=1.1.0,<2
+networkx>=3.0,<4

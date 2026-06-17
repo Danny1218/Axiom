@@ -157,6 +157,29 @@ def _pick_best(rows: list[dict[str, Any]], predicate, key_fn):
     return min(candidates, key=key_fn)
 
 
+def _row_path_str(row: dict[str, Any] | None) -> str | None:
+    if row is None:
+        return None
+    return str(row["path"].resolve())
+
+
+def _write_best_json(
+    out_path: Path,
+    fastest_compile: dict[str, Any] | None,
+    fastest_metric: dict[str, Any] | None,
+    best_success_ratio: dict[str, Any] | None,
+    best_metric_ratio: dict[str, Any] | None,
+) -> None:
+    doc = {
+        "fastest_compile_ok": _row_path_str(fastest_compile),
+        "fastest_metric_ok": _row_path_str(fastest_metric),
+        "highest_success_ratio": _row_path_str(best_success_ratio),
+        "highest_metric_ratio": _row_path_str(best_metric_ratio),
+    }
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(doc, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
 def _print_best(label: str, row: dict[str, Any] | None, value_key: str | None = None) -> None:
     if row is None:
         print(f"BEST {label}: n/a")
@@ -182,6 +205,11 @@ def _print_best(label: str, row: dict[str, Any] | None, value_key: str | None = 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Summarize Onyx latency sweep JSON artifacts.")
     parser.add_argument("artifact_dir", help="Directory containing JSON latency sweep artifacts.")
+    parser.add_argument(
+        "--best-json-out",
+        metavar="PATH",
+        help="Optional path to write JSON with resolved paths for the four BEST picks.",
+    )
     args = parser.parse_args(argv)
 
     artifact_dir = Path(args.artifact_dir)
@@ -219,6 +247,15 @@ def main(argv: list[str] | None = None) -> int:
     _print_best("fastest_metric_ok", fastest_metric, "mean_elapsed")
     _print_best("highest_success_ratio", best_success_ratio)
     _print_best("highest_metric_ratio", best_metric_ratio)
+
+    if args.best_json_out:
+        _write_best_json(
+            Path(args.best_json_out),
+            fastest_compile,
+            fastest_metric,
+            best_success_ratio,
+            best_metric_ratio,
+        )
 
     all_attempts: list[dict[str, Any]] = []
     for path in paths:

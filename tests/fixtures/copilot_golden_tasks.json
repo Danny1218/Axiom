@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "families": [
+    {
+      "id": "canonical_math",
+      "title": "Canonical arithmetic",
+      "tasks": [
+        {
+          "id": "golden_double_x",
+          "goal": "Compute y as twice x.",
+          "evaluation_mode": "predict_rows",
+          "example_input_rows": [{"x": 2.0}, {"x": 3.5}],
+          "expected_rows": [{"y": 4.0}, {"y": 7.0}],
+          "reference_ax": "y = x + x;\n",
+          "metric_pass_min": ["neg_mse", -1e-6]
+        }
+      ]
+    },
+    {
+      "id": "nested_piecewise",
+      "title": "Nested piecewise rules",
+      "tasks": [
+        {
+          "id": "golden_piecewise_ramp",
+          "goal": "If x is below zero return negative band else return x plus a small offset.",
+          "evaluation_mode": "predict_rows",
+          "example_input_rows": [{"x": -2.0}, {"x": 4.0}],
+          "expected_rows": [{"y": -4.0}, {"y": 4.25}],
+          "reference_ax": "if (x < 0) {\n  y = x * 2.0;\n} else {\n  y = x + 0.25;\n}\n",
+          "metric_pass_min": ["neg_mse", -1e-4]
+        }
+      ]
+    },
+    {
+      "id": "noisy_ambiguous",
+      "title": "Noisy / ambiguous phrasing",
+      "tasks": [
+        {
+          "id": "golden_affine_blend",
+          "goal": "Blend exposure and hedge with a small bias term.",
+          "evaluation_mode": "predict_rows",
+          "example_input_rows": [{"exposure": 1.0, "hedge": 2.0}],
+          "expected_rows": [{"response": 1.25}],
+          "reference_ax": "response = exposure * hedge - 0.5 * hedge + 0.25;\n",
+          "metric_pass_min": ["neg_mse", -1e-4]
+        }
+      ]
+    },
+    {
+      "id": "invalid_syntax_repair",
+      "title": "Invalid syntax then repair",
+      "tasks": [
+        {
+          "id": "golden_repair_double",
+          "goal": "Double the input x into y.",
+          "evaluation_mode": "predict_rows",
+          "example_input_rows": [{"x": 1.0}],
+          "expected_rows": [{"y": 2.0}],
+          "broken_ax": "y = ++++ ;\n",
+          "reference_ax": "y = x * 2.0;\n",
+          "metric_pass_min": ["neg_mse", -1e-6]
+        }
+      ]
+    }
+  ]
+}

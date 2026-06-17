@@ -23,6 +23,10 @@ where = ["src"]
 [tool.setuptools.package-data]
 axiom = ["compiler/*.lark", "copilot/fixtures/*.json"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
 [project.optional-dependencies]
 spy = ["pandas>=2.0", "yfinance>=0.2.36"]
 cartpole = ["gymnasium>=0.29.0"]

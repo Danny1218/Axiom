@@ -11,6 +11,7 @@ from profile_onyx_task_latency import (  # noqa: E402 - loads src/ onto sys.path
     _resolve_expert_api_key,
     _resolve_live_config,
     _resolve_setting,
+    _run_warmup_drafts,
 )
 
 from axiom.copilot.backend import build_copilot_expert  # noqa: E402
@@ -150,13 +151,15 @@ def _run_probe_draft(args: argparse.Namespace) -> int:
     wr = int(args.probe_warmup_runs)
     if wr < 0:
         raise SystemExit("--probe-warmup-runs must be >= 0.")
-    if wr > 0:
-        print(f"warmup runs: {wr}")
-        for _ in range(wr):
-            try:
-                expert.draft_program(draft_req)
-            except Exception:
-                pass
+    warmup_results = _run_warmup_drafts(expert, draft_req, wr)
+    if warmup_results and any(r["status"] == "failure" for r in warmup_results):
+        auth_like = any(
+            r.get("status_code") in (401, 403) or r.get("failure_kind") in ("unauthorized", "forbidden")
+            for r in warmup_results
+        )
+        if auth_like:
+            print("probe result: warmup_auth_failure")
+            return 1
     try:
         resp = expert.draft_program(draft_req)
         meta = dict(resp.metadata or {})

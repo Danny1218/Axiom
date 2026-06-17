@@ -192,6 +192,63 @@ def _grade_response(task: Any, source: str) -> dict[str, Any]:
     }
 
 
+def _warmup_failure_kind(exc: BaseException | None, metadata: dict[str, Any]) -> str:
+    if exc is None:
+        return "n/a"
+    fk = metadata.get("failure_kind")
+    if fk:
+        return str(fk)
+    return type(exc).__name__
+
+
+def _run_warmup_drafts(
+    expert: Any,
+    draft_req: Any,
+    warmup_n: int,
+) -> list[dict[str, Any]]:
+    """Run throwaway draft calls; record every outcome (never swallow failures silently)."""
+    results: list[dict[str, Any]] = []
+    if warmup_n <= 0:
+        return results
+    print(f"WARMUP: runs={warmup_n}")
+    for wi in range(1, warmup_n + 1):
+        exc: BaseException | None = None
+        metadata: dict[str, Any] = {}
+        status = "success"
+        try:
+            expert.draft_program(draft_req)
+        except Exception as caught:  # pragma: no cover - live-only branch behavior varies by backend
+            exc = caught
+            status = "failure"
+            metadata = dict(getattr(exc, "metadata", {}) or {})
+        exc_class, status_code_val, request_id_val, response_id_val = _attempt_diagnostics(
+            status=status,
+            exc=exc,
+            metadata=metadata,
+        )
+        failure_kind = _warmup_failure_kind(exc, metadata)
+        rec: dict[str, Any] = {
+            "index": wi,
+            "status": status,
+            "failure_kind": failure_kind,
+            "exception_class": exc_class,
+            "status_code": status_code_val,
+            "request_id": request_id_val,
+            "response_id": response_id_val,
+        }
+        results.append(rec)
+        print(
+            "WARMUP {0}: status={1} failure_kind={2} status_code={3} exception_class={4}".format(
+                wi,
+                status,
+                failure_kind,
+                _status_code_key(status_code_val),
+                exc_class or "n/a",
+            )
+        )
+    return results
+
+
 def _write_json_out(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
@@ -290,13 +347,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     warmup_n = int(args.warmup_runs)
-    if warmup_n > 0:
-        print(f"WARMUP: runs={warmup_n}")
-        for _ in range(warmup_n):
-            try:
-                expert.draft_program(draft_req)
-            except Exception:
-                pass
+    warmup_results = _run_warmup_drafts(expert, draft_req, warmup_n)
 
     elapsed_values: list[float] = []
     success_count = 0
@@ -410,7 +461,9 @@ def main(argv: list[str] | None = None) -> int:
                     "timeout": float(args.timeout),
                     "max_tokens": int(args.max_tokens),
                     "repeats": int(args.repeats),
+                    "warmup_runs": warmup_n,
                 },
+                "warmup": warmup_results,
                 "attempts": attempts,
                 "summary": summary,
             },
