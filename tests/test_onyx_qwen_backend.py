@@ -1133,3 +1133,10 @@ def test_resolve_lmstudio_defaults():
     assert url == "http://127.0.0.1:1234/v1/"
     assert model == "qwen/qwen3-8b"
     assert key is None
+
+
+def test_lmstudio_base_url_does_not_double_v1_chat_path():
+    from axiom.experts.onyx_qwen import OnyxQwenBackend
+
+    backend = OnyxQwenBackend("http://127.0.0.1:1234/v1/", "qwen/qwen3-8b")
+    assert backend._chat_url == "http://127.0.0.1:1234/v1/chat/completions"

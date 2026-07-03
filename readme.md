@@ -1,9 +1,48 @@
 # Axiom Engine
 
-[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/Danny1218/Axiom)
+[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](https://github.com/Danny1218/Axiom)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 
 **A Differentiable Neural Architecture Search (DNAS) compiler.** Write explicit symbolic rules, compile them into a continuous-time neural network, and let the AI evolve to handle the edge cases.
+
+---
+
+## 60-second quickstart
+
+```powershell
+git clone https://github.com/Danny1218/Axiom.git
+cd Axiom
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -e ".[dev,copilot,serve]"
+
+# Train hybrid Titanic example → bundle
+axiom train examples/titanic.ax --dataset titanic --epochs 10 --out titanic_bundle
+
+# Serve and predict (local dev; set AXIOM_ALLOW_INSECURE_SERVE=1)
+$env:AXIOM_ALLOW_INSECURE_SERVE="1"
+axiom serve --bundle titanic_bundle.axb --port 8010
+axiom predict --bundle titanic_bundle.axb --inputs '{"Sex":0,"Pclass":3,"Fare":7.25,"Age":22}'
+
+# Semantic copilot (local LM Studio with qwen/qwen3-8b on :1234)
+axiom copilot-doctor --backend lmstudio
+```
+
+---
+
+## What works / what's experimental
+
+| Area | Status | Notes |
+|------|--------|-------|
+| **`.ax` → IR → train → `.axb`** | Stable | `axiom train`, `axiom load`, `AxiomModel.predict/explain` |
+| **HTTP bundle serve** | Stable | `axiom serve` with optional API key |
+| **Exact symbolic fast paths** | Stable | Deterministic draft for common affine / min-max families |
+| **Tolerant symbolic inference (v1.2)** | Stable | Least-squares fit on noisy rows before LLM; no network required for robustness tasks |
+| **LLM copilot (LM Studio / Onyx)** | Stable | Draft → evaluate → repair; output normalizer canonicalizes almost-valid `.ax` |
+| **Offline benchmark gate** | Stable | `axiom copilot-benchmark --backend benchmark-dispatch` on four JSON suites |
+| **`torch.compile(fullgraph=True)`** | Experimental | Some builds cannot trace strict-mode `ContextVar`; tests skip or use hoisted bools |
+| **MetaCompiler / DNAS unmasking** | Experimental | Sinkhorn routing + shadow expert growth |
+| **Policy gateway / ONNX export** | Optional extras | `[gateway]`, `[export]` — less CI coverage than core path |
 
 ---
 
@@ -168,6 +207,8 @@ Row file format (JSON array): each element is `{"inputs": {...}, "expected": {..
 
 **Exact-symbolic / control-flow fast paths (deterministic):**
 - **What they do:** before the first expert draft call, search runs a local symbolic inference over examples and emits canonical `.ax` immediately when it can prove an exact fit.
+- **Tolerant inference (v1.2 headline):** when rows are *almost* exact (label noise, sparse anchors), **`tolerant_inference.py`** fits affine / interaction / abs families by least squares (default **5% relative RMSE**), picks the simplest model, and skips the LLM entirely. Robustness tasks like **`noisy_affine_thermometer`**, **`signed_cross_term_noisy`**, and **`near_abs_with_bias`** are solved deterministically in tests.
+- **LLM output normalizer:** every expert response passes through **`compiler/normalizer.py`** (`else if` → nested blocks, `&&`/`||` → nested `if`s, `clip(...)` → `min`/`max`, shorthand assignments, comment/prose stripping) before parsing.
 - **Why they exist:** they reduce latency and backend load for common symbolic tasks, avoid unnecessary LLM variance, and keep outputs deterministic when the examples already define a closed form.
 - **When they activate:** only in **`predict_rows`** when **`exact_symbolic_examples_task`** is true.
 - **Supported task shapes today:**

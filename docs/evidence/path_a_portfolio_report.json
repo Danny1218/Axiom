@@ -1,0 +1,12 @@
+{
+  "kind": "axiom.path_a_portfolio",
+  "domain": "finance_risk",
+  "trained_mse": 0.014743812561035156,
+  "symbolic_baseline_mse": 0.04322248077392578,
+  "mse_improvement": 0.02847866821289062,
+  "mse_improvement_pct": 65.88855545300062,
+  "bundle_path": "artifacts/path_a_portfolio/model.axb",
+  "weights_sidecar": "artifacts/path_a_portfolio/model.axb.weights.pt",
+  "bundle_parity_ok": true,
+  "beats_baseline": true
+}

@@ -1057,9 +1057,16 @@ def normalize_onyx_chat_completion_payload(payload: dict[str, Any]) -> None:
 
 def _assistant_content(data: Any) -> str:
     try:
-        return str(data["choices"][0]["message"]["content"])
+        msg = data["choices"][0]["message"]
     except (KeyError, IndexError, TypeError) as e:
-        raise OnyxQwenParseError("response missing choices[0].message.content") from e
+        raise OnyxQwenParseError("response missing choices[0].message") from e
+    if not isinstance(msg, dict):
+        raise OnyxQwenParseError("response choices[0].message is not an object")
+    for key in ("content", "reasoning_content", "text"):
+        value = msg.get(key)
+        if value is not None and str(value).strip():
+            return str(value)
+    raise OnyxQwenParseError("response missing choices[0].message.content")
 
 
 def _completion_overrides_applied(overrides: Optional[Mapping[str, Any]]) -> dict[str, Any]:
@@ -1313,8 +1320,12 @@ class OnyxQwenBackend:
         chat_path: str = "/v1/chat/completions",
         _post: Optional[PostFn] = None,
     ) -> None:
-        self._base = base_url.rstrip("/") + "/"
-        self._chat_url = urljoin(self._base, chat_path.lstrip("/"))
+        base = base_url.rstrip("/") + "/"
+        path = chat_path.lstrip("/")
+        if path.startswith("v1/") and (base.endswith("/v1/") or base.endswith("/v1")):
+            path = path[3:]
+        self._base = base
+        self._chat_url = urljoin(self._base, path)
         self._model = model
         self._timeout = float(timeout)
         self._api_key = api_key.strip() if api_key else None

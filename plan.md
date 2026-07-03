@@ -1,6 +1,6 @@
 # Axiom — Architecture & status
 
-**Version:** 1.2.0 (in progress) · **Stack:** Python 3.10+, PyTorch, Lark, NetworkX
+**Version:** 1.2.0 · **Stack:** Python 3.10+, PyTorch, Lark, NetworkX
 
 ## What this is
 
@@ -83,8 +83,8 @@ examples/     titanic.ax, portfolio.ax, train scripts
 
 ## Release checklist (v1.2.0)
 
-- [ ] Tolerant inference wired and tested on robustness tasks
-- [ ] Normalizer on all LLM responses
-- [ ] README quickstart + honest capability table
-- [ ] `python -m build` succeeds; tag `v1.2.0`
-- [ ] Root clean (no generated JSON/PT artifacts)
+- [x] Tolerant inference wired and tested on robustness tasks
+- [x] Normalizer on all LLM responses
+- [x] README quickstart + honest capability table
+- [x] `python -m build` succeeds; tag `v1.2.0`
+- [x] Root clean (no generated JSON/PT artifacts)
