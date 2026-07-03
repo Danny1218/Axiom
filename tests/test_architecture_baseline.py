@@ -64,7 +64,7 @@ def test_cli_subcommands_stable():
 def test_pyproject_optional_extras_stable():
     text = (_root() / "pyproject.toml").read_text(encoding="utf-8")
     names = _optional_extra_names(text)
-    assert names == {"spy", "cartpole", "inspect", "gateway", "serve", "lock", "export", "copilot", "dev"}
+    assert names == {"spy", "cartpole", "inspect", "gateway", "serve", "lock", "export", "copilot", "dev", "bench"}
 
 
 def test_axiom_root_public_api():

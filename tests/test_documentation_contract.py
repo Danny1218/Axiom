@@ -42,8 +42,8 @@ def test_pyproject_core_dependencies_minimal():
 def test_readme_version_matches_pyproject():
     readme = (_root() / "readme.md").read_text(encoding="utf-8")
     pyproject = (_root() / "pyproject.toml").read_text(encoding="utf-8")
-    assert "1.2.0" in readme
-    assert 'version = "1.2.0"' in pyproject
+    assert "1.3.0" in readme
+    assert 'version = "1.3.0"' in pyproject
 
 
 def test_readme_documents_core_python_api():

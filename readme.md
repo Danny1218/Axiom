@@ -1,9 +1,46 @@
 # Axiom Engine
 
-[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](https://github.com/Danny1218/Axiom)
+[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](https://github.com/Danny1218/Axiom)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 
 **A Differentiable Neural Architecture Search (DNAS) compiler.** Write explicit symbolic rules, compile them into a continuous-time neural network, and let the AI evolve to handle the edge cases.
+
+---
+
+## Benchmarks: where Axiom wins (and where it doesn't)
+
+Reproducible CPU benchmarks (fixed seeds, no network) live under `benchmarks/` and write committed evidence to `docs/evidence/`. Install extras: `pip install -e ".[bench]"`.
+
+### Extrapolation showdown (symbolic recovery vs sklearn)
+
+**Claim:** When labels come from a known formula plus modest noise, Axiom's **tolerant symbolic inference** recovers the closed form and extrapolates outside the training range; linear models and neural nets fit interpolation but fail extrapolation.
+
+```powershell
+python benchmarks/baseline_showdown/run_showdown.py
+```
+
+| Result | Detail |
+|--------|--------|
+| **Wins** | See `docs/evidence/baseline_showdown.md` — Axiom extrapolation RMSE beats the best sklearn baseline (MLP/GBR/linear) on **7/10** in-family tasks by **>=10x** margin |
+| **Interpolation** | Ties or wins in-family (symbolic exact fit) |
+| **Sabotage** | `sin(x)` and `exp(-x)` tasks: Axiom **declines** (2/2) — benchmark is not rigged |
+| **Honest losses** | `affine_three_input` and `clamped_affine_three` exceed tolerant per-row error gates; recorded in evidence JSON |
+
+### Titanic hybrid — accuracy vs hard constraints
+
+**Claim:** A hybrid `.ax` model can match ML accuracy while **guaranteeing** a symbolic rule pure ML cannot.
+
+```powershell
+python benchmarks/titanic_hybrid/run_hybrid_audit.py
+```
+
+| Model | Holdout accuracy | Rule violations (500 edge cases) |
+|-------|------------------|--------------------------------|
+| **Axiom hybrid** (`examples/titanic_hybrid.ax`) | ~0.63 | **0** (InterpretedBlock IR enforces clamp) |
+| LogisticRegression | ~0.85 | ~120 |
+| GradientBoosting | ~0.85 | ~128 |
+
+**Honest admission:** Holdout accuracy **lags** the best baseline by ~22 points on this quick 30-epoch run; the win here is **constraint safety**, not raw accuracy. Use `InterpretedBlock` inference for guaranteed symbolic clamps — the Sinkhorn `ExecutionGraph` training path softens conditionals.
 
 ---
 
@@ -111,6 +148,7 @@ Optional extras:
 | **`[gateway]`** | Policy gateway HTTP + examples (`requests`, Streamlit, overlaps `[serve]` on FastAPI) |
 | **`[copilot]`** | Semantic copilot CLI (`axiom copilot-draft`, `axiom copilot-search`, `axiom copilot-run`) — `requests` for Onyx/Qwen-style chat APIs |
 | **`[dev]`** | Run the test suite (`pytest` + Glass Box deps for `inspect` / `glass_box` tests) |
+| **`[bench]`** | CPU baseline benchmarks (`scikit-learn` for sklearn baselines in `benchmarks/`) |
 
 Run tests locally (CI-parity install):
 

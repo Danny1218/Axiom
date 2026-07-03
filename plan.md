@@ -1,6 +1,6 @@
 # Axiom — Architecture & status
 
-**Version:** 1.2.0 · **Stack:** Python 3.10+, PyTorch, Lark, NetworkX
+**Version:** 1.3.0 · **Stack:** Python 3.10+, PyTorch, Lark, NetworkX
 
 ## What this is
 
@@ -8,6 +8,16 @@ Axiom is a hybrid **symbolic–neural compiler**: `.ax` source is parsed (Lark) 
 `InterpretedBlock` (PyTorch `nn.Module`), trained, serialized to `.axb` bundles, and served over HTTP.
 The **semantic copilot** drafts and repairs `.ax` programs from goals + example rows via an injectable
 expert backend (LM Studio locally, deterministic dispatch offline).
+
+## v1.3 evidence benchmarks
+
+| Benchmark | Command | What it proves |
+|-----------|---------|----------------|
+| **baseline_showdown** | `python benchmarks/baseline_showdown/run_showdown.py` | Tolerant symbolic inference extrapolates on 7/10 formula families; declines sabotage tasks |
+| **titanic_hybrid** | `python benchmarks/titanic_hybrid/run_hybrid_audit.py` | InterpretedBlock hybrid enforces hard rules (0 violations); sklearn baselines violate |
+
+Evidence: `docs/evidence/baseline_showdown.{json,md}`, `docs/evidence/titanic_hybrid.{json,md}`.
+Optional extra: `pip install -e ".[bench]"`.
 
 ## Two execution paths
 
@@ -28,63 +38,25 @@ goal + examples → exact fast paths (search.py)
                 → normalizer (canonical .ax) → parse → evaluate → repair loop
 ```
 
-**Backends:** `benchmark-dispatch` (CI/offline), `onyx-qwen`, `lmstudio` (OpenAI-compatible local default).
-
-**Benchmark suites** (under `benchmarks/`):
-
-1. `copilot_symbolic_and_generalization_tasks.json` — core 10-task gate
-2. `copilot_symbolic_next_milestone_tasks.json` — harder symbolic families
-3. `copilot_symbolic_generalization_stress_tasks.json` — paraphrase / reorder stress
-4. `copilot_symbolic_robustness_ambiguity_stress_tasks.json` — noisy / underdetermined rows
-
-CI runs all four offline via `benchmark-dispatch` (`.github/workflows/copilot-milestone.yml`).
+**Backends:** `benchmark-dispatch` (CI/offline), `onyx-qwen`, `lmstudio` (OpenAI-compatible local default). Local default: `axiom copilot-doctor --backend lmstudio`.
 
 ## Test & benchmark status
 
 | Check | Target |
 |-------|--------|
 | Full suite | `python -m pytest tests -q` → 0 failures |
-| Fast loop | `python -m pytest tests -m "not slow and not compile" -q` |
-| Offline benchmarks | draft + search 10/10, 8/8, 8/8, 8/8 on dispatch |
-| Robustness (v1.2) | noisy tasks solved by tolerant inference without LLM |
-
-Known environment caveat: `torch.compile(fullgraph=True)` cannot trace `ContextVar` in strict mode on
-some PyTorch builds; affected tests are skipped with a precise reason or fixed by hoisting strict flags.
-
-## Package layout
-
-```
-src/axiom/
-  compiler/   Lark parse, IR, serializer, normalizer
-  engine/     InterpretedBlock, trainer, inference, strict
-  copilot/    search, tolerant_inference, benchmarks, server
-  experts/    onyx_qwen, registry
-  gateway/    policy gateway (optional)
-  serve.py    bundle HTTP server
-  cli.py      train, predict, serve, copilot-* subcommands
-tests/        contract + unit + integration
-examples/     titanic.ax, portfolio.ax, train scripts
-```
+| Extrapolation showdown | 7/10 in-family extrap wins (>=10x vs ML); 2/2 sabotage declined |
+| Titanic hybrid | 0 constraint violations (InterpretedBlock); accuracy gap documented |
 
 ## Intentionally frozen (do not break without explicit milestone)
 
 - Public API: `axiom.__all__`, `AxiomModel` methods, CLI subcommand names
-- Optional extras in `pyproject.toml`: `spy`, `cartpole`, `inspect`, `gateway`, `serve`, `lock`, `export`, `copilot`, `dev`
-- Gateway exports (`axiom.gateway.__all__`)
-- Bundle v2 manifest format and locked-bundle crypto checks
+- Optional extras: `spy`, `cartpole`, `inspect`, `gateway`, `serve`, `lock`, `export`, `copilot`, `dev`, `bench`
 - Four benchmark JSON schemas and `benchmark-dispatch` reference programs
-- Exact fast-path detectors in `search.py` (extend, do not remove families)
 
-## Local copilot setup (default)
+## Release checklist (v1.3.0)
 
-1. Start LM Studio with `qwen/qwen3-8b` at `http://127.0.0.1:1234`
-2. `pip install -e ".[copilot]"`
-3. `axiom copilot-doctor --backend lmstudio`
-
-## Release checklist (v1.2.0)
-
-- [x] Tolerant inference wired and tested on robustness tasks
-- [x] Normalizer on all LLM responses
-- [x] README quickstart + honest capability table
-- [x] `python -m build` succeeds; tag `v1.2.0`
-- [x] Root clean (no generated JSON/PT artifacts)
+- [x] `benchmarks/baseline_showdown/` + committed evidence
+- [x] `benchmarks/titanic_hybrid/` + `examples/titanic_hybrid.ax`
+- [x] `[bench]` optional extra (scikit-learn)
+- [x] README benchmark section; tag `v1.3.0`
