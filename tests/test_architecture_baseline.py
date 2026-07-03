@@ -45,6 +45,7 @@ def test_cli_subcommands_stable():
         "train",
         "inspect",
         "predict",
+        "certify",
         "lock-bundle",
         "export-onnx",
         "gateway-serve",

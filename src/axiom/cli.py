@@ -319,6 +319,48 @@ def _cmd_predict(args: argparse.Namespace) -> None:
     print(json.dumps(decoded, indent=2))
 
 
+def _cmd_certify(args: argparse.Namespace) -> None:
+    block = load_bundle(args.bundle, trusted=getattr(args, "trust_bundle", False))
+    bounds_path = Path(args.input_bounds)
+    if not bounds_path.is_file():
+        raise SystemExit(f"Input bounds file not found: {bounds_path}")
+    try:
+        raw_bounds = json.loads(bounds_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        raise SystemExit(f"invalid --input-bounds JSON: {e}") from e
+    if not isinstance(raw_bounds, dict):
+        raise SystemExit("--input-bounds must be a JSON object of var -> [lo, hi]")
+    input_bounds: Dict[str, Tuple[float, float]] = {}
+    for key, val in raw_bounds.items():
+        if not isinstance(val, (list, tuple)) or len(val) != 2:
+            raise SystemExit(f"bounds for {key!r} must be [lo, hi]")
+        input_bounds[str(key)] = (float(val[0]), float(val[1]))
+    node_bounds: Dict[str, Tuple[float, float]] = {}
+    if args.node_bounds:
+        nb_path = Path(args.node_bounds)
+        if not nb_path.is_file():
+            raise SystemExit(f"Node bounds file not found: {nb_path}")
+        raw_nb = json.loads(nb_path.read_text(encoding="utf-8"))
+        if not isinstance(raw_nb, dict):
+            raise SystemExit("--node-bounds must be a JSON object")
+        for key, val in raw_nb.items():
+            if not isinstance(val, (list, tuple)) or len(val) != 2:
+                raise SystemExit(f"node bounds for {key!r} must be [lo, hi]")
+            node_bounds[str(key)] = (float(val[0]), float(val[1]))
+    from axiom.verify.interval import certify
+
+    cert = certify(
+        block,
+        input_bounds,
+        node_bounds=node_bounds or None,
+        source_path=args.source,
+    )
+    out_path = Path(args.out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(cert.to_json(), encoding="utf-8")
+    print(json.dumps({"status": cert.status, "out": str(out_path), **cert.to_dict()}, indent=2))
+
+
 def _cmd_serve(args: argparse.Namespace) -> None:
     try:
         import uvicorn
@@ -1437,6 +1479,47 @@ def main(argv: list[str] | None = None) -> None:
     )
     p_predict.set_defaults(_handler=_cmd_predict)
 
+    p_certify = sub.add_parser(
+        "certify",
+        help="Prove output bounds via static interval analysis over InterpretedBlock IR.",
+    )
+    p_certify.add_argument(
+        "--bundle",
+        type=Path,
+        required=True,
+        help="Path to .axb (InterpretedBlock bundle).",
+    )
+    p_certify.add_argument(
+        "--input-bounds",
+        type=Path,
+        required=True,
+        help='JSON object of ABI var -> [lo, hi], e.g. bounds.json',
+    )
+    p_certify.add_argument(
+        "--node-bounds",
+        type=Path,
+        default=None,
+        help="Optional JSON object of expert/neural backend -> [lo, hi] assumptions.",
+    )
+    p_certify.add_argument(
+        "--out",
+        type=Path,
+        required=True,
+        help="Destination certificate JSON path.",
+    )
+    p_certify.add_argument(
+        "--source",
+        type=Path,
+        default=None,
+        help="Optional .ax source path for bundle/source hash in certificate.",
+    )
+    p_certify.add_argument(
+        "--trust-bundle",
+        action="store_true",
+        help="Allow loading legacy pickle .axb (unsafe for untrusted files).",
+    )
+    p_certify.set_defaults(_handler=_cmd_certify)
+
     p_lock = sub.add_parser(
         "lock-bundle",
         help="Re-save an .axb with AES-256-CTR encrypted neural weights (topology stays readable).",
@@ -1789,6 +1872,9 @@ def main(argv: list[str] | None = None) -> None:
     if handler is _cmd_copilot_studio:
         raise SystemExit(handler(args))
     if handler is _cmd_predict:
+        handler(args)
+        return
+    if handler is _cmd_certify:
         handler(args)
         return
     if handler is _cmd_lock_bundle:
