@@ -1,0 +1,688 @@
+{
+  "version": "1.3.0",
+  "benchmark": "baseline_showdown",
+  "seed": 42,
+  "noise": "3% Gaussian per-row (sigma=0.03*|y|, clipped to +/-0.02)",
+  "wall_ms": 620.618499990087,
+  "success_bar_met": false,
+  "narrative": "Axiom wins extrapolation RMSE on **7/10** in-family tasks (7 by >=10x vs best neural baseline). Sabotage tasks declined: **2/2**. Total wall time: **0.6s**. Success bar not fully met \u2014 see per-task table; results recorded honestly.",
+  "success_check": "- Extrapolation wins (in-family): 7/10 (bar >=8)\n- >=10x margin vs best ML: 7/10 (bar >=8)\n- Sabotage declined: 2/2 (bar 2)",
+  "tasks": [
+    {
+      "task_id": "affine_slope_2",
+      "family": "single_input_affine",
+      "in_family": true,
+      "ground_truth": "y = 2.0*x + 1.5",
+      "best_neural_extrap_rmse": 0.005059272541958454,
+      "axiom_extrap_margin_x": 19948.617310322177,
+      "contenders": [
+        {
+          "name": "axiom",
+          "declined": false,
+          "interp_rmse": 1.1310665912420355e-07,
+          "extrap_rmse": 2.536151986504144e-07,
+          "wall_ms": 34.87000000313856,
+          "recovered_source": "y = 2.0 * x + 1.5;\n",
+          "formula_match": true,
+          "metadata": {
+            "inference_kind": "tolerant",
+            "fast_path": "single_input_affine",
+            "relative_rmse": 0.005969795155453896
+          },
+          "note": null
+        },
+        {
+          "name": "linear",
+          "declined": false,
+          "interp_rmse": 0.0014291384885902637,
+          "extrap_rmse": 0.005059272541958454,
+          "wall_ms": 0.8869000012055039,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        },
+        {
+          "name": "mlp",
+          "declined": false,
+          "interp_rmse": 0.054195647855472165,
+          "extrap_rmse": 1.734526578265311,
+          "wall_ms": 24.552399991080165,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        },
+        {
+          "name": "gbr",
+          "declined": false,
+          "interp_rmse": 0.2311959603328845,
+          "extrap_rmse": 4.9021551745633545,
+          "wall_ms": 19.205400021746755,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "task_id": "affine_neg_slope",
+      "family": "single_input_affine",
+      "in_family": true,
+      "ground_truth": "y = -1.25*x + 0.5",
+      "best_neural_extrap_rmse": 0.019703431571602727,
+      "axiom_extrap_margin_x": 106417.24859226834,
+      "contenders": [
+        {
+          "name": "axiom",
+          "declined": false,
+          "interp_rmse": 5.3308804215971605e-08,
+          "extrap_rmse": 1.8515261230907508e-07,
+          "wall_ms": 5.496099998708814,
+          "recovered_source": "y = -1.25 * x + 0.5;\n",
+          "formula_match": true,
+          "metadata": {
+            "inference_kind": "tolerant",
+            "fast_path": "single_input_affine",
+            "relative_rmse": 0.012795541035365949
+          },
+          "note": null
+        },
+        {
+          "name": "linear",
+          "declined": false,
+          "interp_rmse": 0.005988499886165328,
+          "extrap_rmse": 0.019703431571602727,
+          "wall_ms": 0.6044000037945807,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        },
+        {
+          "name": "mlp",
+          "declined": false,
+          "interp_rmse": 0.04804672442255352,
+          "extrap_rmse": 1.2290141249417945,
+          "wall_ms": 17.73049999610521,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        },
+        {
+          "name": "gbr",
+          "declined": false,
+          "interp_rmse": 0.22190593913169002,
+          "extrap_rmse": 3.0480124171853227,
+          "wall_ms": 18.98369999253191,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "task_id": "quadratic_standard",
+      "family": "quadratic_single_input",
+      "in_family": true,
+      "ground_truth": "y = 0.3*x^2 - 0.5*x + 1.0",
+      "best_neural_extrap_rmse": 3.4457000575148995,
+      "axiom_extrap_margin_x": 7059928.122275017,
+      "contenders": [
+        {
+          "name": "axiom",
+          "declined": false,
+          "interp_rmse": 5.799954945845076e-08,
+          "extrap_rmse": 4.880644672065789e-07,
+          "wall_ms": 5.486900015966967,
+          "recovered_source": "y = 0.3 * x * x - 0.5 * x + 1.0;\n",
+          "formula_match": false,
+          "metadata": {
+            "inference_kind": "tolerant",
+            "fast_path": "quadratic_single_input",
+            "relative_rmse": 0.011183774545031874
+          },
+          "note": null
+        },
+        {
+          "name": "linear",
+          "declined": false,
+          "interp_rmse": 0.37094987092067183,
+          "extrap_rmse": 5.6990020197044755,
+          "wall_ms": 0.5691999976988882,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        },
+        {
+          "name": "mlp",
+          "declined": false,
+          "interp_rmse": 0.075410902810657,
+          "extrap_rmse": 3.4457000575148995,
+          "wall_ms": 11.309599998639897,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        },
+        {
+          "name": "gbr",
+          "declined": false,
+          "interp_rmse": 0.06571215528193497,
+          "extrap_rmse": 5.30049579577864,
+          "wall_ms": 18.622600007802248,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "task_id": "quadratic_inverted",
+      "family": "quadratic_single_input",
+      "in_family": true,
+      "ground_truth": "y = -0.2*x^2 + x + 0.25",
+      "best_neural_extrap_rmse": 2.857443143097281,
+      "axiom_extrap_margin_x": 9030847.48641657,
+      "contenders": [
+        {
+          "name": "axiom",
+          "declined": false,
+          "interp_rmse": 5.0741725127704736e-08,
+          "extrap_rmse": 3.164091905433242e-07,
+          "wall_ms": 6.006499985232949,
+          "recovered_source": "y = -0.2 * x * x + x + 0.25;\n",
+          "formula_match": false,
+          "metadata": {
+            "inference_kind": "tolerant",
+            "fast_path": "quadratic_single_input",
+            "relative_rmse": 0.01539741501766542
+          },
+          "note": null
+        },
+        {
+          "name": "linear",
+          "declined": false,
+          "interp_rmse": 0.24355226317544687,
+          "extrap_rmse": 3.5664834815161592,
+          "wall_ms": 0.668799999402836,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        },
+        {
+          "name": "mlp",
+          "declined": false,
+          "interp_rmse": 0.0764082329345744,
+          "extrap_rmse": 2.857443143097281,
+          "wall_ms": 18.19859998067841,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        },
+        {
+          "name": "gbr",
+          "declined": false,
+          "interp_rmse": 0.12961376818617937,
+          "extrap_rmse": 4.164833120652358,
+          "wall_ms": 19.11409999593161,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "task_id": "interaction_full",
+      "family": "two_input_interaction",
+      "in_family": true,
+      "ground_truth": "out = 0.5*a*b + 0.3*a + 0.2*b + 1.0",
+      "best_neural_extrap_rmse": 5.199624406167228,
+      "axiom_extrap_margin_x": 9992440.531877657,
+      "contenders": [
+        {
+          "name": "axiom",
+          "declined": false,
+          "interp_rmse": 5.635273482366717e-08,
+          "extrap_rmse": 5.203558019264167e-07,
+          "wall_ms": 7.2568999894429,
+          "recovered_source": "out = 0.5 * a * b + 0.3 * a + 0.2 * b + 1.0;\n",
+          "formula_match": true,
+          "metadata": {
+            "inference_kind": "tolerant",
+            "fast_path": "two_input_interaction",
+            "relative_rmse": 0.011559406410454947
+          },
+          "note": null
+        },
+        {
+          "name": "linear",
+          "declined": false,
+          "interp_rmse": 0.8760462235421077,
+          "extrap_rmse": 8.607355322823436,
+          "wall_ms": 0.8690000104252249,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        },
+        {
+          "name": "mlp",
+          "declined": false,
+          "interp_rmse": 0.3098484909888824,
+          "extrap_rmse": 5.199624406167228,
+          "wall_ms": 28.341199998976663,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        },
+        {
+          "name": "gbr",
+          "declined": false,
+          "interp_rmse": 0.5502147448059894,
+          "extrap_rmse": 7.482983130668612,
+          "wall_ms": 21.488400001544505,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "task_id": "interaction_ab_only",
+      "family": "two_input_ab_b",
+      "in_family": true,
+      "ground_truth": "out = 2.0*a*b + 0.5",
+      "best_neural_extrap_rmse": 23.418348793765265,
+      "axiom_extrap_margin_x": 14790320.682913568,
+      "contenders": [
+        {
+          "name": "axiom",
+          "declined": false,
+          "interp_rmse": 1.1639683317863877e-07,
+          "extrap_rmse": 1.583356392050321e-06,
+          "wall_ms": 8.852400002069771,
+          "recovered_source": "out = 2.0 * a * b + 0.5;\n",
+          "formula_match": true,
+          "metadata": {
+            "inference_kind": "tolerant",
+            "fast_path": "two_input_ab_bias",
+            "relative_rmse": 0.006117601341146676
+          },
+          "note": null
+        },
+        {
+          "name": "linear",
+          "declined": false,
+          "interp_rmse": 2.7266627167439643,
+          "extrap_rmse": 33.988372869437974,
+          "wall_ms": 0.763599993661046,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        },
+        {
+          "name": "mlp",
+          "declined": false,
+          "interp_rmse": 0.577485518614596,
+          "extrap_rmse": 23.418348793765265,
+          "wall_ms": 60.3906000033021,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        },
+        {
+          "name": "gbr",
+          "declined": false,
+          "interp_rmse": 2.2925383515454136,
+          "extrap_rmse": 30.552109233024265,
+          "wall_ms": 20.265700004529208,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "task_id": "abs_with_bias",
+      "family": "absolute_with_bias",
+      "in_family": true,
+      "ground_truth": "y = |x| + 0.75",
+      "best_neural_extrap_rmse": 0.35883729435491274,
+      "axiom_extrap_margin_x": 2645969.1595828417,
+      "contenders": [
+        {
+          "name": "axiom",
+          "declined": false,
+          "interp_rmse": 6.890999324243777e-08,
+          "extrap_rmse": 1.3561658232308585e-07,
+          "wall_ms": 6.39609998324886,
+          "recovered_source": "if (x < 0.0) {\n    y = -x + 0.75;\n} else {\n    y = x + 0.75;\n}\n",
+          "formula_match": true,
+          "metadata": {
+            "inference_kind": "tolerant",
+            "fast_path": "absolute_with_bias",
+            "relative_rmse": 0.009913851114998035
+          },
+          "note": null
+        },
+        {
+          "name": "linear",
+          "declined": false,
+          "interp_rmse": 0.5919744297099339,
+          "extrap_rmse": 3.48627236985444,
+          "wall_ms": 0.6155000010039657,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        },
+        {
+          "name": "mlp",
+          "declined": false,
+          "interp_rmse": 0.057976079662477906,
+          "extrap_rmse": 0.35883729435491274,
+          "wall_ms": 20.84050001576543,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        },
+        {
+          "name": "gbr",
+          "declined": false,
+          "interp_rmse": 0.10185833393801295,
+          "extrap_rmse": 2.643892918444041,
+          "wall_ms": 18.974100006744266,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "task_id": "affine_three_input",
+      "family": "affine_multi_input",
+      "in_family": true,
+      "ground_truth": "score = 0.4*u + 0.35*v + 0.25*w + 0.5",
+      "best_neural_extrap_rmse": 0.03159462610650533,
+      "axiom_extrap_margin_x": null,
+      "contenders": [
+        {
+          "name": "axiom",
+          "declined": true,
+          "interp_rmse": null,
+          "extrap_rmse": null,
+          "wall_ms": 0.0,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": "tolerant inference declined"
+        },
+        {
+          "name": "linear",
+          "declined": false,
+          "interp_rmse": 0.008376975288107578,
+          "extrap_rmse": 0.03159462610650533,
+          "wall_ms": 0.5892000044696033,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        },
+        {
+          "name": "mlp",
+          "declined": false,
+          "interp_rmse": 0.09766609456783441,
+          "extrap_rmse": 1.0686678993990337,
+          "wall_ms": 12.879500020062551,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        },
+        {
+          "name": "gbr",
+          "declined": false,
+          "interp_rmse": 0.2749157214656942,
+          "extrap_rmse": 2.8648786795191636,
+          "wall_ms": 19.60780000081286,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "task_id": "clamped_affine_three",
+      "family": "clamped_affine_multi_input",
+      "in_family": true,
+      "ground_truth": "out = clamp(0.6*x1 + 0.3*x2 + 0.1*x3 + 0.05, 0, 1)",
+      "best_neural_extrap_rmse": 0.17240441489781658,
+      "axiom_extrap_margin_x": null,
+      "contenders": [
+        {
+          "name": "axiom",
+          "declined": true,
+          "interp_rmse": null,
+          "extrap_rmse": null,
+          "wall_ms": 0.0,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": "tolerant inference declined"
+        },
+        {
+          "name": "linear",
+          "declined": false,
+          "interp_rmse": 0.3112910089824666,
+          "extrap_rmse": 2.5843041597641947,
+          "wall_ms": 0.600800005486235,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        },
+        {
+          "name": "mlp",
+          "declined": false,
+          "interp_rmse": 0.22014613749231446,
+          "extrap_rmse": 2.301216171737703,
+          "wall_ms": 11.516800004756078,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        },
+        {
+          "name": "gbr",
+          "declined": false,
+          "interp_rmse": 0.21303529435517887,
+          "extrap_rmse": 0.17240441489781658,
+          "wall_ms": 19.127999985357746,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "task_id": "interaction_mixed",
+      "family": "two_input_interaction",
+      "in_family": true,
+      "ground_truth": "out = -0.4*a*b + 1.2*a - 0.3*b + 2.0",
+      "best_neural_extrap_rmse": 6.9993012327227655,
+      "axiom_extrap_margin_x": null,
+      "contenders": [
+        {
+          "name": "axiom",
+          "declined": true,
+          "interp_rmse": null,
+          "extrap_rmse": null,
+          "wall_ms": 0.0,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": "tolerant inference declined"
+        },
+        {
+          "name": "linear",
+          "declined": false,
+          "interp_rmse": 0.5831194890058108,
+          "extrap_rmse": 7.114795785807226,
+          "wall_ms": 0.5836999916937202,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        },
+        {
+          "name": "mlp",
+          "declined": false,
+          "interp_rmse": 0.29817551268893694,
+          "extrap_rmse": 7.409341984096651,
+          "wall_ms": 35.960799985332415,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        },
+        {
+          "name": "gbr",
+          "declined": false,
+          "interp_rmse": 0.5488447782307994,
+          "extrap_rmse": 6.9993012327227655,
+          "wall_ms": 18.91560002695769,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "task_id": "sabotage_sin",
+      "family": "sinusoid",
+      "in_family": false,
+      "ground_truth": "y = sin(x)",
+      "best_neural_extrap_rmse": 1.417885530016782,
+      "axiom_extrap_margin_x": null,
+      "contenders": [
+        {
+          "name": "axiom",
+          "declined": true,
+          "interp_rmse": null,
+          "extrap_rmse": null,
+          "wall_ms": 0.0,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": "tolerant inference declined"
+        },
+        {
+          "name": "linear",
+          "declined": false,
+          "interp_rmse": 0.15977532507595416,
+          "extrap_rmse": 3.1638645896588082,
+          "wall_ms": 0.5712000129278749,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        },
+        {
+          "name": "mlp",
+          "declined": false,
+          "interp_rmse": 0.1314162697447947,
+          "extrap_rmse": 2.787155245741851,
+          "wall_ms": 7.774299971060827,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        },
+        {
+          "name": "gbr",
+          "declined": false,
+          "interp_rmse": 0.08937412410341823,
+          "extrap_rmse": 1.417885530016782,
+          "wall_ms": 18.229000008432195,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "task_id": "sabotage_exp_decay",
+      "family": "exponential_decay",
+      "in_family": false,
+      "ground_truth": "y = exp(-x)",
+      "best_neural_extrap_rmse": 77.98112724633118,
+      "axiom_extrap_margin_x": null,
+      "contenders": [
+        {
+          "name": "axiom",
+          "declined": true,
+          "interp_rmse": null,
+          "extrap_rmse": null,
+          "wall_ms": 0.0,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": "tolerant inference declined"
+        },
+        {
+          "name": "linear",
+          "declined": false,
+          "interp_rmse": 0.953481318283636,
+          "extrap_rmse": 80.07868985471352,
+          "wall_ms": 0.5875999922864139,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        },
+        {
+          "name": "mlp",
+          "declined": false,
+          "interp_rmse": 0.14146258610259585,
+          "extrap_rmse": 77.98112724633118,
+          "wall_ms": 49.85469998791814,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        },
+        {
+          "name": "gbr",
+          "declined": false,
+          "interp_rmse": 0.3438468391278141,
+          "extrap_rmse": 82.36055348693176,
+          "wall_ms": 18.646499986061826,
+          "recovered_source": null,
+          "formula_match": null,
+          "metadata": null,
+          "note": null
+        }
+      ]
+    }
+  ]
+}

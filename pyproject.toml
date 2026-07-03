@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "axiom-engine"
-version = "1.2.0"
+version = "1.3.0"
 description = "Hybrid symbolic–neural execution graph compiler and trainer"
 readme = "readme.md"
 requires-python = ">=3.10"
@@ -40,3 +40,5 @@ export = ["onnx>=1.16.0"]
 # Onyx/Qwen OpenAI-style chat expert (``axiom.experts.onyx_qwen``)
 copilot = ["requests>=2.28.0"]
 dev = ["pytest>=7.0.0", "streamlit>=1.28.0", "graphviz>=0.20.0"]
+# CPU baseline benchmarks (symbolic showdown + Titanic hybrid audit)
+bench = ["scikit-learn>=1.3.0"]
