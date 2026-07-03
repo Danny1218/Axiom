@@ -1,0 +1,110 @@
+{
+  "version": "1.4.0",
+  "benchmark": "titanic_guarded",
+  "seed": 42,
+  "csv_path": "C:\\Users\\Block\\OneDrive\\Desktop\\Coding\\Axiom\\examples\\titanic.csv",
+  "ax_source": "C:\\Users\\Block\\OneDrive\\Desktop\\Coding\\Axiom\\examples\\titanic_guarded.ax",
+  "bundle_path": "C:\\Users\\Block\\OneDrive\\Desktop\\Coding\\Axiom\\docs\\evidence\\titanic_guarded.axb",
+  "source_hash": "a2d04ef1d8a4e6343d367473bd978bfa75562ba7dc2e2b9445929ca924ae4cd8",
+  "rule": "If Pclass > 2 (3rd class) AND Sex == 0 (male) AND Age > 17, survived_prob must be <= 0.15",
+  "accuracy_delta_raw_vs_guarded": 0.0,
+  "v1_3_hybrid_accuracy": 0.6312849162011173,
+  "certificate_path": "C:\\Users\\Block\\OneDrive\\Desktop\\Coding\\Axiom\\docs\\evidence\\titanic_guarded_certificate.json",
+  "certificate_ok": true,
+  "narrative": "Raw GBM holdout accuracy 0.849; guarded wrap 0.849 (delta 0.0000). v1.3 pure-hybrid accuracy 0.631. Constraint violations on 500 edge cases: raw GBM 128, guarded 0. Certificate proves survived_prob.hi=0.15 on rule region (ok=True).",
+  "models": [
+    {
+      "name": "raw_gradient_boosting",
+      "holdout_accuracy": 0.8491620111731844,
+      "constraint_violations": 128,
+      "edge_cases_tested": 500,
+      "train_seconds": 0.05627870000898838,
+      "note": "sklearn GradientBoostingClassifier predict_proba"
+    },
+    {
+      "name": "guarded_gbm_axiom_wrap",
+      "holdout_accuracy": 0.8491620111731844,
+      "constraint_violations": 0,
+      "edge_cases_tested": 500,
+      "train_seconds": 0.0,
+      "note": "expert(tabular_model) + symbolic min clamp via InterpretedBlock"
+    },
+    {
+      "name": "v1.3_axiom_hybrid",
+      "holdout_accuracy": 0.6312849162011173,
+      "constraint_violations": 0,
+      "edge_cases_tested": 500,
+      "train_seconds": 0.0,
+      "note": "reused from docs/evidence/titanic_hybrid.json"
+    }
+  ],
+  "explain_sample": {
+    "inputs": {
+      "Sex": 0.0,
+      "Pclass": 3.0,
+      "Fare": 4359.333876131615,
+      "Age": 36.65175873033585
+    },
+    "trace": {
+      "raw_prob": 0.30876532196998596,
+      "Pclass": 3.0,
+      "survived_prob": 0.15000000596046448,
+      "Fare": 4359.333984375,
+      "Age": 36.65176010131836,
+      "Sex": 0.0,
+      "expert_calls": [
+        {
+          "op": "expert",
+          "backend": "tabular_model"
+        }
+      ]
+    },
+    "note": "raw_prob from expert(); survived_prob after symbolic clamp"
+  },
+  "certificate_summary": {
+    "input_region": {
+      "Pclass": [
+        3.0,
+        3.0
+      ],
+      "Sex": [
+        0.0,
+        0.0
+      ],
+      "Age": [
+        18.0,
+        100.0
+      ],
+      "Fare": [
+        0.0,
+        600.0
+      ]
+    },
+    "proven_output_bounds": {
+      "raw_prob": [
+        0.0,
+        1.0
+      ],
+      "Sex": [
+        0.0,
+        0.0
+      ],
+      "Pclass": [
+        3.0,
+        3.0
+      ],
+      "Fare": [
+        0.0,
+        600.0
+      ],
+      "Age": [
+        18.0,
+        100.0
+      ],
+      "survived_prob": [
+        0.0,
+        0.15
+      ]
+    }
+  }
+}

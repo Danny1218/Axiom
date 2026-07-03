@@ -1,0 +1,143 @@
+{
+  "version": 2,
+  "topology": {
+    "kind": "interpreted_block",
+    "ir": [
+      [
+        "OP_ASSIGN",
+        "raw_prob",
+        [
+          [
+            "OP_EXPERT",
+            "tabular_model",
+            [
+              [
+                "OP_LOAD",
+                "Sex"
+              ],
+              [
+                "OP_LOAD",
+                "Pclass"
+              ],
+              [
+                "OP_LOAD",
+                "Fare"
+              ],
+              [
+                "OP_LOAD",
+                "Age"
+              ],
+              [
+                "OP_VEC_PACK",
+                4
+              ]
+            ]
+          ]
+        ]
+      ],
+      [
+        "OP_ASSIGN",
+        "survived_prob",
+        [
+          [
+            "OP_LOAD",
+            "raw_prob"
+          ]
+        ]
+      ],
+      [
+        "OP_CONDITIONAL",
+        [
+          [
+            "OP_LOAD",
+            "Pclass"
+          ],
+          [
+            "OP_CONST",
+            2.0
+          ],
+          [
+            "OP_CMP_GT"
+          ]
+        ],
+        [
+          [
+            "OP_CONDITIONAL",
+            [
+              [
+                "OP_LOAD",
+                "Sex"
+              ],
+              [
+                "OP_CONST",
+                0.5
+              ],
+              [
+                "OP_CMP_LT"
+              ]
+            ],
+            [
+              [
+                "OP_CONDITIONAL",
+                [
+                  [
+                    "OP_LOAD",
+                    "Age"
+                  ],
+                  [
+                    "OP_CONST",
+                    17.0
+                  ],
+                  [
+                    "OP_CMP_GT"
+                  ]
+                ],
+                [
+                  [
+                    "OP_ASSIGN",
+                    "survived_prob",
+                    [
+                      [
+                        "OP_LOAD",
+                        "survived_prob"
+                      ],
+                      [
+                        "OP_CONST",
+                        0.15
+                      ],
+                      [
+                        "OP_MATH_BINARY",
+                        "min"
+                      ]
+                    ]
+                  ]
+                ],
+                []
+              ]
+            ],
+            []
+          ]
+        ],
+        []
+      ]
+    ],
+    "abi": {
+      "raw_prob": 0,
+      "Sex": 1,
+      "Pclass": 2,
+      "Fare": 3,
+      "Age": 4,
+      "survived_prob": 5
+    },
+    "max_unroll": 8
+  },
+  "abi_widths": {
+    "raw_prob": 1,
+    "Sex": 1,
+    "Pclass": 1,
+    "Fare": 1,
+    "Age": 1,
+    "survived_prob": 1
+  },
+  "neural_weights": null
+}

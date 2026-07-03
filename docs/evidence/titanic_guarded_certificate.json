@@ -1,0 +1,57 @@
+{
+  "axiom_version": "1.3.0",
+  "bundle_source_hash": "a2d04ef1d8a4e6343d367473bd978bfa75562ba7dc2e2b9445929ca924ae4cd8",
+  "input_region": {
+    "Pclass": [
+      3.0,
+      3.0
+    ],
+    "Sex": [
+      0.0,
+      0.0
+    ],
+    "Age": [
+      18.0,
+      100.0
+    ],
+    "Fare": [
+      0.0,
+      600.0
+    ]
+  },
+  "assumptions": {
+    "tabular_model": [
+      0.0,
+      1.0
+    ]
+  },
+  "proven_output_bounds": {
+    "raw_prob": [
+      0.0,
+      1.0
+    ],
+    "Sex": [
+      0.0,
+      0.0
+    ],
+    "Pclass": [
+      3.0,
+      3.0
+    ],
+    "Fare": [
+      0.0,
+      600.0
+    ],
+    "Age": [
+      18.0,
+      100.0
+    ],
+    "survived_prob": [
+      0.0,
+      0.15
+    ]
+  },
+  "timestamp": "2026-07-03T02:21:59.730643+00:00",
+  "unsupported_ops": [],
+  "status": "ok"
+}

@@ -1,0 +1,12 @@
+// Guarded Titanic: wrap a strong tabular model via expert() + hard safety rule.
+// Rule: adult males in 3rd class — cap survival probability at 0.15.
+
+raw_prob = expert("tabular_model", [Sex, Pclass, Fare, Age]);
+survived_prob = raw_prob;
+if (Pclass > 2.0) {
+  if (Sex < 0.5) {
+    if (Age > 17.0) {
+      survived_prob = min(survived_prob, 0.15);
+    }
+  }
+}
