@@ -7,6 +7,7 @@ name = "axiom-engine"
 version = "1.4.0"
 description = "Hybrid symbolic–neural execution graph compiler and trainer"
 readme = "readme.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.10"
 dependencies = [
     "torch>=2.0.0",

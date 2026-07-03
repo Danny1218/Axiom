@@ -732,3 +732,10 @@ Three honest forks after v1.0:
 - **Repository:** [github.com/Danny1218/Axiom](https://github.com/Danny1218/Axiom)  
 - **Tests:** CI-parity: `pip install -e ".[dev,copilot,serve]"` + `pip install -r constraints-dev.txt` then `python -m pytest tests -q`  
 - **Project state (maintainers):** see `plan.md` in this repo.
+
+## License
+
+Axiom is licensed under the **GNU Affero General Public License v3.0** (see `LICENSE`).
+In short: you may use, study, and modify it freely, but if you build a product or
+service on it, your modifications must be open-sourced under the same license.
+For a commercial license without AGPL obligations, contact Onyx Protocol.

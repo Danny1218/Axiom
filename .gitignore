@@ -38,3 +38,6 @@ copilot_trace_*/
 pipeline_sweeps/
 pipeline_sweeps_double_x/
 sweeps/
+
+# Local business documents (never publish)
+business/
