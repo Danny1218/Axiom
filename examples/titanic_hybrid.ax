@@ -1,0 +1,12 @@
+// Hybrid Titanic: neural trunk + hard historical safety rule for 3rd-class adult males.
+// Rule: "women and children first" — adult males in steerage rarely survived; cap probability.
+
+features = [Sex, Pclass, Fare, Age];
+survived_prob = neural(features);
+if (Pclass > 2.0) {
+  if (Sex < 0.5) {
+    if (Age > 17.0) {
+      survived_prob = min(survived_prob, 0.15);
+    }
+  }
+}

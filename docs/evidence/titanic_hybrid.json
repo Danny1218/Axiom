@@ -1,0 +1,58 @@
+{
+  "version": "1.3.0",
+  "benchmark": "titanic_hybrid",
+  "seed": 42,
+  "epochs": 30,
+  "csv_path": "C:\\Users\\Block\\OneDrive\\Desktop\\Coding\\Axiom\\examples\\titanic.csv",
+  "inference_path": "InterpretedBlock (symbolic IR + neural train_tabular)",
+  "rule": "If Pclass > 2 (3rd class) AND Sex == 0 (male) AND Age > 17, survived_prob must be <= 0.15",
+  "success_bar_met": false,
+  "narrative": "Axiom holdout accuracy 0.631 vs best baseline 0.849 (gap 0.218, bar <=0.03). Constraint violations on edge cases: Axiom 0, LogisticRegression 120, GradientBoosting 128. InterpretedBlock inference enforces symbolic clamps by construction; ExecutionGraph Sinkhorn training path does not (documented honestly). Success bar not fully met \u2014 see tables; results recorded honestly.",
+  "models": [
+    {
+      "name": "axiom_hybrid",
+      "holdout_accuracy": 0.6312849162011173,
+      "constraint_violations": 0,
+      "edge_cases_tested": 500,
+      "train_seconds": 1.615012199996272,
+      "note": null
+    },
+    {
+      "name": "logistic_regression",
+      "holdout_accuracy": 0.7988826815642458,
+      "constraint_violations": 120,
+      "edge_cases_tested": 500,
+      "train_seconds": 0.007164099981309846,
+      "note": null
+    },
+    {
+      "name": "gradient_boosting",
+      "holdout_accuracy": 0.8491620111731844,
+      "constraint_violations": 128,
+      "edge_cases_tested": 500,
+      "train_seconds": 0.05605020001530647,
+      "note": null
+    }
+  ],
+  "explain_sample": {
+    "inputs": {
+      "Sex": 0.0,
+      "Pclass": 3.0,
+      "Fare": 4359.333876131615,
+      "Age": 36.65175873033585
+    },
+    "trace": {
+      "survived_prob": 0.15000000596046448,
+      "Age": 36.65176010131836,
+      "features": [
+        0.0,
+        3.0,
+        4359.333984375,
+        36.65176010131836
+      ],
+      "Pclass": 3.0,
+      "Sex": 0.0,
+      "Fare": 4359.333984375
+    }
+  }
+}
