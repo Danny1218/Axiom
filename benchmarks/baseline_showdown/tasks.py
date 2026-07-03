@@ -12,7 +12,6 @@ from benchmarks.baseline_showdown.harness import (
     GLOBAL_SEED,
     INTERP_N,
     NOISE_FRAC,
-    ROW_NOISE_CLIP,
     TRAIN_N,
     TaskSplit,
     coeff_within_pct,
@@ -112,9 +111,7 @@ def _sample_rows(
         if noisy:
             clean = y
             sigma = NOISE_FRAC * max(abs(clean), 1.0)
-            delta = rng.gauss(0.0, sigma)
-            delta = max(-ROW_NOISE_CLIP, min(ROW_NOISE_CLIP, delta))
-            y = clean + delta
+            y = clean + rng.gauss(0.0, sigma)
         rows.append(row)
         ys.append(y)
     return rows, ys

@@ -9,7 +9,10 @@ from pathlib import Path
 import pytest
 
 from axiom.copilot.search import CopilotSearchConfig, run_copilot_draft
-from axiom.copilot.tolerant_inference import DEFAULT_RMSE_TOLERANCE, try_tolerant_symbolic_inference
+from axiom.copilot.tolerant_inference import (
+    DEFAULT_RMSE_TOLERANCE,
+    try_tolerant_symbolic_inference,
+)
 from axiom.experts.base import ExpertDraftRequest, SemanticExpert
 
 
@@ -53,6 +56,15 @@ def test_tolerant_recovers_noisy_affine():
     assert resp is not None
     assert resp.metadata.get("inference_kind") == "tolerant"
     assert "1.25" in resp.ax_source or "1.2" in resp.ax_source
+    assert resp.metadata["relative_rmse"] <= DEFAULT_RMSE_TOLERANCE
+
+
+def test_tolerant_scale_relative_row_gate():
+    """Large-magnitude targets allow proportionally larger per-row error."""
+    inp = [{"x": float(v)} for v in (100.0, 200.0, 300.0, 400.0)]
+    exp = [{"y": 2.0 * row["x"] + rng_offset} for row, rng_offset in zip(inp, (1.0, -2.0, 3.0, -4.0))]
+    resp = try_tolerant_symbolic_inference(_config(inp, exp))
+    assert resp is not None
     assert resp.metadata["relative_rmse"] <= DEFAULT_RMSE_TOLERANCE
 
 

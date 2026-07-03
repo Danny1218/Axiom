@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import math
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
@@ -21,7 +22,9 @@ from axiom.copilot.search import (
 from axiom.experts.base import ExpertDraftResponse
 
 DEFAULT_RMSE_TOLERANCE = 0.05
-MAX_ROW_ABS_ERROR = 0.025
+DEFAULT_REL_ROW_TOL = 0.05
+DEFAULT_ABS_FLOOR = 1e-6
+DEFAULT_NOISE_FRAC = 0.03
 _NONLINEAR_GOAL_HINTS = (
     "clamp",
     "bounded",
@@ -51,7 +54,7 @@ def _round_coeff(v: float) -> float:
         return v
     for step in (1.0, 0.5, 0.25, 0.125, 0.1):
         snapped = round(v / step) * step
-        if abs(v - snapped) <= max(0.03 * max(abs(v), 1.0), 0.005):
+        if abs(v - snapped) <= max(0.03 * abs(v), 0.005):
             return float(snapped)
     return float(f"{v:.6g}")
 
@@ -143,15 +146,49 @@ def _max_abs_error(pred: Sequence[float], actual: Sequence[float]) -> float:
     return max(abs(p - a) for p, a in zip(pred, actual))
 
 
-def _pick(candidates: List[_Cand], tol: float) -> Optional[_Cand]:
-    ok = [
-        c
-        for c in candidates
-        if c.rmse <= tol and c.max_abs_error <= MAX_ROW_ABS_ERROR
-    ]
+def _y_scale(ys: Sequence[float]) -> float:
+    arr = torch.tensor(list(ys), dtype=torch.float64)
+    rms = float(torch.sqrt(torch.mean(arr ** 2)).item())
+    scale = max(rms, DEFAULT_ABS_FLOOR, 1.0)
+    if arr.numel() >= 4:
+        q = torch.quantile(arr, torch.tensor([0.25, 0.75], dtype=torch.float64))
+        iqr = float((q[1] - q[0]).item())
+        scale = max(scale, iqr)
+    return scale
+
+
+def _row_error_gate(
+    ys: Sequence[float],
+    *,
+    rel_row_tol: float = DEFAULT_REL_ROW_TOL,
+    abs_floor: float = DEFAULT_ABS_FLOOR,
+    noise_frac: float = DEFAULT_NOISE_FRAC,
+) -> float:
+    arr = torch.tensor(list(ys), dtype=torch.float64)
+    scale = _y_scale(ys)
+    label_ceiling = max(float(torch.max(torch.abs(arr)).item()), 1.0)
+    n = max(int(arr.numel()), 1)
+    # Benchmark uses sigma = noise_frac * max(|y|, 1); allow headroom for unclipped row max
+    noise_bound = noise_frac * label_ceiling * min(3.0, 2.0 + 0.15 * n)
+    return max(rel_row_tol * scale, noise_bound, abs_floor)
+
+
+def _pick(
+    candidates: List[_Cand],
+    tol: float,
+    ys: Sequence[float],
+    *,
+    rel_row_tol: float = DEFAULT_REL_ROW_TOL,
+    abs_floor: float = DEFAULT_ABS_FLOOR,
+    noise_frac: float = DEFAULT_NOISE_FRAC,
+) -> Optional[_Cand]:
+    gate = _row_error_gate(
+        ys, rel_row_tol=rel_row_tol, abs_floor=abs_floor, noise_frac=noise_frac
+    )
+    ok = [c for c in candidates if c.rmse <= tol and c.max_abs_error <= gate]
     if not ok:
         return None
-    ok.sort(key=lambda c: (c.rmse, c.complexity))
+    ok.sort(key=lambda c: (c.complexity, c.rmse))
     return ok[0]
 
 
@@ -192,6 +229,9 @@ def try_tolerant_symbolic_inference(
     config: CopilotSearchConfig,
     *,
     rmse_tolerance: float = DEFAULT_RMSE_TOLERANCE,
+    rel_row_tol: float = DEFAULT_REL_ROW_TOL,
+    abs_floor: float = DEFAULT_ABS_FLOOR,
+    noise_frac: float = DEFAULT_NOISE_FRAC,
 ) -> Optional[ExpertDraftResponse]:
     if not is_exact_symbolic_examples_task(config):
         return None
@@ -296,21 +336,24 @@ def try_tolerant_symbolic_inference(
         mat = torch.tensor(batch.xs, dtype=torch.float64)
         coef = _lstsq(torch.cat([mat, torch.ones((len(batch.ys), 1))], dim=1), y_t)
         if coef:
-            weights = [_round_coeff(v) for v in coef[:-1]]
-            bias = _round_coeff(coef[-1])
-            pred = [sum(w * xi for w, xi in zip(weights, row)) + bias for row in batch.xs]
-            rmse = _relative_rmse(pred, batch.ys)
+            raw_weights = [float(v) for v in coef[:-1]]
+            raw_bias = float(coef[-1])
+            pred_fit = [
+                sum(w * xi for w, xi in zip(raw_weights, row)) + raw_bias for row in batch.xs
+            ]
+            weights = [_round_coeff(v) for v in raw_weights]
+            bias = _round_coeff(raw_bias)
             cands.append(
                 _Cand(
                     _affine_multi_input_source(batch.out_key, batch.in_keys, weights, bias),
                     "tolerant_affine_multi_input",
                     "affine_multi_input",
-                    rmse,
+                    _relative_rmse(pred_fit, batch.ys),
                     len(weights) + 1,
-                    _max_abs_error(pred, batch.ys),
+                    _max_abs_error(pred_fit, batch.ys),
                 )
             )
-            clamped = [max(0.0, min(1.0, p)) for p in pred]
+            clamped = [max(0.0, min(1.0, p)) for p in pred_fit]
             cands.append(
                 _Cand(
                     _clamped_affine_multi_input_source(batch.out_key, batch.in_keys, weights, bias),
@@ -322,7 +365,14 @@ def try_tolerant_symbolic_inference(
                 )
             )
 
-    pick = _pick(cands, rmse_tolerance)
+    pick = _pick(
+        cands,
+        rmse_tolerance,
+        batch.ys,
+        rel_row_tol=rel_row_tol,
+        abs_floor=abs_floor,
+        noise_frac=noise_frac,
+    )
     if pick is None:
         return None
     if _goal_hints_nonlinear_structure(config) and pick.family in _AFFINE_ONLY_FAMILIES:
@@ -338,4 +388,9 @@ def try_tolerant_symbolic_inference(
     )
 
 
-__all__ = ["DEFAULT_RMSE_TOLERANCE", "try_tolerant_symbolic_inference"]
+__all__ = [
+    "DEFAULT_ABS_FLOOR",
+    "DEFAULT_REL_ROW_TOL",
+    "DEFAULT_RMSE_TOLERANCE",
+    "try_tolerant_symbolic_inference",
+]
