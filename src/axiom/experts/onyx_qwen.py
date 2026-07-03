@@ -28,6 +28,13 @@ except ImportError:
     requests = None  # type: ignore[assignment]
 
 BACKEND_NAME = "onyx_qwen"
+LMSTUDIO_DEFAULT_URL = "http://127.0.0.1:1234/v1/"
+LMSTUDIO_DEFAULT_MODEL = "qwen/qwen3-8b"
+
+_THINKING_BLOCK_RE = re.compile(
+    r"<think>[\s\S]*?</think>",
+    re.IGNORECASE,
+)
 
 # Merged into OpenAI-style chat ``payload`` for ``draft_program`` only; stripped from user context JSON.
 COMPLETION_OVERRIDES_CONTEXT_KEY = "_onyx_completion_overrides"
@@ -1102,8 +1109,10 @@ def _score_fence_body(body: str) -> int:
 
 def split_ax_and_prose(raw: str) -> AxSplitResult:
     """Extract `.ax` from model output: prefer fenced ``ax``, then best non-Macaulay fence, then code-like lines."""
-    text = raw.strip()
+    text, stripped_think = strip_thinking_blocks(raw.strip())
     extraction: dict[str, Any] = {"extraction_mode": "plain_fallback"}
+    if stripped_think:
+        extraction["stripped_think_block"] = True
 
     m_ax = _AX_FENCE.search(text)
     if m_ax:
@@ -1211,12 +1220,22 @@ class OnyxQwenParseError(OnyxQwenError):
 PostFn = Callable[..., Any]
 
 
+def strip_thinking_blocks(raw: str) -> tuple[str, bool]:
+    """Remove Qwen3 ``...`` spans before code extraction."""
+    if not raw or not _THINKING_BLOCK_RE.search(raw):
+        return raw, False
+    stripped = _THINKING_BLOCK_RE.sub("", raw).strip()
+    return stripped, True
+
+
 def normalize_onyx_chat_completion_payload(payload: dict[str, Any]) -> None:
     """Onyx rejects ``temperature: 0``; map non-positive temperature to greedy decoding in-place.
 
     If ``temperature`` is present and ``<= 0`` (after ``float()``), drops ``temperature`` and
     ``top_p``, and sets ``do_sample`` to ``False``. Positive temperatures are unchanged.
+    Also disables Qwen3 thinking mode when the API supports ``enable_thinking``.
     """
+    payload.setdefault("enable_thinking", False)
     if "temperature" not in payload:
         return
     try:
@@ -1244,7 +1263,7 @@ def _completion_overrides_applied(overrides: Optional[Mapping[str, Any]]) -> dic
             if k != "messages" and k != "model":
                 payload[k] = v
         normalize_onyx_chat_completion_payload(payload)
-    return {k: payload[k] for k in sorted(payload) if k not in {"model", "messages"}}
+    return {k: payload[k] for k in sorted(payload) if k not in {"model", "messages", "enable_thinking"}}
 
 
 def _request_diagnostics(
@@ -1534,6 +1553,11 @@ class OnyxQwenBackend:
                 if k != "messages" and k != "model":
                     payload[k] = v
             normalize_onyx_chat_completion_payload(payload)
+        else:
+            normalize_onyx_chat_completion_payload(payload)
+        user_content = str(payload["messages"][-1]["content"])
+        if "qwen" in self._model.lower() and "/no_think" not in user_content.lower():
+            payload["messages"][-1]["content"] = user_content.rstrip() + " /no_think"
         request_started_at = _utc_now_iso()
         started_perf = time.perf_counter()
         max_tokens = payload.get("max_tokens")
@@ -1797,5 +1821,6 @@ __all__ = [
     "user_prompt_draft",
     "user_prompt_repair",
     "user_prompt_trace_summary",
+    "strip_thinking_blocks",
     "split_ax_and_prose",
 ]

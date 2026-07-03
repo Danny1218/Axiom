@@ -49,7 +49,7 @@ def test_readme_version_matches_pyproject():
 def test_readme_documents_core_python_api():
     text = (_root() / "readme.md").read_text(encoding="utf-8")
     assert "axiom.load" in text and "model.predict" in text
-    assert "copilot-doctor" in text and "[copilot]" in text
+    assert "copilot-doctor" in text and "lmstudio" in text
 
 
 def test_examples_titanic_ax_has_conditional_ir():

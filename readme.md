@@ -114,17 +114,17 @@ Compare JSON before/after changes; entries include p50/p95/mean timings and `tor
 
 ## Semantic copilot CLI
 
-Install **`[copilot]`** so `requests` is available. Pass **`--expert-url`** (API base, e.g. `https://your-host/v1/`), **`--expert-model`**, and optionally **`--expert-api-key`** or set **`AXIOM_EXPERT_API_KEY`**. Iteration logs and “wrote file” lines go to **stderr**; the generated **`.ax`** source is printed to **stdout** so you can redirect it.
+Install **`[copilot]`** so `requests` is available. For **local development**, start [LM Studio](https://lmstudio.ai/) with **`qwen/qwen3-8b`** on **`http://127.0.0.1:1234`**, then use **`--backend lmstudio`** (defaults: URL **`http://127.0.0.1:1234/v1/`**, model **`qwen/qwen3-8b`**, no API key). Remote/on-prem endpoints use **`--backend onyx-qwen`** with **`--expert-url`**, **`--expert-model`**, and optionally **`--expert-api-key`** or **`AXIOM_EXPERT_API_KEY`**.
 
-**Onyx-Refinery / local morph server auth (operator note):** Servers aligned with **Onyx-Refinery** typically resolve the expected API key as **`MORPH_API_KEY`** → **`ONYX_API_KEY`** → the development default **`sk-morph-b2b-test`**. **`POST /v1/chat/completions`** accepts **`Authorization: Bearer <key>`** or **`X-API-Key`**. In Axiom, pass the same effective key via **`--expert-api-key`**, **`--expert-api-key-file`** (Phase 118), or **`AXIOM_EXPERT_API_KEY`**. A **401** from the upstream usually means the client key does not match what the server expects; a **timeout** with a matching key points to budget or server-side latency/load instead of auth rejection.
+**Qwen3 thinking blocks:** the backend strips `` spans before code extraction (metadata **`stripped_think_block: true`**) and sends **`enable_thinking: false`** plus a **`/no_think`** suffix on user prompts when the model id contains **`qwen`**.
 
-**Latency sweep grid (`scripts/sweep_robustness_task_latency.ps1`):** **`Timeouts`** and **`MaxTokensList`** are **comma-separated strings** (defaults **`45,60,90,120`** and **`16,32,64`**) so the script behaves the same from any shell; **`WarmupRuns`** forwards to **`profile_onyx_task_latency.py --warmup-runs`**.
-
-**Live preflight probes (`scripts/check_onyx_live_preflight.py --probe`):** **`--probe-mode auth`** issues a cheap **`GET /v1/models`** (same Bearer auth as the expert) to verify the key and route only — it does **not** measure draft latency. **`--probe-mode draft`** (default) runs one measured **`draft_program`** for a single benchmark task; on slow local GPUs, **draft** probes and **`scripts/sweep_robustness_task_latency.ps1`** runs may still need **180s+** (or more) per call. **`--probe-warmup-runs`** (draft only) and **`--warmup-runs`** on **`scripts/profile_onyx_task_latency.py`** add optional throwaway draft calls to reduce cold-start noise — **diagnostic-only**; they do not change **`axiom copilot-benchmark`** defaults. Use **`--probe-timeout`** / **`--probe-max-tokens`** / **`--probe-task-id`** to tune the draft probe without changing global benchmark defaults.
-
-**Smoke check (Phase 81 / 82b / 85b / 123):** **`axiom copilot-doctor`** requests deterministic-style sampling via **`temperature: 0`** in the internal completion-overrides context (default goal: **`y = x * 2.0`**; override with **`--goal`**). On **Onyx**, that is translated to **`do_sample: false`** with **`temperature` omitted** from the HTTP body (Onyx rejects **`temperature: 0`**). It prints connection status, raw response size, an **`ax_source`** preview, **`parse` / `ir` / `block`** from **`validate_program`**, structured **`failures:`** lines on compile errors, **`row_mismatches:`** / **`repair_cues:`** when **`--examples-json`** evaluation fails, **`anti_pattern`** lines when **`forbidden_tokens_detected`** (**`assign_colon_eq`**, **`print_call`**) or **`indexed_variable_warning`** / **`output_call_warning`** / **`suspicious_numeric_literal_warning`** appear in expert metadata, and **`neural: yes/no`** from the extracted program. Use **`--validate-source path.ax`** to diagnose local **`.ax`** without calling the expert (still supports **`--examples-json`**). **Exit 0** only when the chat call succeeds (or validate-only path), compile passes, and (if examples were requested) evaluation succeeds. Optional **`--timeout`** sets the HTTP timeout (default **120** seconds).
+**Smoke check:** **`axiom copilot-doctor`** (default **`--backend lmstudio`**) requests greedy sampling via internal **`temperature: 0`** → HTTP **`do_sample: false`**. It prints **`connection:`**, **`parse` / `ir` / `block`**, and optional example-row diagnostics. Use **`--validate-source path.ax`** to check local **`.ax`** without calling the expert.
 
 ```powershell
+# Local LM Studio (default backend)
+axiom copilot-doctor
+
+# Remote OpenAI-compatible server
 axiom copilot-doctor --backend onyx-qwen --expert-url "https://your-host/v1/" --expert-model "qwen-7b"
 ```
 

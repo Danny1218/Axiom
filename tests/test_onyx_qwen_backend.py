@@ -918,7 +918,8 @@ def test_normalize_onyx_chat_completion_payload_positive_unchanged():
 def test_normalize_onyx_chat_completion_payload_no_temperature_no_op():
     p = {"model": "m", "messages": [], "max_tokens": 10}
     normalize_onyx_chat_completion_payload(p)
-    assert p == {"model": "m", "messages": [], "max_tokens": 10}
+    assert p["max_tokens"] == 10
+    assert p["enable_thinking"] is False
 
 
 def test_greedy_completion_overrides_drop_top_p_from_http_payload():
@@ -1092,3 +1093,43 @@ def test_build_onyx_qwen_expert_accepts_timeout():
 
     b = build_onyx_qwen_expert(url="http://h", model="m", timeout=41.25)
     assert b._timeout == 41.25
+
+
+def test_strip_thinking_blocks_removes_redacted_span():
+    from axiom.experts.onyx_qwen import strip_thinking_blocks
+
+    raw = "<think>plan</think>\n```ax\ny = x * 2.0;\n```"
+    cleaned, stripped = strip_thinking_blocks(raw)
+    assert stripped is True
+    assert "plan" not in cleaned
+    assert "y = x * 2.0" in cleaned
+
+
+def test_split_ax_and_prose_records_stripped_think_block():
+    raw = "<think>hidden</think>\n```ax\ny = 1.0;\n```"
+    split = split_ax_and_prose(raw)
+    assert split.extraction.get("stripped_think_block") is True
+    assert "y = 1.0" in split.ax_source
+
+
+def test_chat_payload_disables_thinking_and_appends_no_think_suffix():
+    calls: list[dict] = []
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        calls.append(json)
+        return _ok_response("```ax\ny = 1.0;\n```")
+
+    b = OnyxQwenBackend("http://h", "qwen/qwen3-8b", _post=fake_post)
+    b.draft_program(ExpertDraftRequest("goal-text"))
+    assert calls[0]["enable_thinking"] is False
+    assert calls[0]["messages"][-1]["content"].endswith("/no_think")
+
+
+def test_resolve_lmstudio_defaults():
+    from axiom.copilot.backend import resolve_copilot_http_settings
+
+    kind, url, model, key = resolve_copilot_http_settings("lmstudio", expert_url="", expert_model="")
+    assert kind == "onyx-qwen"
+    assert url == "http://127.0.0.1:1234/v1/"
+    assert model == "qwen/qwen3-8b"
+    assert key is None

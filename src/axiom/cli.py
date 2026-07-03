@@ -488,14 +488,17 @@ def _make_copilot_expert(args: argparse.Namespace):
     backend = str(args.backend).strip().lower().replace("_", "-")
     url = (args.expert_url or "").strip()
     model = (args.expert_model or "").strip()
-    if backend == "onyx-qwen":
+    if backend in ("onyx-qwen", "lmstudio"):
         _require_requests_for_copilot()
-        if not url:
-            raise SystemExit("--expert-url is required for onyx-qwen.")
-        if not model:
-            raise SystemExit("--expert-model is required for onyx-qwen.")
+        if backend == "onyx-qwen":
+            if not url:
+                raise SystemExit("--expert-url is required for onyx-qwen.")
+            if not model:
+                raise SystemExit("--expert-model is required for onyx-qwen.")
     elif backend != "benchmark-dispatch":
-        raise SystemExit(f"Unsupported --backend {args.backend!r} (expected onyx-qwen or benchmark-dispatch).")
+        raise SystemExit(
+            f"Unsupported --backend {args.backend!r} (expected onyx-qwen, lmstudio, or benchmark-dispatch)."
+        )
     key = args.expert_api_key
     if key is None or str(key).strip() == "":
         key = os.environ.get("AXIOM_EXPERT_API_KEY")
@@ -786,10 +789,12 @@ def _cmd_copilot_doctor(args: argparse.Namespace) -> None:
         ax = Path(validate_path).read_text(encoding="utf-8")
         raise SystemExit(_copilot_doctor_validate_source(ax, args))
 
-    if not args.backend or not args.expert_url or not args.expert_model:
-        raise SystemExit(
-            "--backend, --expert-url, and --expert-model are required unless --validate-source is set."
-        )
+    backend = (args.backend or "lmstudio").strip().lower().replace("_", "-")
+    if backend not in ("onyx-qwen", "lmstudio"):
+        raise SystemExit(f"Unsupported --backend {args.backend!r} (expected onyx-qwen or lmstudio).")
+    if backend == "onyx-qwen" and (not args.expert_url or not args.expert_model):
+        raise SystemExit("--backend onyx-qwen requires --expert-url and --expert-model.")
+    args.backend = backend
 
     from axiom.copilot.evaluator import evaluate_program, validate_program
     from axiom.copilot.models import ProgramCandidate
@@ -1144,23 +1149,23 @@ def _cmd_copilot_benchmark(args: argparse.Namespace) -> None:
 def _add_copilot_benchmark_backend_args(p: argparse.ArgumentParser) -> None:
     p.add_argument(
         "--backend",
-        choices=["onyx-qwen", "benchmark-dispatch"],
+        choices=["onyx-qwen", "lmstudio", "benchmark-dispatch"],
         required=True,
-        help="Semantic expert implementation (`benchmark-dispatch` is deterministic/offline for CI).",
+        help="Semantic expert implementation (`lmstudio` = local OpenAI API; `benchmark-dispatch` = offline CI).",
     )
     p.add_argument(
         "--expert-url",
         type=str,
         required=False,
         default=None,
-        help="Base URL for chat/completions (required for onyx-qwen only).",
+        help="Base URL for chat/completions (onyx-qwen required; lmstudio defaults to http://127.0.0.1:1234/v1/).",
     )
     p.add_argument(
         "--expert-model",
         type=str,
         required=False,
         default=None,
-        help="Remote model id (required for onyx-qwen only).",
+        help="Remote model id (onyx-qwen required; lmstudio defaults to qwen/qwen3-8b).",
     )
     p.add_argument(
         "--expert-api-key",
@@ -1173,9 +1178,9 @@ def _add_copilot_benchmark_backend_args(p: argparse.ArgumentParser) -> None:
 def _add_copilot_backend_args(p: argparse.ArgumentParser) -> None:
     p.add_argument(
         "--backend",
-        choices=["onyx-qwen"],
+        choices=["onyx-qwen", "lmstudio"],
         required=True,
-        help="Semantic expert implementation (OpenAI-style chat; requires [copilot] / requests).",
+        help="Semantic expert (OpenAI-style chat). `lmstudio` defaults to http://127.0.0.1:1234/v1/ + qwen/qwen3-8b.",
     )
     p.add_argument("--goal", type=str, required=True, help="Natural-language goal for the .ax program.")
     p.add_argument(
@@ -1187,14 +1192,16 @@ def _add_copilot_backend_args(p: argparse.ArgumentParser) -> None:
     p.add_argument(
         "--expert-url",
         type=str,
-        required=True,
-        help="Base URL for chat/completions (e.g. https://api.example.com/v1/).",
+        required=False,
+        default=None,
+        help="Chat API base URL (required for onyx-qwen; lmstudio default http://127.0.0.1:1234/v1/).",
     )
     p.add_argument(
         "--expert-model",
         type=str,
-        required=True,
-        help="Remote model id (passed through to the chat API).",
+        required=False,
+        default=None,
+        help="Remote model id (required for onyx-qwen; lmstudio default qwen/qwen3-8b).",
     )
     p.add_argument(
         "--expert-api-key",
@@ -1579,9 +1586,10 @@ def main(argv: list[str] | None = None) -> None:
     )
     p_cdoc.add_argument(
         "--backend",
-        choices=["onyx-qwen"],
+        choices=["onyx-qwen", "lmstudio"],
         required=False,
-        help="Semantic expert implementation (requires [copilot] / requests).",
+        default="lmstudio",
+        help="Semantic expert (default: lmstudio → http://127.0.0.1:1234/v1/, model qwen/qwen3-8b).",
     )
     p_cdoc.add_argument(
         "--goal",
