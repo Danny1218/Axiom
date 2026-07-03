@@ -22,6 +22,28 @@ from axiom.experts.base import ExpertDraftResponse
 
 DEFAULT_RMSE_TOLERANCE = 0.05
 MAX_ROW_ABS_ERROR = 0.025
+_NONLINEAR_GOAL_HINTS = (
+    "clamp",
+    "bounded",
+    "min(",
+    "max(",
+    "prefer",
+    "cap",
+    "clip",
+    "piecewise",
+    "threshold",
+    "mirror",
+)
+_AFFINE_ONLY_FAMILIES = frozenset(
+    {
+        "single_input_affine",
+        "two_input_interaction",
+        "two_input_ab_b",
+        "two_input_ab_a",
+        "two_input_ab_bias",
+        "affine_multi_input",
+    }
+)
 
 
 def _round_coeff(v: float) -> float:
@@ -161,6 +183,11 @@ def _append_two_input_candidate(
     )
 
 
+def _goal_hints_nonlinear_structure(config: CopilotSearchConfig) -> bool:
+    text = f"{config.goal} {config.domain_context or ''}".lower()
+    return any(hint in text for hint in _NONLINEAR_GOAL_HINTS)
+
+
 def try_tolerant_symbolic_inference(
     config: CopilotSearchConfig,
     *,
@@ -297,6 +324,8 @@ def try_tolerant_symbolic_inference(
 
     pick = _pick(cands, rmse_tolerance)
     if pick is None:
+        return None
+    if _goal_hints_nonlinear_structure(config) and pick.family in _AFFINE_ONLY_FAMILIES:
         return None
     return ExpertDraftResponse(
         ax_source=pick.source,
