@@ -1,6 +1,6 @@
 # Axiom Engine
 
-[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](https://github.com/Danny1218/Axiom)
+[![Version](https://img.shields.io/badge/version-1.4.0-blue.svg)](https://github.com/Danny1218/Axiom)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 
 **A Differentiable Neural Architecture Search (DNAS) compiler.** Write explicit symbolic rules, compile them into a continuous-time neural network, and let the AI evolve to handle the edge cases.
@@ -11,9 +11,40 @@
 
 Reproducible CPU benchmarks (fixed seeds, no network) live under `benchmarks/` and write committed evidence to `docs/evidence/`. Install extras: `pip install -e ".[bench]"`.
 
+### Guarded Titanic — wrap the strong model, prove the clamp
+
+**Claim:** Call your best tabular model via `expert()` and keep symbolic safety rules in `.ax`; holdout accuracy matches the wrapped model while constraints are machine-checkable.
+
+```powershell
+python benchmarks/titanic_hybrid/run_guarded_audit.py
+```
+
+| Model | Holdout accuracy | Rule violations (500 edge cases) |
+|-------|------------------|----------------------------------|
+| **Raw GradientBoosting** | ~0.85 | ~128 |
+| **Guarded GBM (Axiom wrap)** | ~0.85 (Δ≈0) | **0** |
+| v1.3 pure hybrid (neural) | ~0.63 | 0 |
+
+Certificate excerpt from `docs/evidence/titanic_guarded_certificate.json`:
+
+```json
+{
+  "input_region": {"Pclass": [3.0, 3.0], "Sex": [0.0, 0.0], "Age": [18.0, 100.0]},
+  "assumptions": {"tabular_model": [0.0, 1.0]},
+  "proven_output_bounds": {"survived_prob": [0.0, 0.15]}
+}
+```
+
+### Guardrail pattern
+
+1. Train or load a strong baseline (sklearn, custom Python, etc.).
+2. Wrap in `.ax`: `raw = expert("your_model", features);` plus symbolic `if` / `min` / `max` rules.
+3. Wire the handler at runtime (`ExpertRuntimeRegistry`) or in `axiom serve`.
+4. Run **`axiom certify`** with input region + declared expert bounds → JSON safety certificate.
+
 ### Extrapolation showdown (symbolic recovery vs sklearn)
 
-**Claim:** When labels come from a known formula plus modest noise, Axiom's **tolerant symbolic inference** recovers the closed form and extrapolates outside the training range; linear models and neural nets fit interpolation but fail extrapolation.
+**Claim:** When labels come from a known formula plus modest noise, Axiom's **tolerant symbolic inference** recovers the closed form and extrapolates outside the training range.
 
 ```powershell
 python benchmarks/baseline_showdown/run_showdown.py
@@ -21,26 +52,18 @@ python benchmarks/baseline_showdown/run_showdown.py
 
 | Result | Detail |
 |--------|--------|
-| **Wins** | See `docs/evidence/baseline_showdown.md` — Axiom extrapolation RMSE beats the best sklearn baseline (MLP/GBR/linear) on **7/10** in-family tasks by **>=10x** margin |
-| **Interpolation** | Ties or wins in-family (symbolic exact fit) |
-| **Sabotage** | `sin(x)` and `exp(-x)` tasks: Axiom **declines** (2/2) — benchmark is not rigged |
-| **Honest losses** | `affine_three_input` and `clamped_affine_three` exceed tolerant per-row error gates; recorded in evidence JSON |
+| **Wins** | **9/10** in-family extrapolation wins (`docs/evidence/baseline_showdown.md`) with **unclipped** 3% Gaussian noise |
+| **Honest loss** | `clamped_affine_three` declines — noisy labels vs clamp family |
+| **Sabotage** | `sin(x)` and `exp(-x)`: Axiom **declines** (2/2) |
+| **Gates (v1.4)** | Scale-relative row tolerance + 5% relative RMSE; benchmark noise clipping removed |
 
-### Titanic hybrid — accuracy vs hard constraints
+### Titanic hybrid (v1.3 reference)
 
-**Claim:** A hybrid `.ax` model can match ML accuracy while **guaranteeing** a symbolic rule pure ML cannot.
+v1.3 neural hybrid (`examples/titanic_hybrid.ax`) enforced constraints but lagged GBM accuracy (~0.63). v1.4 **`titanic_guarded.ax`** wraps GBM instead (see above). Reproduce v1.3 numbers:
 
 ```powershell
 python benchmarks/titanic_hybrid/run_hybrid_audit.py
 ```
-
-| Model | Holdout accuracy | Rule violations (500 edge cases) |
-|-------|------------------|--------------------------------|
-| **Axiom hybrid** (`examples/titanic_hybrid.ax`) | ~0.63 | **0** (InterpretedBlock IR enforces clamp) |
-| LogisticRegression | ~0.85 | ~120 |
-| GradientBoosting | ~0.85 | ~128 |
-
-**Honest admission:** Holdout accuracy **lags** the best baseline by ~22 points on this quick 30-epoch run; the win here is **constraint safety**, not raw accuracy. Use `InterpretedBlock` inference for guaranteed symbolic clamps — the Sinkhorn `ExecutionGraph` training path softens conditionals.
 
 ---
 

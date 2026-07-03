@@ -1,6 +1,6 @@
 # Axiom — Architecture & status
 
-**Version:** 1.3.0 · **Stack:** Python 3.10+, PyTorch, Lark, NetworkX
+**Version:** 1.4.0 · **Stack:** Python 3.10+, PyTorch, Lark, NetworkX
 
 ## What this is
 
@@ -9,15 +9,16 @@ Axiom is a hybrid **symbolic–neural compiler**: `.ax` source is parsed (Lark) 
 The **semantic copilot** drafts and repairs `.ax` programs from goals + example rows via an injectable
 expert backend (LM Studio locally, deterministic dispatch offline).
 
-## v1.3 evidence benchmarks
+## v1.4 evidence benchmarks
 
 | Benchmark | Command | What it proves |
 |-----------|---------|----------------|
-| **baseline_showdown** | `python benchmarks/baseline_showdown/run_showdown.py` | Tolerant symbolic inference extrapolates on 7/10 formula families; declines sabotage tasks |
-| **titanic_hybrid** | `python benchmarks/titanic_hybrid/run_hybrid_audit.py` | InterpretedBlock hybrid enforces hard rules (0 violations); sklearn baselines violate |
+| **titanic_guarded** | `python benchmarks/titanic_hybrid/run_guarded_audit.py` | `expert()` wraps GBM (~0.85 acc), 0 violations, interval certificate |
+| **baseline_showdown** | `python benchmarks/baseline_showdown/run_showdown.py` | 9/10 extrap wins, unclipped noise, scale-relative gates |
+| **titanic_hybrid** (v1.3) | `python benchmarks/titanic_hybrid/run_hybrid_audit.py` | Neural hybrid constraint baseline |
 
-Evidence: `docs/evidence/baseline_showdown.{json,md}`, `docs/evidence/titanic_hybrid.{json,md}`.
-Optional extra: `pip install -e ".[bench]"`.
+Evidence: `docs/evidence/titanic_guarded.{json,md}`, `titanic_guarded_certificate.json`,
+`baseline_showdown.{json,md}`. CLI: **`axiom certify`**.
 
 ## Two execution paths
 
@@ -27,36 +28,34 @@ Optional extra: `pip install -e ".[bench]"`.
 | **Compiled** | Opt-in `torch.compile(fullgraph=True)` | Hot loops/conditionals; strict mode uses plain bools outside traced regions |
 
 Public entry points (frozen): `axiom.load`, `AxiomModel.predict/explain/export_report`, CLI subcommands
-listed in `tests/test_architecture_baseline.py`.
+listed in `tests/test_architecture_baseline.py` (+ **`certify`** in v1.4).
 
 ## Copilot pipeline
 
 ```
 goal + examples → exact fast paths (search.py)
-                → tolerant symbolic regression (tolerant_inference.py)  [v1.2]
+                → tolerant symbolic regression (tolerant_inference.py)  [scale-relative gates v1.4]
                 → LLM draft/repair (onyx_qwen / lmstudio alias)
                 → normalizer (canonical .ax) → parse → evaluate → repair loop
 ```
-
-**Backends:** `benchmark-dispatch` (CI/offline), `onyx-qwen`, `lmstudio` (OpenAI-compatible local default). Local default: `axiom copilot-doctor --backend lmstudio`.
 
 ## Test & benchmark status
 
 | Check | Target |
 |-------|--------|
 | Full suite | `python -m pytest tests -q` → 0 failures |
-| Extrapolation showdown | 7/10 in-family extrap wins (>=10x vs ML); 2/2 sabotage declined |
-| Titanic hybrid | 0 constraint violations (InterpretedBlock); accuracy gap documented |
+| Guarded Titanic | GBM accuracy preserved, 0 violations, certificate hi ≤ 0.15 |
+| Extrapolation showdown | 9/10 in-family wins; 2/2 sabotage declined; noise unclipped |
 
 ## Intentionally frozen (do not break without explicit milestone)
 
-- Public API: `axiom.__all__`, `AxiomModel` methods, CLI subcommand names
+- Public API: `axiom.__all__`, `AxiomModel` methods, CLI subcommand names (except additive `certify`)
 - Optional extras: `spy`, `cartpole`, `inspect`, `gateway`, `serve`, `lock`, `export`, `copilot`, `dev`, `bench`
 - Four benchmark JSON schemas and `benchmark-dispatch` reference programs
 
-## Release checklist (v1.3.0)
+## Release checklist (v1.4.0)
 
-- [x] `benchmarks/baseline_showdown/` + committed evidence
-- [x] `benchmarks/titanic_hybrid/` + `examples/titanic_hybrid.ax`
-- [x] `[bench]` optional extra (scikit-learn)
-- [x] README benchmark section; tag `v1.3.0`
+- [x] `examples/titanic_guarded.ax` + `run_guarded_audit.py` + certificate
+- [x] Scale-relative tolerant gates; showdown noise un-rigged
+- [x] `src/axiom/verify/interval.py` + `axiom certify`
+- [x] README / plan; tag `v1.4.0`
