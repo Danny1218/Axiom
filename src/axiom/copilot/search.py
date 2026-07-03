@@ -2320,6 +2320,10 @@ def run_copilot_draft(
         draft_req = _build_copilot_draft_request(config)
     draft_resp = _try_exact_symbolic_fast_path(config)
     if draft_resp is None:
+        from axiom.copilot.tolerant_inference import try_tolerant_symbolic_inference
+
+        draft_resp = try_tolerant_symbolic_inference(config)
+    if draft_resp is None:
         draft_resp = config.expert.draft_program(draft_req)
     return draft_req, draft_resp
 

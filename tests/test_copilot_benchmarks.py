@@ -731,20 +731,24 @@ def test_robustness_ambiguity_stress_suite_runs_with_benchmark_dispatch():
     assert suite.draft_summary.compile_success_rate == 1.0
     assert suite.draft_summary.metric_success_rate == 1.0
     assert suite.search_summary.metric_success_rate == 1.0
-    assert all(comp.draft_only is not None for comp in suite.tasks)
-    assert all(comp.search is not None for comp in suite.tasks)
-    assert all(comp.draft_only.backend_kind == "expert_backend" for comp in suite.tasks if comp.draft_only is not None)
-    assert all(comp.search.backend_kind == "expert_backend" for comp in suite.tasks if comp.search is not None)
-    assert all(
-        comp.draft_only.producing_backend_name == "benchmark_dispatch"
-        for comp in suite.tasks
-        if comp.draft_only is not None
-    )
-    assert all(
-        comp.search.producing_backend_name == "benchmark_dispatch"
-        for comp in suite.tasks
-        if comp.search is not None
-    )
+    tolerant_task_ids = {
+        "noisy_affine_thermometer",
+        "near_abs_with_bias",
+        "signed_cross_term_noisy",
+    }
+    for comp in suite.tasks:
+        assert comp.draft_only is not None
+        assert comp.search is not None
+        if comp.task_id in tolerant_task_ids:
+            assert comp.draft_only.backend_kind == "tolerant"
+            assert comp.search.backend_kind == "tolerant"
+            assert comp.draft_only.producing_backend_name.startswith("tolerant_")
+            assert comp.search.producing_backend_name.startswith("tolerant_")
+        else:
+            assert comp.draft_only.backend_kind == "expert_backend"
+            assert comp.search.backend_kind == "expert_backend"
+            assert comp.draft_only.producing_backend_name == "benchmark_dispatch"
+            assert comp.search.producing_backend_name == "benchmark_dispatch"
 
 
 def test_copilot_milestone_workflow_runs_pytest_smoke_and_three_benchmarks():

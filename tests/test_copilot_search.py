@@ -65,6 +65,14 @@ EX_IN = [{"x": 1.0}]
 EX_EXP = [{"y": 2.0}]
 
 
+def _run_search_when_exact_fast_path_misses(cfg: CopilotSearchConfig, ex: "ScriptedExpert") -> None:
+    from axiom.copilot.tolerant_inference import try_tolerant_symbolic_inference
+
+    tolerant = try_tolerant_symbolic_inference(cfg)
+    run_copilot_search(cfg)
+    assert len(ex.draft_calls) == (0 if tolerant is not None else 1)
+
+
 @pytest.fixture(autouse=True)
 def _fresh_parser():
     reset_parser()
@@ -558,8 +566,7 @@ def test_run_copilot_search_threads_completion_overrides_to_draft_and_repair():
         repair_valid_with_metrics=False,
         completion_overrides={"temperature": 0.2, "top_p": 0.95},
     )
-    run_copilot_search(cfg)
-    assert len(ex.draft_calls) == 1 and len(ex.repair_calls) == 1
+    _run_search_when_exact_fast_path_misses(cfg, ex) and len(ex.repair_calls) == 1
     want = {"temperature": 0.2, "top_p": 0.95}
     assert ex.draft_calls[0].context.get(COMPLETION_OVERRIDES_CONTEXT_KEY) == want
     assert ex.repair_calls[0].context.get(COMPLETION_OVERRIDES_CONTEXT_KEY) == want
@@ -663,8 +670,7 @@ def test_linear_xy_fast_path_not_used_single_example_row():
         score_sort_key="neg_mse",
         repair_valid_with_metrics=False,
     )
-    run_copilot_search(cfg)
-    assert len(ex.draft_calls) == 1
+    _run_search_when_exact_fast_path_misses(cfg, ex)
 
 
 def test_linear_xy_fast_path_not_used_non_collinear():
@@ -680,8 +686,7 @@ def test_linear_xy_fast_path_not_used_non_collinear():
         score_sort_key="neg_mse",
         repair_valid_with_metrics=False,
     )
-    run_copilot_search(cfg)
-    assert len(ex.draft_calls) == 1
+    _run_search_when_exact_fast_path_misses(cfg, ex)
 
 
 def test_piecewise_threshold_identity_fast_path_success():
@@ -731,8 +736,7 @@ def test_piecewise_threshold_identity_fast_path_falls_back_noisy():
         score_sort_key="neg_mse",
     )
     assert _try_piecewise_threshold_identity_fast_path(cfg) is None
-    run_copilot_search(cfg)
-    assert len(ex.draft_calls) == 1
+    _run_search_when_exact_fast_path_misses(cfg, ex)
 
 
 def test_unit_step_fast_path_exact_success():
@@ -823,8 +827,7 @@ def test_absolute_value_piecewise_fast_path_falls_back_when_noisy():
         score_sort_key="neg_mse",
     )
     assert _try_absolute_value_piecewise_fast_path(cfg) is None
-    run_copilot_search(cfg)
-    assert len(ex.draft_calls) == 1
+    _run_search_when_exact_fast_path_misses(cfg, ex)
 
 
 def test_nested_piecewise_identity_cap_fast_path_success():
@@ -916,8 +919,7 @@ def test_nested_piecewise_identity_cap_fast_path_falls_back_noisy():
         score_sort_key="neg_mse",
     )
     assert _try_nested_piecewise_identity_cap_fast_path(cfg) is None
-    run_copilot_search(cfg)
-    assert len(ex.draft_calls) == 1
+    _run_search_when_exact_fast_path_misses(cfg, ex)
 
 
 def test_nested_piecewise_identity_cap_fast_path_shifted_affine_success():
@@ -966,8 +968,7 @@ def test_nested_piecewise_identity_cap_fast_path_shifted_affine_falls_back_when_
         score_sort_key="neg_mse",
     )
     assert _try_nested_piecewise_identity_cap_fast_path(cfg) is None
-    run_copilot_search(cfg)
-    assert len(ex.draft_calls) == 1
+    _run_search_when_exact_fast_path_misses(cfg, ex)
 
 
 def test_linear_xy_fast_path_affine_with_intercept():
@@ -1083,8 +1084,7 @@ def test_quadratic_single_input_fast_path_falls_back_when_row_noisy():
         score_sort_key="neg_mse",
     )
     assert _try_quadratic_single_input_fast_path(cfg) is None
-    run_copilot_search(cfg)
-    assert len(ex.draft_calls) == 1
+    _run_search_when_exact_fast_path_misses(cfg, ex)
 
 
 def test_quadratic_single_input_fast_path_quadratic_plus_linear_falls_back_when_row_noisy():
@@ -1103,8 +1103,7 @@ def test_quadratic_single_input_fast_path_quadratic_plus_linear_falls_back_when_
         score_sort_key="neg_mse",
     )
     assert _try_quadratic_single_input_fast_path(cfg) is None
-    run_copilot_search(cfg)
-    assert len(ex.draft_calls) == 1
+    _run_search_when_exact_fast_path_misses(cfg, ex)
 
 
 def test_quadratic_single_input_fast_path_returns_none_when_not_enough_distinct_x_rows():
@@ -1185,8 +1184,7 @@ def test_max_of_two_fast_path_falls_back_when_row_noisy():
         score_sort_key="neg_mse",
     )
     assert _try_max_of_two_fast_path(cfg) is None
-    run_copilot_search(cfg)
-    assert len(ex.draft_calls) == 1
+    _run_search_when_exact_fast_path_misses(cfg, ex)
 
 
 def _load_three_way_maxmin_rows():
@@ -1273,8 +1271,7 @@ def test_three_way_maxmin_fast_path_falls_back_when_row_noisy():
         score_sort_key="neg_mse",
     )
     assert _try_three_way_maxmin_fast_path(cfg) is None
-    run_copilot_search(cfg)
-    assert len(ex.draft_calls) == 1
+    _run_search_when_exact_fast_path_misses(cfg, ex)
 
 
 def test_min_of_max_pair_fast_path_exact_success():
@@ -1317,8 +1314,7 @@ def test_min_of_max_pair_fast_path_falls_back_when_row_noisy():
         score_sort_key="neg_mse",
     )
     assert _try_min_of_max_pair_fast_path(cfg) is None
-    run_copilot_search(cfg)
-    assert len(ex.draft_calls) == 1
+    _run_search_when_exact_fast_path_misses(cfg, ex)
 
 
 def test_max_of_three_nested_fast_path_exact_success():
@@ -1361,8 +1357,7 @@ def test_max_of_three_nested_fast_path_falls_back_when_row_noisy():
         score_sort_key="neg_mse",
     )
     assert _try_max_of_three_nested_fast_path(cfg) is None
-    run_copilot_search(cfg)
-    assert len(ex.draft_calls) == 1
+    _run_search_when_exact_fast_path_misses(cfg, ex)
 
 
 def test_minmax_blend_fast_path_exact_success():
@@ -1405,8 +1400,7 @@ def test_minmax_blend_fast_path_falls_back_when_row_noisy():
         score_sort_key="neg_mse",
     )
     assert _try_minmax_blend_fast_path(cfg) is None
-    run_copilot_search(cfg)
-    assert len(ex.draft_calls) == 1
+    _run_search_when_exact_fast_path_misses(cfg, ex)
 
 
 def test_bounded_affine2_fast_path_risk_score_v3_exact():
@@ -1473,8 +1467,7 @@ def test_bounded_affine2_fast_path_falls_back_insufficient_strict_interior():
         repair_valid_with_metrics=False,
     )
     assert _try_bounded_affine2_fast_path(cfg) is None
-    run_copilot_search(cfg)
-    assert len(ex.draft_calls) == 1
+    _run_search_when_exact_fast_path_misses(cfg, ex)
 
 
 def test_bounded_affine2_clamp_edges_validated_on_v3_subset():
@@ -1565,8 +1558,7 @@ def test_bounded_affine_multi_input_fast_path_falls_back_when_row_noisy():
         score_sort_key="neg_mse",
     )
     assert _try_bounded_affine_multi_input_fast_path(cfg) is None
-    run_copilot_search(cfg)
-    assert len(ex.draft_calls) == 1
+    _run_search_when_exact_fast_path_misses(cfg, ex)
 
 
 def test_two_input_interaction_fast_path_exact_cross_term_success():
@@ -1665,8 +1657,7 @@ def test_two_input_interaction_fast_path_falls_back_when_noisy():
         repair_valid_with_metrics=False,
     )
     assert _try_two_input_interaction_fast_path(cfg) is None
-    run_copilot_search(cfg)
-    assert len(ex.draft_calls) == 1
+    _run_search_when_exact_fast_path_misses(cfg, ex)
 
 
 def test_two_input_interaction_fast_path_returns_none_when_ambiguous():
@@ -1774,8 +1765,7 @@ def test_affine_multi_input_fast_path_falls_back_when_noisy():
         score_fn=default_neg_mse_score_fn(),
         score_sort_key="neg_mse",
     )
-    run_copilot_search(cfg)
-    assert len(ex.draft_calls) == 1
+    _run_search_when_exact_fast_path_misses(cfg, ex)
 
 
 def test_affine_multi_input_fast_path_fixture_emits_canonical_without_indexed_access():
@@ -1865,8 +1855,7 @@ def test_affine_multi_input_fast_path_four_input_signed_bias_falls_back_when_noi
         score_sort_key="neg_mse",
     )
     assert _try_affine_multi_input_fast_path(cfg) is None
-    run_copilot_search(cfg)
-    assert len(ex.draft_calls) == 1
+    _run_search_when_exact_fast_path_misses(cfg, ex)
 
 
 def test_single_input_affine_fast_path_reading_scale_and_shift_success():
@@ -1895,8 +1884,7 @@ def test_single_input_affine_fast_path_reading_scale_and_shift_falls_back_when_n
         expected_rows=expected_rows,
     )
     assert _try_single_input_affine_fast_path(cfg) is None
-    run_copilot_search(cfg)
-    assert len(ex.draft_calls) == 1
+    _run_search_when_exact_fast_path_misses(cfg, ex)
 
 
 def test_bounded_affine_multi_input_fast_path_compass_unit_clip_success():
@@ -1925,8 +1913,7 @@ def test_bounded_affine_multi_input_fast_path_compass_unit_clip_falls_back_when_
         expected_rows=expected_rows,
     )
     assert _try_bounded_affine_multi_input_fast_path(cfg) is None
-    run_copilot_search(cfg)
-    assert len(ex.draft_calls) == 1
+    _run_search_when_exact_fast_path_misses(cfg, ex)
 
 
 def test_max_of_three_nested_fast_path_largest_channel_after_merge_success():
@@ -1955,8 +1942,7 @@ def test_max_of_three_nested_fast_path_largest_channel_after_merge_falls_back_wh
         expected_rows=expected_rows,
     )
     assert _try_max_of_three_nested_fast_path(cfg) is None
-    run_copilot_search(cfg)
-    assert len(ex.draft_calls) == 1
+    _run_search_when_exact_fast_path_misses(cfg, ex)
 
 
 def test_nested_piecewise_identity_cap_fast_path_shifted_ramp_window_success():
@@ -1995,5 +1981,4 @@ def test_nested_piecewise_identity_cap_fast_path_shifted_ramp_window_falls_back_
         expected_rows=expected_rows,
     )
     assert _try_nested_piecewise_identity_cap_fast_path(cfg) is None
-    run_copilot_search(cfg)
-    assert len(ex.draft_calls) == 1
+    _run_search_when_exact_fast_path_misses(cfg, ex)

@@ -108,6 +108,24 @@ def metric_success(task: BenchmarkTask, report: ProgramEvaluationReport) -> bool
     return float(v) >= float(lo)
 
 
+def _classify_benchmark_backend(
+    backend_name: str,
+    metadata: Optional[Mapping[str, Any]] = None,
+    *,
+    expert_call: str = "draft",
+) -> tuple[str, str, str]:
+    """Return ``(producing_backend_name, backend_kind, winner_origin)`` for benchmark records."""
+    md = dict(metadata or {})
+    name = str(backend_name or "")
+    if md.get("inference_kind") == "tolerant" or name.startswith("tolerant_"):
+        return name, "tolerant", "deterministic_inference"
+    if name.endswith("_fast_path"):
+        return name, "fast_path", "deterministic_inference"
+    if expert_call == "repair":
+        return name, "expert_backend", "model_repair"
+    return name, "expert_backend", "model_draft"
+
+
 @dataclass
 class BenchmarkRunRecord:
     """Outcome for one task under one strategy (draft-only or search)."""
@@ -175,8 +193,10 @@ def run_benchmark_draft_only(
     _, resp = run_copilot_draft(cfg)
     rep = _evaluate_for_task(task, resp.ax_source)
     co, mo = compile_success(rep), metric_success(task, rep)
-    backend_name = str(resp.backend_name or "")
-    is_fast = backend_name.endswith("_fast_path")
+    backend_name, backend_kind, winner_origin = _classify_benchmark_backend(
+        str(resp.backend_name or ""),
+        resp.metadata,
+    )
     return BenchmarkRunRecord(
         task_id=task.id,
         mode="draft_only",
@@ -185,8 +205,8 @@ def run_benchmark_draft_only(
         compile_ok=co,
         metric_ok=mo,
         producing_backend_name=backend_name,
-        backend_kind="fast_path" if is_fast else "expert_backend",
-        winner_origin="deterministic_inference" if is_fast else "model_draft",
+        backend_kind=backend_kind,
+        winner_origin=winner_origin,
     )
 
 
@@ -229,16 +249,13 @@ def run_benchmark_search(
     co, mo = compile_success(rep), metric_success(task, rep)
     win_rec = next((it for it in out.iterations if it.source == out.best_source), None)
     win_meta = win_rec.producing_expert if win_rec is not None else {}
-    backend_name = str(win_meta.get("backend_name", ""))
     expert_call = str(win_meta.get("expert_call", "draft"))
-    is_fast = backend_name.endswith("_fast_path")
-    winner_origin: Literal["deterministic_inference", "model_draft", "model_repair"]
-    if is_fast:
-        winner_origin = "deterministic_inference"
-    elif expert_call == "repair":
-        winner_origin = "model_repair"
-    else:
-        winner_origin = "model_draft"
+    nested_md = win_meta.get("metadata") if isinstance(win_meta.get("metadata"), dict) else {}
+    backend_name, backend_kind, winner_origin = _classify_benchmark_backend(
+        str(win_meta.get("backend_name", "")),
+        nested_md,
+        expert_call=expert_call,
+    )
     return BenchmarkRunRecord(
         task_id=task.id,
         mode="search",
@@ -249,7 +266,7 @@ def run_benchmark_search(
         converged=out.converged,
         iterations_run=len(out.iterations),
         producing_backend_name=backend_name,
-        backend_kind="fast_path" if is_fast else "expert_backend",
+        backend_kind=backend_kind,
         winner_origin=winner_origin,
     )
 
