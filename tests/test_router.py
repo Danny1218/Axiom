@@ -1,3 +1,4 @@
+import pytest
 import torch
 
 from axiom.engine.router import SinkhornRouter, sinkhorn_balance
@@ -69,6 +70,7 @@ def test_router_uniform_routing_high_normalized_entropy_tensor():
     assert float(ent.item()) >= 0.5
 
 
+@pytest.mark.compile
 def test_sinkhorn_router_masked_compile_aot_eager_fullgraph_matches_eager():
     import torch._dynamo.config as dynamo_config
 

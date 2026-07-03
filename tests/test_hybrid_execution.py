@@ -38,6 +38,7 @@ if (a > 0) {
     assert out[0, bc].item() > 1.0
 
 
+@pytest.mark.compile
 def test_hybrid_graph_compiles_aot_eager():
     """Full-graph friendly path without MSVC/inductor (Windows CI)."""
     import torch._dynamo.config as dynamo_config

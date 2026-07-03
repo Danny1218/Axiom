@@ -1,3 +1,4 @@
+import pytest
 import torch
 import torch._dynamo.config as dynamo_config
 import torch.nn as nn
@@ -45,6 +46,7 @@ def test_meta_respects_max_unmasks():
     assert len(out) == 1
 
 
+@pytest.mark.compile
 def test_compile_interpreted_block_vector_literal_aot_eager():
     """Array literal path uses ``torch.stack``; compiled forward must match eager (Phase 3)."""
     reset_parser()

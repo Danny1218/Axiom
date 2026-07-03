@@ -1,5 +1,6 @@
 """Phase 12: fixed unroll interpreter + global fullgraph=True for graphs with OP_LOOP."""
 
+import pytest
 import torch
 import torch._dynamo.config as dynamo_config
 
@@ -7,6 +8,8 @@ from axiom.compiler.flow import wire_execution_graph
 from axiom.compiler.ir import ast_to_ir
 from axiom.compiler.parser import parse_ax, reset_parser
 from axiom.engine.supernet import LatentSupernet
+
+pytestmark = pytest.mark.compile
 
 
 def test_compile_fullgraph_while_loop_matches_eager():

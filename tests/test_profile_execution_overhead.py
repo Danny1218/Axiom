@@ -7,6 +7,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+pytestmark = pytest.mark.slow
+
 
 def test_profile_execution_overhead_json_contract(tmp_path: Path):
     root = Path(__file__).resolve().parents[1]

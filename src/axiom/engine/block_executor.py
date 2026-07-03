@@ -9,7 +9,7 @@ from axiom.compiler.ir import extract_neural_node_specs
 from axiom.engine.expert_call import ExpertHandler
 from axiom.engine.expert_registry import ExpertRuntimeRegistry
 from axiom.engine.interpreter import collect_assigned_names_from_stmts, collect_load_names_from_stmts, exec_stmt
-from axiom.engine.strict import StrictInferenceError, mark_defined, strict_execution
+from axiom.engine.strict import StrictInferenceError, mark_defined
 from axiom.engine.ssm import LiquidKANNode
 from axiom.primitives.liquid_tensor import LiquidFeatureReadout
 
@@ -120,23 +120,24 @@ class InterpretedBlock(nn.Module):
             env_defined = {n for n in self.abi if n not in assigned}
         else:
             env_defined = set(self.abi.keys())
-        with strict_execution(self.strict, env_defined):
-            for stmt in self.ir_stmts:
-                exec_stmt(
-                    env,
-                    stmt,
-                    B=B,
-                    dim=D,
-                    max_unroll=self.max_unroll,
-                    device=device,
-                    dtype=dtype,
-                    abi_widths=self.abi_widths,
-                    neural_registry=self.neural_registry,
-                    expert_handler=self.expert_handler,
-                    expert_fallback=self.expert_fallback,
-                    expert_registry=self.expert_registry,
-                    expert_audit=audit,
-                )
+        for stmt in self.ir_stmts:
+            exec_stmt(
+                env,
+                stmt,
+                B=B,
+                dim=D,
+                max_unroll=self.max_unroll,
+                device=device,
+                dtype=dtype,
+                abi_widths=self.abi_widths,
+                neural_registry=self.neural_registry,
+                expert_handler=self.expert_handler,
+                expert_fallback=self.expert_fallback,
+                expert_registry=self.expert_registry,
+                expert_audit=audit,
+                strict=self.strict,
+                env_defined=env_defined,
+            )
         self._last_expert_trace = audit
         out = h.clone()
         for name, col in self.abi.items():

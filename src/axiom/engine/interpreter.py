@@ -10,7 +10,7 @@ import torch.nn.functional as F
 
 from axiom.engine.expert_call import ExpertHandler, ExpertRuntimeError
 from axiom.engine.expert_registry import ExpertRuntimeRegistry
-from axiom.engine.strict import StrictInferenceError, env_defined_set, mark_defined, strict_execution, strict_mode_enabled
+from axiom.engine.strict import StrictInferenceError, mark_defined
 
 Stmt = Tuple
 ExprIR = List[Tuple]
@@ -228,6 +228,8 @@ def eval_expr(
     expert_fallback: Optional[float] = None,
     expert_registry: Optional[ExpertRuntimeRegistry] = None,
     expert_audit: Optional[List[Dict[str, Any]]] = None,
+    strict: bool = False,
+    env_defined: Optional[Set[str]] = None,
 ) -> torch.Tensor:
     stack: List[torch.Tensor] = []
     z = _batch_zeros(B, device, dtype)
@@ -238,8 +240,7 @@ def eval_expr(
             stack.append(torch.full((B,), float(tup[1]), device=device, dtype=dtype, requires_grad=False))
         elif op == "OP_LOAD":
             name = str(tup[1])
-            defined = env_defined_set()
-            if strict_mode_enabled() and defined is not None and name not in defined:
+            if strict and env_defined is not None and name not in env_defined:
                 raise StrictInferenceError(f"load of unset variable {name!r}")
             stack.append(env.get(name, z))
         elif op == "OP_NEG":
@@ -261,7 +262,7 @@ def eval_expr(
                 arr2 = arr
                 k = int(arr2.shape[1])
             idx_raw = idx_t.to(dtype=torch.int64)
-            if strict_mode_enabled():
+            if strict:
                 bad = (idx_raw < 0) | (idx_raw >= k)
                 if bool(bad.any()):
                     raise StrictInferenceError(f"index out of range (width={k})")
@@ -284,7 +285,7 @@ def eval_expr(
             b, a = stack.pop(), stack.pop()
             a, b = _promote_batch_binop(a, b)
             mask = b.abs() > 1e-12
-            if strict_mode_enabled() and not bool(mask.all()):
+            if strict and not bool(mask.all()):
                 raise StrictInferenceError("division by zero")
             safe_b = torch.where(mask, b, o)
             safe_div = a / safe_b
@@ -341,6 +342,8 @@ def eval_expr(
                 expert_fallback=expert_fallback,
                 expert_registry=expert_registry,
                 expert_audit=expert_audit,
+                strict=strict,
+                env_defined=env_defined,
             )
             feats2 = feats.unsqueeze(-1) if feats.dim() == 1 else feats
             reg = neural_registry
@@ -370,6 +373,8 @@ def eval_expr(
                 expert_fallback=expert_fallback,
                 expert_registry=expert_registry,
                 expert_audit=expert_audit,
+                strict=strict,
+                env_defined=env_defined,
             )
             fd = feats.detach()
             if fd.dim() == 1:
@@ -487,6 +492,8 @@ def run_while_loop(
     expert_fallback: Optional[float] = None,
     expert_registry: Optional[ExpertRuntimeRegistry] = None,
     expert_audit: Optional[List[Dict[str, Any]]] = None,
+    strict: bool = False,
+    env_defined: Optional[Set[str]] = None,
 ) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
     """
     Runs exactly ``max_unroll`` iterations (no early ``break``). When the condition is false,
@@ -511,6 +518,8 @@ def run_while_loop(
             expert_fallback=expert_fallback,
             expert_registry=expert_registry,
             expert_audit=expert_audit,
+            strict=strict,
+            env_defined=env_defined,
         )
         entering = scope & (cond_val != 0)
         for st in body_ir:
@@ -529,6 +538,8 @@ def run_while_loop(
                 expert_fallback=expert_fallback,
                 expert_registry=expert_registry,
                 expert_audit=expert_audit,
+                strict=strict,
+                env_defined=env_defined,
             )
         snaps.append(
             snapshot_env(
@@ -555,6 +566,8 @@ def exec_stmt(
     expert_fallback: Optional[float] = None,
     expert_registry: Optional[ExpertRuntimeRegistry] = None,
     expert_audit: Optional[List[Dict[str, Any]]] = None,
+    strict: bool = False,
+    env_defined: Optional[Set[str]] = None,
 ) -> None:
     if active_mask is None:
         active_mask = _all_active(B, device)
@@ -572,6 +585,8 @@ def exec_stmt(
             expert_fallback=expert_fallback,
             expert_registry=expert_registry,
             expert_audit=expert_audit,
+            strict=strict,
+            env_defined=env_defined,
         )
         k = str(stmt[1])
         old = env[k]
@@ -584,9 +599,8 @@ def exec_stmt(
             nv = nv.squeeze(-1)
         m = _broadcast_mask(active_mask, nv)
         env[k] = torch.where(m, nv, old)
-        defined = env_defined_set()
-        if defined is not None:
-            mark_defined(defined, k)
+        if env_defined is not None:
+            mark_defined(env_defined, k)
     elif op == "OP_BLEND_ASSIGN":
         k = str(stmt[1])
         path_a = eval_expr(
@@ -600,6 +614,8 @@ def exec_stmt(
             expert_fallback=expert_fallback,
             expert_registry=expert_registry,
             expert_audit=expert_audit,
+            strict=strict,
+            env_defined=env_defined,
         ).to(dtype=dtype)
         nv = eval_expr(
             env,
@@ -612,6 +628,8 @@ def exec_stmt(
             expert_fallback=expert_fallback,
             expert_registry=expert_registry,
             expert_audit=expert_audit,
+            strict=strict,
+            env_defined=env_defined,
         )
         old = env[k]
         path_a, nv2 = _promote_batch_binop(path_a, nv)
@@ -621,9 +639,8 @@ def exec_stmt(
         parent_m = _broadcast_mask(active_mask, nv)
         aa = path_a * parent_m
         env[k] = aa * nv + (1.0 - aa) * old
-        defined = env_defined_set()
-        if defined is not None:
-            mark_defined(defined, k)
+        if env_defined is not None:
+            mark_defined(env_defined, k)
     elif op == "OP_EXPR_STMT":
         eval_expr(
             env,
@@ -636,6 +653,8 @@ def exec_stmt(
             expert_fallback=expert_fallback,
             expert_registry=expert_registry,
             expert_audit=expert_audit,
+            strict=strict,
+            env_defined=env_defined,
         )
     elif op == "OP_CONDITIONAL":
         cond_vec = eval_expr(
@@ -649,49 +668,53 @@ def exec_stmt(
             expert_fallback=expert_fallback,
             expert_registry=expert_registry,
             expert_audit=expert_audit,
+            strict=strict,
+            env_defined=env_defined,
         )
         base = {k: v.clone() for k, v in env.items()}
-        parent_defined = env_defined_set()
+        parent_defined = env_defined
         then_defined = set(parent_defined) if parent_defined is not None else None
         else_defined = set(parent_defined) if parent_defined is not None else None
         then_env = {k: v.clone() for k, v in env.items()}
-        with strict_execution(strict_mode_enabled(), then_defined):
-            for s in stmt[2]:
-                exec_stmt(
-                    then_env,
-                    s,
-                    B=B,
-                    dim=dim,
-                    max_unroll=max_unroll,
-                    device=device,
-                    dtype=dtype,
-                    active_mask=active_mask,
-                    abi_widths=aw,
-                    neural_registry=neural_registry,
-                    expert_handler=expert_handler,
-                    expert_fallback=expert_fallback,
-                    expert_registry=expert_registry,
-                    expert_audit=expert_audit,
-                )
+        for s in stmt[2]:
+            exec_stmt(
+                then_env,
+                s,
+                B=B,
+                dim=dim,
+                max_unroll=max_unroll,
+                device=device,
+                dtype=dtype,
+                active_mask=active_mask,
+                abi_widths=aw,
+                neural_registry=neural_registry,
+                expert_handler=expert_handler,
+                expert_fallback=expert_fallback,
+                expert_registry=expert_registry,
+                expert_audit=expert_audit,
+                strict=strict,
+                env_defined=then_defined,
+            )
         else_env = {k: v.clone() for k, v in env.items()}
-        with strict_execution(strict_mode_enabled(), else_defined):
-            for s in stmt[3]:
-                exec_stmt(
-                    else_env,
-                    s,
-                    B=B,
-                    dim=dim,
-                    max_unroll=max_unroll,
-                    device=device,
-                    dtype=dtype,
-                    active_mask=active_mask,
-                    abi_widths=aw,
-                    neural_registry=neural_registry,
-                    expert_handler=expert_handler,
-                    expert_fallback=expert_fallback,
-                    expert_registry=expert_registry,
-                    expert_audit=expert_audit,
-                )
+        for s in stmt[3]:
+            exec_stmt(
+                else_env,
+                s,
+                B=B,
+                dim=dim,
+                max_unroll=max_unroll,
+                device=device,
+                dtype=dtype,
+                active_mask=active_mask,
+                abi_widths=aw,
+                neural_registry=neural_registry,
+                expert_handler=expert_handler,
+                expert_fallback=expert_fallback,
+                expert_registry=expert_registry,
+                expert_audit=expert_audit,
+                strict=strict,
+                env_defined=else_defined,
+            )
         sel = cond_vec != 0
         for k in env.keys():
             te, ee = then_env[k], else_env[k]
@@ -724,6 +747,8 @@ def exec_stmt(
             expert_fallback=expert_fallback,
             expert_registry=expert_registry,
             expert_audit=expert_audit,
+            strict=strict,
+            env_defined=env_defined,
         )
     else:
         raise ValueError(f"unknown stmt {op}")

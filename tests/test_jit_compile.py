@@ -1,5 +1,6 @@
 """Phase 10/11: functional forward + signals; torch.compile matches eager (fullgraph)."""
 
+import pytest
 import torch
 import torch._dynamo.config as dynamo_config
 
@@ -7,6 +8,8 @@ from axiom.compiler.flow import wire_execution_graph
 from axiom.compiler.ir import ast_to_ir
 from axiom.compiler.parser import parse_ax, reset_parser
 from axiom.engine.supernet import LatentSupernet
+
+pytestmark = pytest.mark.compile
 
 
 def _assert_shadow_dicts_close(a: dict, b: dict, *, atol: float = 1e-5, rtol: float = 1e-5) -> None:
