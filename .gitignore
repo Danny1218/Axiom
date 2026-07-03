@@ -14,18 +14,24 @@ axiom_bundle.pt
 axiom_bundle_topology.json
 axiom_bundle_*.pt
 axiom_bundle_*_topology.json
+_smoke_bundle.pt
+_smoke_bundle_topology.json
+_smoke_predict.axb
+ci_pytest_output.txt
+debug_execution_overhead.json
+release_evidence*.json
+benchmark_symbolic_*.json
 .axiom_inspector_upload/
 src/axiom/tools/.axiom_inspector_upload/
 
 artifacts/
-release_evidence*.json
-benchmark_symbolic_snapshot*.json
-benchmark_symbolic_suite*.json
 best_*.ax
 pipeline_*.json
 showcase_*.ax
 showcase_*.json
 debug_*/
+debug_onyx_latency_sweeps/
+debug_onyx_request_capture/
 showcase_*/
 copilot_run_*/
 copilot_trace_*/

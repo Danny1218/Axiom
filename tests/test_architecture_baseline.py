@@ -23,27 +23,19 @@ def _optional_extra_names(pyproject_text: str) -> set[str]:
     return set(re.findall(r"^([a-z]+)\s*=\s*\[", block, re.MULTILINE))
 
 
-def test_plan_documents_semantic_copilot_roadmap():
+def test_plan_architecture_and_status_doc():
     plan = (_root() / "plan.md").read_text(encoding="utf-8")
-    assert "## Next target (semantic copilot" in plan
-    assert "Phase 58" in plan and "experts" in plan.lower()
-    assert "Phase 60" in plan and "copilot" in plan.lower()
-    assert "Phase 82" in plan and "completion_overrides" in plan
-    assert "Phase 82b" in plan and "do_sample" in plan.lower()
-    assert "Phase 81" in plan and "copilot-doctor" in plan
-    assert "Phase 61" in plan and "copilot-draft" in plan
-    assert "Phase 62" in plan and "artifacts" in plan.lower()
-    assert "Phase 63" in plan and "copilot-studio" in plan
-    assert "Phase 64" in plan and "summarize" in plan.lower()
-    assert "Phase 65" in plan and "benchmark" in plan.lower()
-    assert "Phase 66" in plan and "OP_EXPERT" in plan
-    assert "Phase 67" in plan and "copilot-serve" in plan
-    assert "Phase 68" in plan and "train_tabular" in plan
-    assert "Phase 69" in plan and "tabular_json" in plan
-    assert "Phase 70" in plan and "copilot-benchmark" in plan
-    assert "Phase 71" in plan and "copilot-run" in plan
-    assert "Phase 72" in plan and "ExpertRuntimeRegistry" in plan
-    assert "Phase 57" in plan
+    assert "## What this is" in plan
+    assert "## Two execution paths" in plan
+    assert "Interpreted" in plan and "Compiled" in plan
+    assert "## Copilot pipeline" in plan
+    assert "tolerant_inference" in plan
+    assert "lmstudio" in plan
+    assert "## Test & benchmark status" in plan
+    assert "## Intentionally frozen" in plan
+    assert "axiom.load" in plan
+    assert "benchmark-dispatch" in plan
+    assert len(plan.splitlines()) <= 200
 
 
 def test_cli_subcommands_stable():
