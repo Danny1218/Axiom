@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "axiom-engine"
+name = "onyx-axiom"
 version = "1.4.0"
 description = "Hybrid symbolic–neural execution graph compiler and trainer"
 readme = "readme.md"

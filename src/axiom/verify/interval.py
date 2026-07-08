@@ -22,9 +22,14 @@ NINF = float("-inf")
 
 
 def _import_version() -> str:
-    from importlib.metadata import version
+    from importlib.metadata import PackageNotFoundError, version
 
-    return version("axiom-engine")
+    for dist_name in ("onyx-axiom", "axiom-engine"):
+        try:
+            return version(dist_name)
+        except PackageNotFoundError:
+            continue
+    return "unknown"
 
 
 @dataclass(frozen=True)

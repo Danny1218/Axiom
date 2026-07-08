@@ -158,7 +158,7 @@ cd Axiom
 pip install -e .
 ```
 
-This installs the **`axiom-engine`** package and the global **`axiom`** CLI. Requires **Python 3.10+** and **PyTorch 2+**. Core dependencies are **torch**, **lark**, and **networkx** only.
+This installs the **`onyx-axiom`** package (importable as `axiom`, also available on PyPI: `pip install onyx-axiom`) and the global **`axiom`** CLI. Requires **Python 3.10+** and **PyTorch 2+**. Core dependencies are **torch**, **lark**, and **networkx** only.
 
 Optional extras:
 
